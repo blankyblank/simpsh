@@ -6,17 +6,17 @@
 
 char *tokens;
 
-char **parseargs(char **inputline) {
+char **parseargs(char **inputline, char * delim) {
   int i;
   char **lineargs;
 
   char *linecpy = *inputline;
-  tokens = strtok(linecpy, " \n");
+  tokens = strtok(linecpy, delim);
   lineargs = malloc(sizeof(char*) * 1024);
   i = 0;
   while (tokens) {
     lineargs[i] = tokens;
-    tokens = strtok(NULL, " \n");
+    tokens = strtok(NULL, delim);
     i++;
   }
   lineargs[i] = NULL;

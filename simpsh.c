@@ -11,7 +11,7 @@ int shell_loop(char **argv) {
     if (line && *line) {
       add_history(line);
     }
-    args = parseargs(&line);
+    args = parseargs(&line, " \n");
 
     if (getbuiltin(&args[0]) == 1) {
       builtin_launch(args);

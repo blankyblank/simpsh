@@ -2,6 +2,6 @@
 doc
 compile_commands.json
 simpsh
-project.ede
+*.ede
 simsh.geany
 *.bk

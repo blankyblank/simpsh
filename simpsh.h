@@ -18,17 +18,17 @@
 #include <sys/wait.h>
 
 extern char **environ;
-char **parseargs(char **);
+char **parseargs(char**, char*);
 int getbuiltin(char**);
 int builtin_launch(char**);
 int shexec(char**);
 int shell_loop(char**);
-char *getpath(char **);
+char *getpath(char**);
 char *getfullpath(char *,char *);
 
-int cdcmd(char **);
-int pwdcmd(char **);
-int falsecmd(char **);
-int exitcmd(char **);
+int cdcmd(char**);
+int pwdcmd(char**);
+int falsecmd(char**);
+int exitcmd(char**);
 
 #endif /* SIMP_H */ 
