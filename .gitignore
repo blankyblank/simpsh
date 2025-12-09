@@ -1,0 +1,5 @@
+.cache
+doc
+obj
+compile_commands.json
+simpsh
