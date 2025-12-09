@@ -20,7 +20,7 @@ char **parseargs(char **inputline) {
     i++;
   }
   lineargs[i] = NULL;
-
+  free(tokens);
   return lineargs;
 }
 
