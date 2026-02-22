@@ -1,7 +1,8 @@
-.cache
+.cache/
 doc
 compile_commands.json
 simpsh
 *.ede
 simsh.geany
 *.bk
+bak/*
