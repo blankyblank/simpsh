@@ -1,4 +1,4 @@
-##simpsh
+#simpsh
 
 An extremely simple shell. I intend for this to eventually be a posix compliant 
 shell with most interactive, and non interactive features you would expect.
