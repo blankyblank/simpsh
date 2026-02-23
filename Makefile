@@ -1,10 +1,15 @@
 CC = gcc
 
-CFLAGS = -I. -march=native -O -Wall -Wextra -pedantic -pipe
-LDLIBS = -lm /usr/lib/libreadline.so
+# CFLAGS = -I. -Os -Wall -Wextra -pedantic -pipe
+#CFLAGS = -I. -O0 -Wall -Wextra -pedantic -pipe -g -static-libasan
+# CFLAGS = -I. -Og -Wall -Wextra -pedantic -pipe -g -fsanitize=address,leak,undefined -fno-analyzer-state-merge
+# CFLAGS = -I. -Og -Wall -Wextra -pedantic -pipe -g3 -fsanitize=address,leak,undefined -fno-omit-frame-pointer
+CFLAGS = -I. -Og -Wall -Wextra -pedantic -pipe -g3 -fno-omit-frame-pointer
+LDLIBS = -lm /usr/lib64/libreadline.so
 OBJDIR = obj
 SRC 	 = $(wildcard *.c)
 #)_OBJ 	 = simpsh.o builtins.o exec.o
+
 OBJ 	 = $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
 
 simpsh: $(OBJ)
@@ -16,7 +21,7 @@ $(OBJDIR)/%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 .PHONY: clean
 clean:
-	rm -f simpsh *.o
+	rm -f simpsh obj/*.o
 
 install:
 	rm -f /home/blank/.local/bin/simpsh

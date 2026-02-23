@@ -1,6 +1,7 @@
 #ifndef SIMP_H
 #define SIMP_H
 
+#define _GNU_SOURCE
 #include <errno.h>
 #include <locale.h>
 #include <signal.h>
@@ -17,18 +18,22 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-extern char **environ;
-char **parseargs(char**, char*);
-int getbuiltin(char**);
-int builtin_launch(char**);
-int shexec(char**);
-int shell_loop(char**);
-char *getpath(char**);
-char *getfullpath(char *,char *);
+extern  char **environ;
+extern  void freeptr(char **);
+extern  char **readinput(char*, char*);
+extern  int getbuiltin(char**);
+extern  int builtin_launch(char**);
+extern  int shexec(char**);
+extern  char *lineread(void);
+extern  char *getpath(char**);
+extern  char *getfullpath(char *,char *);
+extern  int startsWithSlash(const char *);
+
 
 int cdcmd(char**);
-int pwdcmd(char**);
-int falsecmd(char**);
 int exitcmd(char**);
+int falsecmd(char**);
+int helpcmd(char**);
+int pwdcmd(char**);
 
 #endif /* SIMP_H */ 
