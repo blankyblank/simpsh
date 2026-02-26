@@ -1,27 +1,37 @@
-CC = gcc
+CC := gcc
 
-# CFLAGS = -I. -Os -Wall -Wextra -pedantic -pipe
-#CFLAGS = -I. -O0 -Wall -Wextra -pedantic -pipe -g -static-libasan
-# CFLAGS = -I. -Og -Wall -Wextra -pedantic -pipe -g -fsanitize=address,leak,undefined -fno-analyzer-state-merge
-CFLAGS = -I. -Og -Wall -Wextra -pedantic -pipe -g3 -fsanitize=address,leak,undefined -fno-omit-frame-pointer
-# CFLAGS = -I. -Og -Wall -Wextra -pedantic -pipe -g3 -fno-omit-frame-pointer
-LDLIBS = -lm /usr/lib64/libreadline.so
-OBJDIR = obj
-SRC 	 = $(wildcard *.c)
-#)_OBJ 	 = simpsh.o builtins.o exec.o
+CFLAGS 		   := -I. -Og -Wall -Wextra -pedantic -pipe -g3
+SANITIZE_FLAGS := -fsanitize=address,leak,undefined -fno-omit-frame-pointer
+# CFLAGS 		   := -I. -Os -Wall -Wextra -pedantic -pipe
+# CFLAGS 		   := -I. -Og -Wall -Wextra -pedantic -pipe -g3
+# SANITIZE_FLAGS := -static-libasan
+# SANITIZE_FLAGS := -fsanitize=address,leak,undefined -fno-analyzer-state-merge
+# SANITIZE_FLAGS := -fno-omit-frame-pointer
 
-OBJ 	 = $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
+LDLIBS 	 	   := -lm /usr/lib64/libreadline.so
 
-simpsh: $(OBJ)
+OBJDIR 	 	   := obj
+SRC 	 	   := $(wildcard *.c)
+OBJ 	 	   := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
+
+TARGET		   := simpsh
+CFLAGS		   := $(CFLAGS) $(SANITIZE_FLAGS)
+
+.PHONY: all clean install uninstall
+
+all: $(TARGET)
+
+$(OBJDIR)/%.o: %.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR):
+	mkdir -p $@
+
+$(TARGET): $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDLIBS)
+
 all.c:
 	echo "int main() { return 0;}" > all.c
-
-$(OBJDIR)/%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
-.PHONY: clean
-clean:
-	rm -f simpsh obj/*.o
 
 install:
 	rm -f /home/blank/.local/bin/simpsh
@@ -30,3 +40,6 @@ install:
 
 uninstall:
 	rm -f /home/blank/.local/bin/simpsh
+
+clean:
+	rm -f simpsh obj/*.o
