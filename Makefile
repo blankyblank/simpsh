@@ -3,8 +3,8 @@ CC = gcc
 # CFLAGS = -I. -Os -Wall -Wextra -pedantic -pipe
 #CFLAGS = -I. -O0 -Wall -Wextra -pedantic -pipe -g -static-libasan
 # CFLAGS = -I. -Og -Wall -Wextra -pedantic -pipe -g -fsanitize=address,leak,undefined -fno-analyzer-state-merge
-# CFLAGS = -I. -Og -Wall -Wextra -pedantic -pipe -g3 -fsanitize=address,leak,undefined -fno-omit-frame-pointer
-CFLAGS = -I. -Og -Wall -Wextra -pedantic -pipe -g3 -fno-omit-frame-pointer
+CFLAGS = -I. -Og -Wall -Wextra -pedantic -pipe -g3 -fsanitize=address,leak,undefined -fno-omit-frame-pointer
+# CFLAGS = -I. -Og -Wall -Wextra -pedantic -pipe -g3 -fno-omit-frame-pointer
 LDLIBS = -lm /usr/lib64/libreadline.so
 OBJDIR = obj
 SRC 	 = $(wildcard *.c)

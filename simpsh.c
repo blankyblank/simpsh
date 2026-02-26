@@ -1,7 +1,11 @@
 #include "simpsh.h"
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 char *
 lineread(void) {
+  /* get input for interactive shell */
   char *line = (char *)NULL;
 
   line = readline(" $ ");
@@ -16,12 +20,13 @@ readinput(char *inputline, char *delim) {
   char *tokens;
   int i = 0;
   char **lineargs = malloc(sizeof(char *) * 1024);
+
   if (!lineargs) {
     perror("malloc failed");
     return NULL;
   }
 
-  // lineargs = malloc(sizeof(char*) * 1024);
+  /* break input line up into tokens to use later */
   tokens = strtok(inputline, delim);
 
   while (tokens) {
@@ -36,13 +41,15 @@ readinput(char *inputline, char *delim) {
     tokens = strtok(NULL, delim);
     i++;
   }
+
   lineargs[i] = NULL;
   return lineargs;
 }
 
 int
 startsWithSlash(const char *str) {
-  if (str != NULL || str[0] == '/')
+  /* check if command contains a / */
+  if (str != NULL && str[0] == '/')
     return (1);
 
   return (0);
@@ -50,10 +57,14 @@ startsWithSlash(const char *str) {
 
 char *
 getfullpath(char *path, char *file) {
+  /* takes the command and checks eacch directory on path until it finds the
+   * executable */
   char *pathcpy, *token;
   struct stat filepath;
   char *pathbuf = NULL;
+  size_t bufsize;
 
+  /* get path variable and seperate each directory to check for file later */
   pathcpy = strdup(path);
   token = strtok(pathcpy, ":");
 
@@ -62,16 +73,17 @@ getfullpath(char *path, char *file) {
       free(pathbuf);
       pathbuf = NULL;
     }
-    pathbuf = malloc(strlen(token) + strlen(file) + 2);
+    bufsize = strlen(token) + strlen(file) + 2;
+    pathbuf = malloc(bufsize);
     if (!pathbuf) {
       perror("Error: malloc failed");
+      free(pathcpy);
       exit(EXIT_FAILURE);
     }
-    strcpy(pathbuf, token);
-    strcat(pathbuf, "/");
-    strcat(pathbuf, file);
-    strcat(pathbuf, "\0");
+    /* add file to the end of the path the loop is currently checking */
+    snprintf(pathbuf, bufsize, "%s/%s", token, file);
 
+    /* see if file exists at current path, and if it's executable */
     if (stat(pathbuf, &filepath) == 0 && access(pathbuf, X_OK) == 0) {
       free(pathcpy);
       return (pathbuf);
@@ -106,11 +118,14 @@ getpath(char **file) {
 
 int
 shexec(char **args) {
+  /* fork and exec the command passed to the shell */
   int wstatus;
   int estatus;
   pid_t pid;
   char *fullpath;
 
+  /* test if the command has a /, if not return the first executable
+     on PATH with the command name given */
   fullpath = getpath(&args[0]);
   if (fullpath == NULL) {
     perror("command not found");
@@ -127,6 +142,7 @@ shexec(char **args) {
   }
 
   if (pid == 0) {
+    /* if fork was successful run the command */
     if (execve(fullpath, args, NULL) == -1) {
       perror(args[0]);
       free(fullpath);
@@ -134,7 +150,7 @@ shexec(char **args) {
     }
   } else {
     estatus = waitpid(-1, &wstatus, 0);
-
+    free(fullpath);
     return estatus;
   }
   wait(&wstatus);

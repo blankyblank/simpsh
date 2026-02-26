@@ -1,11 +1,9 @@
 #include "simpsh.h"
-#include <string.h>
 
 int
 main(int argc, char **argv) {
   char *line = (char *)NULL, *cmd;
   char **args = (char **)NULL;
-  (void)argc;
   int cflag = 0, tflag = 0, c = 0;
   /* (void)argv; */
 

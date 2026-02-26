@@ -42,7 +42,7 @@ int
 builtin_launch(char **args) {
   int n = builtinnum();
   int i;
-  for (i = 0; i <= n; i++) {
+  for (i = 0; i < n; i++) {
     if (!strcmp(*args, builtins[i])) {
       return (*builtin_funcs[i])(args);
     }
