@@ -84,22 +84,3 @@ freeptr(char **args) {
     free(args);
   }
 }
-
-/* else if (tflag > 0) { */
-/*   /\* temporaty until I write functionality */
-/*    * for piping input to the shell to be executed */
-/*    *\/ */
-/*   cmd = argv[c]; */
-/*   args = readinput(cmd, " \n"); */
-
-/*   if (getbuiltin(args) == 1) { */
-/*     if (builtin_launch(args) == -1) */
-/*       estatus = 1; */
-/*     else */
-/*       estatus = 0; */
-/*   } else { */
-/*     estatus = shexec(args); */
-/*   } */
-
-/*   exit(estatus); */
-/* } */
