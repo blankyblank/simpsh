@@ -1,10 +1,10 @@
 #include "simpsh.h"
-#include <stdio.h>
 
 int builtinnum(void);
 int cdsetpwd(char *);
 
 // clang-format off
+/* the array of builtin commands */
 char *builtins[] = {
   "cd",
   "exit",
@@ -27,6 +27,7 @@ int builtinnum(void) {
 
 int
 getbuiltin(char **args) {
+  /* check if string matches builtin command */
   int n = builtinnum();
   int i;
 
@@ -40,6 +41,7 @@ getbuiltin(char **args) {
 
 int
 builtin_launch(char **args) {
+  /* launch builtin */
   int n = builtinnum();
   int i;
   for (i = 0; i < n; i++) {

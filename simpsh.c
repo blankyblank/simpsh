@@ -1,7 +1,4 @@
 #include "simpsh.h"
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 char *
 lineread(void) {

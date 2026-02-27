@@ -4,9 +4,9 @@ int
 main(int argc, char **argv) {
   char *line = (char *)NULL, *cmd;
   char **args = (char **)NULL;
-  int cflag = 0, tflag = 0, c = 0;
-  /* (void)argv; */
+  int estatus, cflag = 0, tflag = 0, c = 0;
 
+  /* check of command line flags */
   if (argc > 1) {
     if (strcmp(argv[1], "-c") == 0 && argc > 2) {
       cflag = 1;
@@ -14,28 +14,34 @@ main(int argc, char **argv) {
       argc -= 2;
     }
   }
+  /* check if stdin is a terminal */
   if (!isatty(STDOUT_FILENO)) {
     tflag = 1;
-    cflag = 0;
   }
 
+  /* set up locale */
   setlocale(LC_ALL, "");
-  using_history();
 
-  if (cflag > 0) {
+  /* if using -c don't enter the loop*/
+  if (cflag > 0 || tflag > 0) {
     cmd = argv[c];
     args = readinput(cmd, " \n");
 
     if (getbuiltin(args) == 1) {
-      builtin_launch(args);
+      if (builtin_launch(args) == -1)
+        estatus = 1;
+      else
+        estatus = 0;
     } else {
-      shexec(args);
+      estatus = shexec(args);
     }
-    exit(0);
 
-  } else if (tflag > 0) {
-    exitcmd(0);
+    exit(estatus);
   } else {
+    /* set up histor y*/
+    using_history();
+
+    /* the main loop for the interactive shell */
     while (1) {
       if (args != NULL) {
         freeptr(args);
@@ -43,6 +49,7 @@ main(int argc, char **argv) {
       }
       line = lineread();
       args = readinput(line, " \n");
+      /* check if it's a builtin command or not and run it */
       if (getbuiltin(&args[0]) == 1) {
         builtin_launch(args);
         free(line);
@@ -77,3 +84,22 @@ freeptr(char **args) {
     free(args);
   }
 }
+
+/* else if (tflag > 0) { */
+/*   /\* temporaty until I write functionality */
+/*    * for piping input to the shell to be executed */
+/*    *\/ */
+/*   cmd = argv[c]; */
+/*   args = readinput(cmd, " \n"); */
+
+/*   if (getbuiltin(args) == 1) { */
+/*     if (builtin_launch(args) == -1) */
+/*       estatus = 1; */
+/*     else */
+/*       estatus = 0; */
+/*   } else { */
+/*     estatus = shexec(args); */
+/*   } */
+
+/*   exit(estatus); */
+/* } */
