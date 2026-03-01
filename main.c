@@ -1,4 +1,5 @@
 #include "simpsh.h"
+#include <stdio.h>
 
 int
 main(int argc, char **argv) {
@@ -52,11 +53,6 @@ main(int argc, char **argv) {
         args = NULL;
       }
       line = lineread();
-      if (line == "\0") {
-        printf("\n");
-        continue;
-        ;
-      }
       args = readinput(line, " \n");
       /* check if it's a builtin command or not and run it */
       if (getbuiltin(&args[0]) == 1) {
