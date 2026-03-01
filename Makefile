@@ -1,12 +1,12 @@
 CC := gcc
 
 CFLAGS 		   := -I. -Og -Wall -Wextra -pedantic -pipe -g3
-SANITIZE_FLAGS := -fsanitize=address,leak,undefined -fno-omit-frame-pointer
 # CFLAGS 		   := -I. -Os -Wall -Wextra -pedantic -pipe
 # CFLAGS 		   := -I. -Og -Wall -Wextra -pedantic -pipe -g3
+# SANITIZE_FLAGS := -fsanitize=address,leak,undefined -fno-omit-frame-pointer
 # SANITIZE_FLAGS := -static-libasan
 # SANITIZE_FLAGS := -fsanitize=address,leak,undefined -fno-analyzer-state-merge
-# SANITIZE_FLAGS := -fno-omit-frame-pointer
+SANITIZE_FLAGS := -fno-omit-frame-pointer
 
 LDLIBS 	 	   := -lm /usr/lib64/libreadline.so
 

@@ -12,28 +12,29 @@
 #include <unistd.h>
 
 #include <linux/limits.h>
-#include <readline/readline.h>
 #include <readline/history.h>
-#include <sys/types.h>
+#include <readline/readline.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 
-extern  char **environ;
-extern  void freeptr(char **);
-extern  char **readinput(char*, char*);
-extern  int getbuiltin(char**);
-extern  int builtin_launch(char**);
-extern  int shexec(char**);
-extern  char *lineread(void);
-extern  char *getpath(char**);
-extern  char *getfullpath(char *,char *);
-extern  int startsWithSlash(const char *);
+extern char **environ;
+extern void freeptr(char **);
+extern char **readinput(char *, char *);
+extern int getbuiltin(char **);
+extern int builtin_launch(char **);
+extern int shexec(char **);
+extern char *lineread(void);
+extern char *getpath(char **);
+extern char *getfullpath(char *, char *);
+extern int startsWithSlash(const char *);
 
+int cdcmd(char **);
+int echocmd(char **);
+int execcmd(char **);
+int exitcmd(char **);
+int falsecmd(char **);
+int helpcmd(char **);
+int pwdcmd(char **);
 
-int cdcmd(char**);
-int exitcmd(char**);
-int falsecmd(char**);
-int helpcmd(char**);
-int pwdcmd(char**);
-
-#endif /* SIMP_H */ 
+#endif /* SIMP_H */

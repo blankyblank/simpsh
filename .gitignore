@@ -9,3 +9,4 @@ bak
 .dir-locals.el
 .gdb_history
 obj/*.o
+*vterm*

@@ -1,5 +1,6 @@
 #include "simpsh.h"
 
+int argcount(char **);
 int builtinnum(void);
 int cdsetpwd(char *);
 
@@ -7,6 +8,8 @@ int cdsetpwd(char *);
 /* the array of builtin commands */
 char *builtins[] = {
   "cd",
+  "echo",
+  "exec",
   "exit",
   "false",
   "help",
@@ -14,6 +17,8 @@ char *builtins[] = {
 };
 int (*builtin_funcs[])(char **) = {
   &cdcmd,
+  &echocmd,
+  &execcmd,
   &exitcmd,
   &falsecmd,
   &helpcmd,
@@ -24,6 +29,16 @@ int builtinnum(void) {
 }
 
 // clang-format on
+
+int
+argcount(char **args) {
+  int argc = 0;
+
+  while (args[argc] != NULL)
+    argc++;
+
+  return argc;
+}
 
 int
 getbuiltin(char **args) {
@@ -84,10 +99,100 @@ int
 cdcmd(char **args) {
   char *homedir = getenv("HOME");
   char **dir = args;
+
   if (dir[1] == 0) {
     cdsetpwd(homedir);
   } else if (cdsetpwd(dir[1]) == -1) {
     return -1;
+  }
+  return 0;
+}
+
+int echo_print(int, int, char **);
+
+int
+echocmd(char *args[]) {
+  int n;
+  int stat, argc;
+
+  argc = argcount(args);
+
+  if (argc >= 2) {
+    if (strcmp(args[1], "-n") == 0 && argc > 2) {
+      n = 1;
+      stat = echo_print(argc, n, args);
+      if (stat == -1) {
+        printf("something went wrong\n");
+        return EXIT_FAILURE;
+      }
+    } else if (strcmp(args[1], "-n") == 0) {
+      /* printf(""); */
+      return EXIT_SUCCESS;
+    } else {
+      n = 0;
+      stat = echo_print(argc, n, args);
+      if (stat == -1) {
+        printf("something went wrong\n");
+        return EXIT_FAILURE;
+      }
+      return EXIT_SUCCESS;
+    }
+  } else {
+    printf("\n");
+    return EXIT_SUCCESS;
+  }
+  return EXIT_SUCCESS;
+}
+
+int
+echo_print(int argc, int n, char *args[]) {
+  int i;
+  char strng = ' ';
+  if (n == 1) {
+    for (i = 2; i < argc; i++) {
+      if (i < argc - 1) {
+        printf("%s%c", args[i], strng);
+      } else {
+        printf("%s", args[i]);
+      }
+    }
+    return 0;
+  } else {
+    for (i = 1; i < argc; i++) {
+      if (i < argc - 1) {
+        printf("%s%c", args[i], strng);
+      } else {
+        printf("%s", args[i]);
+      }
+    }
+    printf("\n");
+    return 0;
+  }
+  return -1;
+}
+
+int
+execcmd(char **args) {
+  char *fullpath;
+
+  fullpath = getpath(&args[1]);
+
+  if (args[1] == NULL) {
+    perror("Missing command");
+    return 1;
+  }
+
+  if (fullpath == NULL) {
+    perror("command not found");
+    if (fullpath)
+      free(fullpath);
+    return 1;
+  }
+
+  if (execve(fullpath, &args[1], environ) < 0) {
+    perror(args[0]);
+    free(fullpath);
+    return 1;
   }
   return 0;
 }

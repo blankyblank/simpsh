@@ -2,21 +2,26 @@
 
 int
 main(int argc, char **argv) {
-  char *line = (char *)NULL, *cmd;
+  const unsigned MAX_LENGTH = 256;
+  char *line = (char *)NULL, *cmd = NULL, buf[MAX_LENGTH];
   char **args = (char **)NULL;
-  int estatus, cflag = 0, tflag = 0, c = 0;
+  int estatus, cflag = 0, tflag = 0, c_arg = 0;
 
   /* check of command line flags */
   if (argc > 1) {
     if (strcmp(argv[1], "-c") == 0 && argc > 2) {
       cflag = 1;
-      c += 2;
+      c_arg += 2;
       argc -= 2;
     }
+    cmd = argv[c_arg];
   }
   /* check if stdin is a terminal */
-  if (!isatty(STDOUT_FILENO)) {
+  if (!isatty(STDIN_FILENO)) {
     tflag = 1;
+    if ((cmd = fgets(buf, MAX_LENGTH, stdin)) == NULL) {
+      perror("couldn't get command");
+    }
   }
 
   /* set up locale */
@@ -24,7 +29,6 @@ main(int argc, char **argv) {
 
   /* if using -c don't enter the loop*/
   if (cflag > 0 || tflag > 0) {
-    cmd = argv[c];
     args = readinput(cmd, " \n");
 
     if (getbuiltin(args) == 1) {
@@ -48,6 +52,11 @@ main(int argc, char **argv) {
         args = NULL;
       }
       line = lineread();
+      if (line == "\0") {
+        printf("\n");
+        continue;
+        ;
+      }
       args = readinput(line, " \n");
       /* check if it's a builtin command or not and run it */
       if (getbuiltin(&args[0]) == 1) {
