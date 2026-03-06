@@ -19,15 +19,12 @@
 #include <sys/wait.h>
 
 extern char **environ;
-extern void freeptr(char **);
-extern char **readinput(char *, char *);
-extern int getbuiltin(char **);
-extern int builtin_launch(char **);
-extern int shexec(char **);
-extern char *lineread(void);
-extern char *getpath(char **);
-extern char *getfullpath(char *, char *);
-extern int startsWithSlash(const char *);
+
+typedef enum {
+  AND,
+  OR,
+  SEMICOLON
+} cntr;
 
 int cdcmd(char **);
 int echocmd(char **);
@@ -36,5 +33,24 @@ int exitcmd(char **);
 int falsecmd(char **);
 int helpcmd(char **);
 int pwdcmd(char **);
+
+extern char **getinput(char *, char *);
+extern int getbuiltin(char **);
+extern char *getpath(char **);
+extern int builtin_launch(char **);
+extern int shexec(char **);
+extern char *lineread(void);
+
+static inline void
+freeptr(char **args) {
+  if (args != NULL) {
+    int i = 0;
+    while (args[i] != NULL) {
+      free(args[i]);
+      i++;
+    }
+    free(args);
+  }
+}
 
 #endif /* SIMP_H */

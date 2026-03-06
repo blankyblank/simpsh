@@ -1,5 +1,4 @@
 #include "simpsh.h"
-#include <stdio.h>
 
 int
 main(int argc, char **argv) {
@@ -8,15 +7,17 @@ main(int argc, char **argv) {
   char **args = (char **)NULL;
   int estatus, cflag = 0, tflag = 0, c_arg = 0;
 
-  /* check of command line flags */
+  /* check for cli flags */
   if (argc > 1) {
     if (strcmp(argv[1], "-c") == 0 && argc > 2) {
       cflag = 1;
+      /* if we found -c we move argv[] here */
       c_arg += 2;
       argc -= 2;
     }
     cmd = argv[c_arg];
   }
+
   /* check if stdin is a terminal */
   if (!isatty(STDIN_FILENO)) {
     tflag = 1;
@@ -28,10 +29,9 @@ main(int argc, char **argv) {
   /* set up locale */
   setlocale(LC_ALL, "");
 
-  /* if using -c don't enter the loop*/
+  /* if using -c or aren't we connected to a terminal don't enter the loop*/
   if (cflag > 0 || tflag > 0) {
-    args = readinput(cmd, " \n");
-
+    args = getinput(cmd, " \n");
     if (getbuiltin(args) == 1) {
       if (builtin_launch(args) == -1)
         estatus = 1;
@@ -40,20 +40,28 @@ main(int argc, char **argv) {
     } else {
       estatus = shexec(args);
     }
-
     exit(estatus);
   } else {
     /* set up histor y*/
     using_history();
 
     /* the main loop for the interactive shell */
-    while (1) {
+    for (;;) {
       if (args != NULL) {
         freeptr(args);
         args = NULL;
       }
+      /* calls readline */
       line = lineread();
-      args = readinput(line, " \n");
+
+      /* takes user input */
+      if ((args = getinput(line, " \n")) == NULL || args[0] == NULL) {
+        /* the if statement checks for empty lines to handle them properly */
+        free(line);
+        line = NULL;
+        continue;
+      }
+
       /* check if it's a builtin command or not and run it */
       if (getbuiltin(&args[0]) == 1) {
         builtin_launch(args);
@@ -61,13 +69,12 @@ main(int argc, char **argv) {
         line = NULL;
       } else {
         shexec(args);
-        free(line);
-        line = NULL;
       }
-      if (args != NULL) {
-        freeptr(args);
-        args = NULL;
-      }
+
+      freeptr(args);
+      free(line);
+      args = NULL;
+      line = NULL;
     }
 
     if (line != NULL) {
@@ -75,17 +82,5 @@ main(int argc, char **argv) {
       line = NULL;
     }
     exit(0);
-  }
-}
-
-void
-freeptr(char **args) {
-  if (args != NULL) {
-    int i = 0;
-    while (args[i] != NULL) {
-      free(args[i]);
-      i++;
-    }
-    free(args);
   }
 }

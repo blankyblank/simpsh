@@ -1,5 +1,8 @@
 #include "simpsh.h"
 
+char *getfullpath(char *, char *);
+int startsWithSlash(const char *);
+
 char *
 lineread(void) {
   /* get input for interactive shell */
@@ -13,10 +16,14 @@ lineread(void) {
 }
 
 char **
-readinput(char *inputline, char *delim) {
+getinput(char *inputline, char *delim) {
   char *tokens;
   int i = 0;
   char **lineargs = malloc(sizeof(char *) * 1024);
+
+  if (inputline == NULL) {
+    return (char **)NULL;
+  }
 
   if (!lineargs) {
     perror("malloc failed");
@@ -116,8 +123,7 @@ getpath(char **file) {
 int
 shexec(char **args) {
   /* fork and exec the command passed to the shell */
-  int wstatus;
-  int estatus;
+  int wstatus, estatus;
   pid_t pid;
   char *fullpath;
 
@@ -146,7 +152,9 @@ shexec(char **args) {
       exit(97);
     }
   } else {
-    estatus = waitpid(-1, &wstatus, 0);
+    waitpid(-1, &wstatus, 0);
+    estatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+
     free(fullpath);
     return estatus;
   }
