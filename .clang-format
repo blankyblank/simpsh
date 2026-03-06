@@ -89,7 +89,7 @@ ObjCBreakBeforeNestedBlockParam: true
 ObjCSpaceAfterProperty: true
 ObjCSpaceBeforeProtocolList: true
 PPIndentWidth: 2
-PackConstructorInitializers: Never
+PackConstructorInitializers: NextLine
 PointerAlignment: Right
 QualifierAlignment: Left
 RawStringFormats: []
@@ -99,7 +99,7 @@ RemoveBracesLLVM: false
 #RemoveSemicolon: false
 RequiresClausePosition: OwnLine
 #RequiresExpressionIndentation: Keyword
-SeparateDefinitionBlocks: Always
+SeparateDefinitionBlocks: Leave
 ShortNamespaceLines: 0
 SortIncludes: CaseSensitive
 SortJavaStaticImport: Before

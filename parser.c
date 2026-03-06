@@ -1,8 +1,15 @@
 #include "simpsh.h"
+#include <string.h>
 
+#define MAX_CMDS 256
+
+/* store commands before putting them in ast */
+typedef struct {
+  char *cmd;
+  cntrl opp;
+} cmd_tok;
 /* tree struct to use for command parsing */
 typedef struct cmd_tree cmd_tree;
-
 struct cmd_tree {
   enum {
     CMD,
@@ -11,10 +18,16 @@ struct cmd_tree {
 
   char **args;
   int c_false;
-  cntr opp_t;
+  cntrl opp_t;
   cmd_tree *left;
   cmd_tree *right;
 };
+
+cmd_tree *newcmdnode(char **, int);
+cmd_tree *newoppnode(cntrl, cmd_tree *, cmd_tree *);
+void freectree(cmd_tree *);
+int scan_input(char *, cmd_tok *, int *);
+cntrl chk_op(char *);
 
 cmd_tree *
 newcmdnode(char **args, int c_false) {
@@ -37,7 +50,7 @@ newcmdnode(char **args, int c_false) {
 }
 
 cmd_tree *
-newoppnode(cntr opp_t, cmd_tree *left, cmd_tree *right) {
+newoppnode(cntrl opp_t, cmd_tree *left, cmd_tree *right) {
   cmd_tree *ot = malloc(sizeof(cmd_tree));
   if (!ot) {
     perror("malloc failed");
@@ -72,4 +85,39 @@ freectree(cmd_tree *cmd_tree) {
   }
 
   free(cmd_tree);
+}
+
+/* cmd_tok toks[MAX_CMDS]; */
+
+int
+scan_input(char *line, cmd_tok *toks[MAX_CMDS], int *cnt) {
+  int success = 0, err = -1;
+  int i, start = 0;
+  cnt = 0;
+
+  for (i = 0; i < strlen(line); i++) {
+    if (line[i] == '&' && i + 1 < strlen(line) && line[i + 1] == '&') {
+      toks[cnt].opp = AND;
+      toks[cnt].cmd = strndup(&line[start], i - start);
+      cnt++;
+      i++;
+    } else if (line[i] == '|' && i + 1 < strlen(line) && line[i + 1] == '|') {
+      toks[cnt].opp = OR;
+      toks[cnt].cmd = strndup(&line[start], i - start);
+      cnt++;
+      i++;
+    } else if (line[i] == ';') {
+      toks[cnt].opp = SEMICOLON;
+      toks[cnt].cmd = strndup(&line[start], i - start);
+      cnt++;
+      i++;
+    }
+
+    if (line[i] != '\0') {
+      toks[cnt].opp = 0;
+      toks[cnt].cmd = strndup(&line[start], strlen(line) - start);
+    }
+  }
+
+  return success;
 }

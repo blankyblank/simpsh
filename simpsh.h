@@ -24,7 +24,7 @@ typedef enum {
   AND,
   OR,
   SEMICOLON
-} cntr;
+} cntrl;
 
 int cdcmd(char **);
 int echocmd(char **);
