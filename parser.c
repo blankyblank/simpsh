@@ -87,36 +87,35 @@ freectree(cmd_tree *cmd_tree) {
   free(cmd_tree);
 }
 
-/* cmd_tok toks[MAX_CMDS]; */
-
 int
-scan_input(char *line, cmd_tok *toks[MAX_CMDS], int *cnt) {
+scan_input(char *line, cmd_tok *toks, int *cnt) {
   int success = 0, err = -1;
   int i, start = 0;
-  cnt = 0;
+  *cnt = 0;
 
   for (i = 0; i < strlen(line); i++) {
     if (line[i] == '&' && i + 1 < strlen(line) && line[i + 1] == '&') {
-      toks[cnt].opp = AND;
-      toks[cnt].cmd = strndup(&line[start], i - start);
-      cnt++;
+      toks[*cnt].opp = AND;
+      toks[*cnt].cmd = strndup(&line[start], i - start);
+      (*cnt)++;
       i++;
     } else if (line[i] == '|' && i + 1 < strlen(line) && line[i + 1] == '|') {
-      toks[cnt].opp = OR;
-      toks[cnt].cmd = strndup(&line[start], i - start);
-      cnt++;
+      toks[*cnt].opp = OR;
+      toks[*cnt].cmd = strndup(&line[start], i - start);
+      (*cnt)++;
       i++;
     } else if (line[i] == ';') {
-      toks[cnt].opp = SEMICOLON;
-      toks[cnt].cmd = strndup(&line[start], i - start);
-      cnt++;
+      toks[*cnt].opp = SEMICOLON;
+      toks[*cnt].cmd = strndup(&line[start], i - start);
+      (*cnt)++;
       i++;
     }
+  }
 
-    if (line[i] != '\0') {
-      toks[cnt].opp = 0;
-      toks[cnt].cmd = strndup(&line[start], strlen(line) - start);
-    }
+  if (line[i] != '\0') {
+    toks[*cnt].opp = 0;
+    toks[*cnt].cmd = strndup(&line[start], strlen(line) - start);
+    (*cnt)++;
   }
 
   return success;
