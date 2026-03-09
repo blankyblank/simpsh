@@ -70,18 +70,17 @@ builtin_launch(char **args) {
 
 int
 cdsetpwd(char *arg) {
-  char respath[PATH_MAX];
+  char oldpwd[PATH_MAX];
   char *newpwd = NULL;
-  // struct stat filepath;
-  char *oldpwd = getenv("PWD");
-  // char *oldpwd = getenv("PWD");
-  getcwd(oldpwd, sizeof(oldpwd + 1));
+
+  /* char *oldpwd = getenv("PWD"); */
+  getcwd(oldpwd, sizeof(oldpwd));
   if (!strcmp(arg, "-")) {
     newpwd = getenv("OLDPWD");
+    if (newpwd == NULL)
+      return -1;
   } else {
-    if (realpath(arg, respath) != NULL) {
-      newpwd = realpath(arg, respath);
-    } else {
+    if (realpath(arg, newpwd) == NULL) {
       perror(arg);
       return -1;
     }
@@ -103,7 +102,7 @@ cdcmd(char **args) {
   if (dir[1] == 0) {
     cdsetpwd(homedir);
   } else if (cdsetpwd(dir[1]) == -1) {
-    return -1;
+    return 1;
   }
   return 0;
 }
@@ -168,7 +167,7 @@ echo_print(int argc, int n, char *args[]) {
     printf("\n");
     return 0;
   }
-  return -1;
+  return 1;
 }
 
 int
@@ -217,10 +216,10 @@ int
 helpcmd(char **args) {
   (void)args;
   char **helparray = builtins;
-  int i;
+  int i, n = builtinnum();
 
   printf("These are the builtin commands included with simpsh:\n\n");
-  for (i = 0; i < 5; i++) {
+  for (i = 0; i < n; i++) {
     printf("%s \n", helparray[i]);
   }
   return 0;

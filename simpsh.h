@@ -23,7 +23,8 @@ extern char **environ;
 typedef enum {
   AND,
   OR,
-  SEMICOLON
+  SEMICOLON,
+  NONE,
 } cntrl;
 
 int cdcmd(char **);
