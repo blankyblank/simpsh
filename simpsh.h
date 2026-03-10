@@ -83,4 +83,12 @@ freeptr(char **args) {
   }
 }
 
+static inline void
+freetoks(cmd_tok *toks, int c) {
+  int i;
+  for (i = 0; i < c; i++) {
+    if (toks[i].cmd != NULL)
+      free(toks[i].cmd);
+  }
+}
 #endif /* SIMP_H */

@@ -73,13 +73,13 @@ scan_input(char *line, cmd_tok *toks, int *cnt) {
       toks[*cnt].opp = AND;
       toks[*cnt].cmd = strndup(&line[s], i - s);
       (*cnt)++;
-      i++;
+      i += 2;
       s = i;
     } else if (line[i] == '|' && i + 1 < strlen(line) && line[i + 1] == '|') {
       toks[*cnt].opp = OR;
       toks[*cnt].cmd = strndup(&line[s], i - s);
       (*cnt)++;
-      i++;
+      i += 2;
       s = i;
     } else if (line[i] == ';') {
       toks[*cnt].opp = SEMICOLON;
@@ -110,6 +110,12 @@ build_tree(cmd_tok *tokens, int cnt, int i) {
 
   c = tokens[i];
   args = getinput(c.cmd, " \n");
+  if (args == NULL || args[0] == NULL) {
+    fprintf(stderr, "unexpected operator\n");
+    free(args);
+    return NULL;
+  }
+
   cmd_tree *left = newcmdnode(args, 0);
 
   if (i == cnt - 1) {

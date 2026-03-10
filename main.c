@@ -1,6 +1,4 @@
 #include "simpsh.h"
-#include <stdio.h>
-#include <stdlib.h>
 
 #define MAX_CMDS 256
 
@@ -10,7 +8,7 @@ main(int argc, char **argv) {
   char *line = (char *)NULL, *cmd = NULL, buf[MAX_LENGTH];
   char **args = (char **)NULL;
   int estatus, cflag = 0, tflag = 0, c_arg = 0;
-  int tok_cnt, scan_s;
+  int tok_c, scan_s;
   cmd_tok toks[MAX_CMDS];
   cmd_tree *r;
 
@@ -61,45 +59,30 @@ main(int argc, char **argv) {
       /* calls readline */
       line = lineread();
 
-      scan_s = scan_input(line, toks, &tok_cnt);
+      /* parse user input */
+      scan_s = scan_input(line, toks, &tok_c);
 
-      if (scan_s < 0) {
-        perror("failed to read input");
+      /* if input is empty */
+      if (scan_s > 0) {
         free(line);
         continue;
-      } else if (scan_s > 0) {
+        /* if something failed*/
+      } else if (scan_s < 0) {
+        perror("failed to read input");
         free(line);
         continue;
       }
 
-      r = build_tree(toks, tok_cnt, 0);
+      /* take tokens from parsed input and build a tree
+       * from them from them */
+      r = build_tree(toks, tok_c, 0);
 
+      /* run the commands in the tree */
       estatus = run_commands(r);
 
       freectree(r);
+      freetoks(toks, tok_c);
       free(line);
-
-      /* takes user input */
-      // if ((args = getinput(line, " \n")) == NULL || args[0] == NULL) {
-      //   /* the if statement checks for empty lines to handle them properly */
-      //   free(line);
-      //   line = NULL;
-      //   continue;
-      // }
-
-      /* check if it's a builtin command or not and run it */
-      // if (getbuiltin(&args[0]) == 1) {
-      //   builtin_launch(args);
-      //   free(line);
-      //   line = NULL;
-      // } else {
-      //   shexec(args);
-      // }
-
-      // freeptr(args);
-      // free(line);
-      // args = NULL;
-      // line = NULL;
     }
 
     if (line != NULL) {
