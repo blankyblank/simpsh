@@ -67,7 +67,7 @@ main(int argc, char **argv) {
         perror("failed to read input");
         free(line);
         continue;
-      } else if (scan_s < 0) {
+      } else if (scan_s > 0) {
         free(line);
         continue;
       }
@@ -78,6 +78,7 @@ main(int argc, char **argv) {
 
       freectree(r);
       free(line);
+
       /* takes user input */
       // if ((args = getinput(line, " \n")) == NULL || args[0] == NULL) {
       //   /* the if statement checks for empty lines to handle them properly */
