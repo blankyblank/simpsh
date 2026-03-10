@@ -1,36 +1,4 @@
 #include "simpsh.h"
-#include <readline/history.h>
-#include <string.h>
-
-#define MAX_CMDS 256
-
-/* store commands before putting them in ast */
-typedef struct {
-  char *cmd;
-  cntrl opp;
-} cmd_tok;
-/* tree struct to use for command parsing */
-typedef struct cmd_tree cmd_tree;
-struct cmd_tree {
-  enum {
-    CMD,
-    OP
-  } type;
-
-  char **args;
-  int c_false;
-  cntrl opp_t;
-  cmd_tree *left;
-  cmd_tree *right;
-};
-
-cmd_tree *newcmdnode(char **, int);
-cmd_tree *newoppnode(cntrl, cmd_tree *, cmd_tree *);
-void freectree(cmd_tree *);
-int scan_input(char *, cmd_tok *, int *);
-cntrl chk_op(char *);
-cmd_tree *build_tree(cmd_tok *, int, int);
-int run_commands(cmd_tree *);
 
 cmd_tree *
 newcmdnode(char **args, int c_false) {
@@ -153,30 +121,47 @@ build_tree(cmd_tok *tokens, int cnt, int i) {
 
 int
 run_commands(cmd_tree *n) {
-  int l_status = -1, r_status = -1;
-  int status;
+  int l_status, r_status;
 
   if (n == NULL) {
     return 0;
   }
 
   if (n->type == CMD) {
-    if (getbuiltin(n->args) == 1) {
-      status = builtin_launch(n->args);
-    } else {
-      status = shexec(n->args);
-    }
+    if (getbuiltin(n->args) == 1)
+      return builtin_launch(n->args);
+    else
+      return shexec(n->args);
   }
 
   if (n->type == OP) {
     l_status = run_commands(n->left);
-    r_status = run_commands(n->right);
+
+    switch (n->opp_t) {
+    case SEMICOLON:
+      r_status = run_commands(n->right);
+      return r_status;
+    case AND:
+      if (l_status != 0) {
+        return l_status;
+      }
+      r_status = run_commands(n->right);
+      return r_status;
+    case OR:
+      if (l_status == 0) {
+        return l_status;
+      }
+      r_status = run_commands(n->right);
+      return r_status;
+    case NONE:
+      return l_status;
+    default:
+      fprintf(stderr, "Unknown Operator\n");
+      return 1;
+    }
   }
 
-  if (r_status > -1)
-    return r_status;
-  else
-    return l_status;
+  return 0;
 
   /* note to self need to work out the logic on how to handle exist status, and
      what the return value on this function should actually be still

@@ -1,4 +1,8 @@
 #include "simpsh.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+#define MAX_CMDS 256
 
 int
 main(int argc, char **argv) {
@@ -6,6 +10,9 @@ main(int argc, char **argv) {
   char *line = (char *)NULL, *cmd = NULL, buf[MAX_LENGTH];
   char **args = (char **)NULL;
   int estatus, cflag = 0, tflag = 0, c_arg = 0;
+  int tok_cnt, scan_s;
+  cmd_tok toks[MAX_CMDS];
+  cmd_tree *r;
 
   /* check for cli flags */
   if (argc > 1) {
@@ -26,7 +33,6 @@ main(int argc, char **argv) {
     }
   }
 
-  /* set up locale */
   setlocale(LC_ALL, "");
 
   /* if using -c or aren't we connected to a terminal don't enter the loop*/
@@ -37,15 +43,16 @@ main(int argc, char **argv) {
         estatus = 1;
       else
         estatus = 0;
-    } else {
+    } else
       estatus = shexec(args);
-    }
     exit(estatus);
   } else {
     /* set up histor y*/
+
     using_history();
 
     /* the main loop for the interactive shell */
+
     for (;;) {
       if (args != NULL) {
         freeptr(args);
@@ -54,27 +61,44 @@ main(int argc, char **argv) {
       /* calls readline */
       line = lineread();
 
-      /* takes user input */
-      if ((args = getinput(line, " \n")) == NULL || args[0] == NULL) {
-        /* the if statement checks for empty lines to handle them properly */
+      scan_s = scan_input(line, toks, &tok_cnt);
+
+      if (scan_s < 0) {
+        perror("failed to read input");
         free(line);
-        line = NULL;
+        continue;
+      } else if (scan_s < 0) {
+        free(line);
         continue;
       }
 
-      /* check if it's a builtin command or not and run it */
-      if (getbuiltin(&args[0]) == 1) {
-        builtin_launch(args);
-        free(line);
-        line = NULL;
-      } else {
-        shexec(args);
-      }
+      r = build_tree(toks, tok_cnt, 0);
 
-      freeptr(args);
+      estatus = run_commands(r);
+
+      freectree(r);
       free(line);
-      args = NULL;
-      line = NULL;
+      /* takes user input */
+      // if ((args = getinput(line, " \n")) == NULL || args[0] == NULL) {
+      //   /* the if statement checks for empty lines to handle them properly */
+      //   free(line);
+      //   line = NULL;
+      //   continue;
+      // }
+
+      /* check if it's a builtin command or not and run it */
+      // if (getbuiltin(&args[0]) == 1) {
+      //   builtin_launch(args);
+      //   free(line);
+      //   line = NULL;
+      // } else {
+      //   shexec(args);
+      // }
+
+      // freeptr(args);
+      // free(line);
+      // args = NULL;
+      // line = NULL;
     }
 
     if (line != NULL) {

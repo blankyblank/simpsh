@@ -27,6 +27,27 @@ typedef enum {
   NONE,
 } cntrl;
 
+/* store commands before putting them in ast */
+typedef struct {
+  char *cmd;
+  cntrl opp;
+} cmd_tok;
+
+/* tree struct to use for command parsing */
+typedef struct cmd_tree cmd_tree;
+struct cmd_tree {
+  enum {
+    CMD,
+    OP
+  } type;
+
+  char **args;
+  int c_false;
+  cntrl opp_t;
+  cmd_tree *left;
+  cmd_tree *right;
+};
+
 int cdcmd(char **);
 int echocmd(char **);
 int execcmd(char **);
@@ -41,6 +62,14 @@ extern char *getpath(char **);
 extern int builtin_launch(char **);
 extern int shexec(char **);
 extern char *lineread(void);
+
+extern cmd_tree *newcmdnode(char **, int);
+extern cmd_tree *newoppnode(cntrl, cmd_tree *, cmd_tree *);
+extern void freectree(cmd_tree *);
+extern int scan_input(char *, cmd_tok *, int *);
+extern cntrl chk_op(char *);
+extern cmd_tree *build_tree(cmd_tok *, int, int);
+extern int run_commands(cmd_tree *);
 
 static inline void
 freeptr(char **args) {
