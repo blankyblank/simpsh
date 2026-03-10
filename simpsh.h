@@ -30,7 +30,7 @@ typedef enum {
 /* store commands before putting them in ast */
 typedef struct {
   char *cmd;
-  cntrl opp;
+  cntrl op;
 } cmd_tok;
 
 /* tree struct to use for command parsing */
@@ -43,7 +43,7 @@ struct cmd_tree {
 
   char **args;
   int c_false;
-  cntrl opp_t;
+  cntrl op_t;
   cmd_tree *left;
   cmd_tree *right;
 };

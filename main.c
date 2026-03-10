@@ -1,10 +1,10 @@
 #include "simpsh.h"
 
 #define MAX_CMDS 256
+#define MAX_LENGTH 256
 
 int
 main(int argc, char **argv) {
-  const unsigned MAX_LENGTH = 256;
   char *line = (char *)NULL, *cmd = NULL, buf[MAX_LENGTH];
   char **args = (char **)NULL;
   int estatus, cflag = 0, tflag = 0, c_arg = 0;

@@ -231,11 +231,9 @@ helpcmd(char **args) {
 int
 pwdcmd(char **args) {
   (void)args;
-  // char pwdbuf[PATH_MAX];
   char *pwdbuf = NULL;
   char *pwd;
   pwd = getcwd(pwdbuf, 0);
-  // if (getcwd(pwdbuf, PATH_MAX)) {
   if (pwd) {
     printf("%s\n", pwd);
     free(pwd);

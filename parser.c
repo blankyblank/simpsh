@@ -12,10 +12,10 @@ newcmdnode(char **args, int c_false) {
   ct->args = args;
   ct->c_false = c_false;
 
-  /* cmd tree has no children, and doesn't doesn't have an opperator in it */
+  /* cmd tree has no children, and doesn't have an operator in it */
   ct->left = NULL;
   ct->right = NULL;
-  ct->opp_t = 0;
+  ct->op_t = 0;
 
   return ct;
 }
@@ -29,7 +29,7 @@ newoppnode(cntrl opp_t, cmd_tree *left, cmd_tree *right) {
   }
 
   ot->type = OP;
-  ot->opp_t = opp_t;
+  ot->op_t = opp_t;
   ot->left = left;
   ot->right = right;
 
@@ -70,19 +70,19 @@ scan_input(char *line, cmd_tok *toks, int *cnt) {
 
   for (i = 0; i < strlen(line); i++) {
     if (line[i] == '&' && i + 1 < strlen(line) && line[i + 1] == '&') {
-      toks[*cnt].opp = AND;
+      toks[*cnt].op = AND;
       toks[*cnt].cmd = strndup(&line[s], i - s);
       (*cnt)++;
       i += 2;
       s = i;
     } else if (line[i] == '|' && i + 1 < strlen(line) && line[i + 1] == '|') {
-      toks[*cnt].opp = OR;
+      toks[*cnt].op = OR;
       toks[*cnt].cmd = strndup(&line[s], i - s);
       (*cnt)++;
       i += 2;
       s = i;
     } else if (line[i] == ';') {
-      toks[*cnt].opp = SEMICOLON;
+      toks[*cnt].op = SEMICOLON;
       toks[*cnt].cmd = strndup(&line[s], i - s);
       (*cnt)++;
       i++;
@@ -91,7 +91,7 @@ scan_input(char *line, cmd_tok *toks, int *cnt) {
   }
 
   if (s < strlen(line)) {
-    toks[*cnt].opp = NONE;
+    toks[*cnt].op = NONE;
     toks[*cnt].cmd = strndup(&line[s], strlen(line) - s);
     (*cnt)++;
   }
@@ -124,7 +124,7 @@ build_tree(cmd_tok *tokens, int cnt, int i) {
 
   cmd_tree *right = build_tree(tokens, cnt, i + 1);
 
-  cmd_tree *root = newoppnode(c.opp, left, right);
+  cmd_tree *root = newoppnode(c.op, left, right);
   return root;
 }
 
@@ -146,7 +146,7 @@ run_commands(cmd_tree *n) {
   if (n->type == OP) {
     l_status = run_commands(n->left);
 
-    switch (n->opp_t) {
+    switch (n->op_t) {
     case SEMICOLON:
       r_status = run_commands(n->right);
       return r_status;
@@ -171,8 +171,4 @@ run_commands(cmd_tree *n) {
   }
 
   return 0;
-
-  /* note to self need to work out the logic on how to handle exist status, and
-     what the return value on this function should actually be still
-  */
 }
