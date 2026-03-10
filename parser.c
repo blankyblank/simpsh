@@ -74,16 +74,19 @@ scan_input(char *line, cmd_tok *toks, int *cnt) {
       toks[*cnt].cmd = strndup(&line[s], i - s);
       (*cnt)++;
       i++;
+      s = i;
     } else if (line[i] == '|' && i + 1 < strlen(line) && line[i + 1] == '|') {
       toks[*cnt].opp = OR;
       toks[*cnt].cmd = strndup(&line[s], i - s);
       (*cnt)++;
       i++;
+      s = i;
     } else if (line[i] == ';') {
       toks[*cnt].opp = SEMICOLON;
       toks[*cnt].cmd = strndup(&line[s], i - s);
       (*cnt)++;
       i++;
+      s = i;
     }
   }
 
