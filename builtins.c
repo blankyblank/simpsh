@@ -1,4 +1,5 @@
 #include "simpsh.h"
+#include <linux/limits.h>
 
 int argcount(char **);
 int builtinnum(void);
@@ -70,7 +71,7 @@ builtin_launch(char **args) {
 
 int
 cdsetpwd(char *arg) {
-  char oldpwd[PATH_MAX];
+  char respath[PATH_MAX], oldpwd[PATH_MAX];
   char *newpwd = NULL;
 
   /* char *oldpwd = getenv("PWD"); */
@@ -80,7 +81,9 @@ cdsetpwd(char *arg) {
     if (newpwd == NULL)
       return -1;
   } else {
-    if (realpath(arg, newpwd) == NULL) {
+    if (realpath(arg, respath) != NULL)
+      newpwd = realpath(arg, respath);
+    else {
       perror(arg);
       return -1;
     }
