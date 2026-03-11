@@ -1,7 +1,4 @@
 #include "simpsh.h"
-#include <linux/limits.h>
-#include <stdlib.h>
-#include <string.h>
 
 int argcount(char **);
 int builtinnum(void);

@@ -1,7 +1,12 @@
 #include "simpsh.h"
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 char *getfullpath(char *, char *);
 int startsWithSlash(const char *);
+char *exp_var(char *);
 
 char *
 lineread(void) {
@@ -15,6 +20,48 @@ lineread(void) {
   return line;
 }
 
+char *
+exp_var(char *args) {
+  char *var, *vt, *res;
+  size_t args_l = strlen(args);
+  size_t bufsize = args_l * 2;
+  size_t i, j, p = 0;
+  size_t vt_l, var_l;
+
+  res = malloc(bufsize);
+  if (!res) {
+    perror("malloc failed");
+    return NULL;
+  }
+
+  for (i = 0; i < args_l; i++) {
+    if (args[i] == '$') {
+      for (j = i + 1;; j++) {
+        if ((isalnum(args[j]) == 0 && args[j] != '_') || args[j] == '\0') {
+          vt_l = j - (i + 1);
+          vt = strndup(&args[i + 1], vt_l);
+          if ((var = getenv(vt)) == NULL)
+            var = "";
+          var_l = strlen(var);
+          if (p + var_l > bufsize) {
+            /* TODO: add realloc here later */
+          }
+          memcpy(&res[p], var, var_l);
+          free(vt);
+          p += var_l;
+          i = j - 1;
+          break;
+        }
+      }
+    } else {
+      res[p] = args[i];
+      p++;
+    }
+  }
+
+  res[p] = '\0';
+  return res;
+}
 char **
 getinput(char *inputline, char *delim) {
   char *tokens;
