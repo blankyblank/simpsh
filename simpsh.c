@@ -146,7 +146,7 @@ shexec(char **args) {
 
   if (pid == 0) {
     /* if fork was successful run the command */
-    if (execve(fullpath, args, NULL) == -1) {
+    if (execve(fullpath, args, environ) == -1) {
       perror(args[0]);
       free(fullpath);
       exit(97);
@@ -160,6 +160,5 @@ shexec(char **args) {
   }
   wait(&wstatus);
   free(fullpath);
-
   return 1;
 }

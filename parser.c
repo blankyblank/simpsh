@@ -63,10 +63,14 @@ scan_input(char *line, cmd_tok *toks, int *cnt) {
   unsigned int i, s = 0;
   *cnt = 0;
 
+  /* check if input  is null, or empy */
   if (line == NULL)
     return -1;
   if (strlen(line) == 0)
     return 1;
+
+  /* check for operators, save the type, extract the command
+   * then increment the correct number of spaces to match their lenght */
 
   for (i = 0; i < strlen(line); i++) {
     if (line[i] == '&' && i + 1 < strlen(line) && line[i + 1] == '&') {
@@ -90,6 +94,7 @@ scan_input(char *line, cmd_tok *toks, int *cnt) {
     }
   }
 
+  /* no operator */
   if (s < strlen(line)) {
     toks[*cnt].op = NONE;
     toks[*cnt].cmd = strndup(&line[s], strlen(line) - s);
@@ -99,6 +104,7 @@ scan_input(char *line, cmd_tok *toks, int *cnt) {
   return 0;
 }
 
+/* build command tree recursively */
 cmd_tree *
 build_tree(cmd_tok *tokens, int cnt, int i) {
   cmd_tok c;
@@ -110,6 +116,8 @@ build_tree(cmd_tok *tokens, int cnt, int i) {
 
   c = tokens[i];
   args = getinput(c.cmd, " \n");
+
+  /* handle empty input */
   if (args == NULL || args[0] == NULL) {
     fprintf(stderr, "unexpected operator\n");
     free(args);
@@ -132,9 +140,8 @@ int
 run_commands(cmd_tree *n) {
   int l_status, r_status;
 
-  if (n == NULL) {
+  if (n == NULL)
     return 0;
-  }
 
   if (n->type == CMD) {
     if (getbuiltin(n->args) == 1)
@@ -151,15 +158,13 @@ run_commands(cmd_tree *n) {
       r_status = run_commands(n->right);
       return r_status;
     case AND:
-      if (l_status != 0) {
+      if (l_status != 0)
         return l_status;
-      }
       r_status = run_commands(n->right);
       return r_status;
     case OR:
-      if (l_status == 0) {
+      if (l_status == 0)
         return l_status;
-      }
       r_status = run_commands(n->right);
       return r_status;
     case NONE:

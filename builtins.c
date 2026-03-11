@@ -1,10 +1,13 @@
 #include "simpsh.h"
 #include <linux/limits.h>
+#include <stdlib.h>
+#include <string.h>
 
 int argcount(char **);
 int builtinnum(void);
 int cdsetpwd(char *);
-
+int echo_print(int, int, char **);
+int exportcmd(char **);
 // clang-format off
 /* the array of builtin commands */
 char *builtins[] = {
@@ -12,6 +15,7 @@ char *builtins[] = {
   "echo",
   "exec",
   "exit",
+  "export",
   "false",
   "help",
   "pwd",
@@ -21,6 +25,7 @@ int (*builtin_funcs[])(char **) = {
   &echocmd,
   &execcmd,
   &exitcmd,
+  &exportcmd,
   &falsecmd,
   &helpcmd,
   &pwdcmd,
@@ -110,8 +115,6 @@ cdcmd(char **args) {
   return 0;
 }
 
-int echo_print(int, int, char **);
-
 int
 echocmd(char *args[]) {
   int n;
@@ -125,35 +128,33 @@ echocmd(char *args[]) {
       stat = echo_print(argc, n, args);
       if (stat == -1) {
         printf("something went wrong\n");
-        return EXIT_FAILURE;
+        return 1;
       }
+
     } else if (strcmp(args[1], "-n") == 0) {
-      /* printf(""); */
-      return EXIT_SUCCESS;
+      return 0;
     } else {
       n = 0;
       stat = echo_print(argc, n, args);
-      if (stat == -1) {
-        printf("something went wrong\n");
-        return EXIT_FAILURE;
-      }
-      return EXIT_SUCCESS;
+      if (stat == -1)
+        return 1;
+      return 0;
     }
   } else {
     printf("\n");
-    return EXIT_SUCCESS;
+    return 0;
   }
-  return EXIT_SUCCESS;
+  return 0;
 }
 
 int
 echo_print(int argc, int n, char *args[]) {
   int i;
-  char strng = ' ';
+  char s = ' ';
   if (n == 1) {
     for (i = 2; i < argc; i++) {
       if (i < argc - 1) {
-        printf("%s%c", args[i], strng);
+        printf("%s%c", args[i], s);
       } else {
         printf("%s", args[i]);
       }
@@ -162,7 +163,7 @@ echo_print(int argc, int n, char *args[]) {
   } else {
     for (i = 1; i < argc; i++) {
       if (i < argc - 1) {
-        printf("%s%c", args[i], strng);
+        printf("%s%c", args[i], s);
       } else {
         printf("%s", args[i]);
       }
@@ -207,6 +208,29 @@ exitcmd(char **argv) {
     freeptr(args);
   }
   exit(0);
+}
+
+int
+exportcmd(char **args) {
+  int argc, l;
+  char *n, *t, *val;
+  argc = argcount(args);
+
+  if (argc > 1) {
+    t = strchr(args[1], '=');
+    if (t == NULL) {
+      setenv(args[1], "", 0);
+    } else {
+      l = t - args[1];
+      n = strndup(args[1], l);
+      val = strdup(t + 1);
+      setenv(n, val, 1);
+      free(val);
+      free(n);
+    }
+  }
+
+  return 0;
 }
 
 int
