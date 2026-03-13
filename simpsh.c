@@ -1,12 +1,7 @@
 #include "simpsh.h"
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 char *getfullpath(char *, char *);
 int startsWithSlash(const char *);
-char *exp_var(char *);
 
 char *
 lineread(void) {
@@ -22,7 +17,7 @@ lineread(void) {
 
 char *
 exp_var(char *args) {
-  char *var, *vt, *res;
+  char *var, *t, *res, *vt = NULL;
   size_t args_l = strlen(args);
   size_t bufsize = args_l * 2;
   size_t i, j, p = 0;
@@ -39,20 +34,34 @@ exp_var(char *args) {
       for (j = i + 1;; j++) {
         if ((isalnum(args[j]) == 0 && args[j] != '_') || args[j] == '\0') {
           vt_l = j - (i + 1);
-          vt = strndup(&args[i + 1], vt_l);
-          if ((var = getenv(vt)) == NULL)
+          if (vt_l == 0) {
             var = "";
-          var_l = strlen(var);
-          if (p + var_l > bufsize) {
-            /* TODO: add realloc here later */
+            var_l = vt_l;
+            break;
+          } else {
+            vt = strndup(&args[i + 1], vt_l);
+            if ((var = getenv(vt)) == NULL)
+              var = "";
+            var_l = strlen(var);
+            if (p + var_l > bufsize) {
+              bufsize = p + var_l + 256;
+              t = realloc(res, bufsize);
+              if (!t) {
+                free(res);
+                if (vt)
+                  free(vt);
+              }
+              res = t;
+            }
+            break;
           }
-          memcpy(&res[p], var, var_l);
-          free(vt);
-          p += var_l;
-          i = j - 1;
-          break;
         }
       }
+      memcpy(&res[p], var, var_l);
+      if (vt)
+        free(vt);
+      p += var_l;
+      i = j - 1;
     } else {
       res[p] = args[i];
       p++;
@@ -178,7 +187,7 @@ shexec(char **args) {
      on PATH with the command name given */
   fullpath = getpath(&args[0]);
   if (fullpath == NULL) {
-    perror("command not found");
+    fprintf(stderr, "%s: %s: command not found\n", name, args[0]);
     if (fullpath)
       free(fullpath);
     return 1;
@@ -205,7 +214,5 @@ shexec(char **args) {
     free(fullpath);
     return estatus;
   }
-  wait(&wstatus);
-  free(fullpath);
   return 1;
 }

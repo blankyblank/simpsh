@@ -6,6 +6,7 @@
 int
 main(int argc, char **argv) {
   char *line = (char *)NULL, *cmd = NULL, buf[MAX_LENGTH];
+  char *vline;
   char **args = (char **)NULL;
   int estatus, cflag = 0, tflag = 0, c_arg = 0;
   int tok_c, scan_s;
@@ -45,8 +46,7 @@ main(int argc, char **argv) {
       estatus = shexec(args);
     exit(estatus);
   } else {
-    /* set up histor y*/
-
+    /* set up history */
     using_history();
 
     /* the main loop for the interactive shell */
@@ -59,7 +59,13 @@ main(int argc, char **argv) {
       /* calls readline */
       line = lineread();
 
-      /* parse user input */
+      /* variable expansion */
+      if (line && strchr(line, '$')) {
+        vline = exp_var(line);
+        free(line);
+        line = vline;
+      }
+
       scan_s = scan_input(line, toks, &tok_c);
 
       /* if input is empty */
@@ -73,11 +79,9 @@ main(int argc, char **argv) {
         continue;
       }
 
-      /* take tokens from parsed input and build a tree
-       * from them from them */
+      /* build the actual command from parsed input */
       r = build_tree(toks, tok_c, 0);
-
-      /* run the commands in the tree */
+      /* then run it */
       estatus = run_commands(r);
 
       freectree(r);

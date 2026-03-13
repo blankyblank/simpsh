@@ -19,6 +19,7 @@
 #include <sys/wait.h>
 
 extern char **environ;
+#define name "simpsh"
 
 typedef enum {
   AND,
@@ -62,6 +63,7 @@ extern char *getpath(char **);
 extern int builtin_launch(char **);
 extern int shexec(char **);
 extern char *lineread(void);
+extern char *exp_var(char *);
 
 extern cmd_tree *newcmdnode(char **, int);
 extern cmd_tree *newoppnode(cntrl, cmd_tree *, cmd_tree *);
