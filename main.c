@@ -12,8 +12,14 @@ main(int argc, char **argv) {
   int tok_c, scan_s;
   cmd_tok toks[MAX_CMDS];
   cmd_tree *r;
+  setlocale(LC_ALL, "");
 
-  /* check for cli flags */
+  /*
+   * if using -c or aren't we connected to a terminal we
+   * don't enter the loop so we check for those first and handle
+   * it accordingly
+   */
+
   if (argc > 1) {
     if (strcmp(argv[1], "-c") == 0 && argc > 2) {
       cflag = 1;
@@ -23,8 +29,6 @@ main(int argc, char **argv) {
     }
     cmd = argv[c_arg];
   }
-
-  /* check if stdin is a terminal */
   if (!isatty(STDIN_FILENO)) {
     tflag = 1;
     if ((cmd = fgets(buf, MAX_LENGTH, stdin)) == NULL) {
@@ -32,9 +36,6 @@ main(int argc, char **argv) {
     }
   }
 
-  setlocale(LC_ALL, "");
-
-  /* if using -c or aren't we connected to a terminal don't enter the loop*/
   if (cflag > 0 || tflag > 0) {
     args = getinput(cmd, " \n");
     if (getbuiltin(args) == 1) {
@@ -48,34 +49,37 @@ main(int argc, char **argv) {
   } else {
     /* set up history */
     using_history();
-
-    /* the main loop for the interactive shell */
+    /* the main loop */
 
     for (;;) {
       if (args != NULL) {
         freeptr(args);
         args = NULL;
       }
-      /* calls readline */
       line = lineread();
 
       /* variable expansion */
       if (line && strchr(line, '$')) {
-        vline = exp_var(line);
-        free(line);
-        line = vline;
+        if ((vline = exp_var(line)) == NULL) {
+          free(line);
+          line = vline;
+          estatus = 1;
+          continue;
+        } else {
+          free(line);
+          line = vline;
+        }
       }
 
-      scan_s = scan_input(line, toks, &tok_c);
-
-      /* if input is empty */
-      if (scan_s > 0) {
+      if ((scan_s = scan_input(line, toks, &tok_c)) > 0) {
+        /* if input is empty */
         free(line);
         continue;
         /* if something failed*/
       } else if (scan_s < 0) {
         perror("failed to read input");
         free(line);
+        estatus = 1;
         continue;
       }
 

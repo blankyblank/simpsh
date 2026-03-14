@@ -15,62 +15,6 @@ lineread(void) {
   return line;
 }
 
-char *
-exp_var(char *args) {
-  char *var, *t, *res, *vt = NULL;
-  size_t args_l = strlen(args);
-  size_t bufsize = args_l * 2;
-  size_t i, j, p = 0;
-  size_t vt_l, var_l;
-
-  res = malloc(bufsize);
-  if (!res) {
-    perror("malloc failed");
-    return NULL;
-  }
-
-  for (i = 0; i < args_l; i++) {
-    if (args[i] == '$') {
-      for (j = i + 1;; j++) {
-        if ((isalnum(args[j]) == 0 && args[j] != '_') || args[j] == '\0') {
-          vt_l = j - (i + 1);
-          if (vt_l == 0) {
-            var = "";
-            var_l = vt_l;
-            break;
-          } else {
-            vt = strndup(&args[i + 1], vt_l);
-            if ((var = getenv(vt)) == NULL)
-              var = "";
-            var_l = strlen(var);
-            if (p + var_l > bufsize) {
-              bufsize = p + var_l + 256;
-              t = realloc(res, bufsize);
-              if (!t) {
-                free(res);
-                if (vt)
-                  free(vt);
-              }
-              res = t;
-            }
-            break;
-          }
-        }
-      }
-      memcpy(&res[p], var, var_l);
-      if (vt)
-        free(vt);
-      p += var_l;
-      i = j - 1;
-    } else {
-      res[p] = args[i];
-      p++;
-    }
-  }
-
-  res[p] = '\0';
-  return res;
-}
 char **
 getinput(char *inputline, char *delim) {
   char *tokens;

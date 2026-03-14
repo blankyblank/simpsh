@@ -10,3 +10,4 @@ bak
 .gdb_history
 obj/*.o
 *vterm*
+PROJECT.md

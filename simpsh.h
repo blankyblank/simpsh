@@ -93,4 +93,5 @@ freetoks(cmd_tok *toks, int c) {
       free(toks[i].cmd);
   }
 }
+
 #endif /* SIMP_H */
