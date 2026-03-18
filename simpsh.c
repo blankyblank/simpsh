@@ -95,9 +95,11 @@ getfullpath(char *path, char *file) {
     token = strtok(NULL, ":");
   }
   free(pathcpy);
-  if (pathbuf)
-    free(pathbuf);
-  return (NULL);
+  goto fail;
+
+fail:
+  if (pathbuf) free(pathbuf);
+  return NULL;
 }
 
 char *
@@ -131,17 +133,16 @@ shexec(char **args) {
      on PATH with the command name given */
   fullpath = getpath(&args[0]);
   if (fullpath == NULL) {
-    fprintf(stderr, "%s: %s: command not found\n", name, args[0]);
-    if (fullpath)
-      free(fullpath);
-    return 1;
+    fprintf(stderr, "%s: %s: command not found\n", sh_argv0, args[0]);
+    estatus = 1;
+    goto done;
   }
 
   pid = fork();
   if (pid == -1) {
     perror("failed to create");
-    free(fullpath);
-    exit(41);
+    estatus = 1;
+    goto done;
   }
 
   if (pid == 0) {
@@ -158,5 +159,10 @@ shexec(char **args) {
     free(fullpath);
     return estatus;
   }
-  return 1;
+  estatus = 1;
+  goto done;
+
+done:
+  if (fullpath) free(fullpath);
+  return estatus;
 }
