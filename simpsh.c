@@ -148,8 +148,8 @@ shexec(char **args) {
     /* if fork was successful run the command */
     if (execve(fullpath, args, environ) == -1) {
       perror(args[0]);
-      free(fullpath);
-      exit(97);
+      estatus = 1;
+      goto done;
     }
   } else {
     waitpid(-1, &wstatus, 0);
