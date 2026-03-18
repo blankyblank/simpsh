@@ -1,3 +1,4 @@
+// vim: set filetype=c:
 #ifndef SIMP_H
 #define SIMP_H
 
@@ -18,9 +19,21 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-extern char **environ;
-#define name "simpsh"
+/* alias stuff */
+#define ALIAS_BUCKETS 64
 
+extern char **environ;
+
+typedef struct alias alias;
+struct alias {
+  char *name;
+  char *value;
+  alias *next;
+};
+
+extern alias *alias_tab[ALIAS_BUCKETS];
+
+/* parser stuff */
 typedef enum {
   AND,
   OR,
@@ -49,6 +62,15 @@ struct cmd_tree {
   cmd_tree *right;
 };
 
+/* shell variables */
+extern char *sh_argv0;
+extern char **sh_argv;
+extern int sh_argc;
+extern int lstatus;
+extern pid_t sh_pid;
+extern char *sh_pid_s;
+
+/* builtins */
 int cdcmd(char **);
 int echocmd(char **);
 int execcmd(char **);
@@ -57,6 +79,10 @@ int falsecmd(char **);
 int helpcmd(char **);
 int pwdcmd(char **);
 
+/* functions for shell */
+extern alias *get_alias(char *);
+extern void set_alias(char *, char *);
+extern void rm_alias(char *);
 extern char **getinput(char *, char *);
 extern int getbuiltin(char **);
 extern char *getpath(char **);
@@ -64,14 +90,23 @@ extern int builtin_launch(char **);
 extern int shexec(char **);
 extern char *lineread(void);
 extern char *exp_var(char *);
-
-extern cmd_tree *newcmdnode(char **, int);
-extern cmd_tree *newoppnode(cntrl, cmd_tree *, cmd_tree *);
-extern void freectree(cmd_tree *);
 extern int scan_input(char *, cmd_tok *, int *);
 extern cntrl chk_op(char *);
 extern cmd_tree *build_tree(cmd_tok *, int, int);
 extern int run_commands(cmd_tree *);
+
+/* malloc and free (mostly free right now) or other small inlined functions */
+
+static inline unsigned int
+hash(const char *s) {
+  unsigned int h = 0;
+  while (*s) {
+    h = h * 31 + (unsigned char)*s;
+    s++;
+  }
+  return h % ALIAS_BUCKETS;
+}
+
 
 static inline void
 freeptr(char **args) {

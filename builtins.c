@@ -5,9 +5,11 @@ int builtinnum(void);
 int cdsetpwd(char *);
 int echo_print(int, int, char **);
 int exportcmd(char **);
-// clang-format off
-/* the array of builtin commands */
+int aliascmd(char **);
+
+/* the array of builtin commands */  // clang-format off
 char *builtins[] = {
+  "alias",
   "cd",
   "echo",
   "exec",
@@ -18,6 +20,7 @@ char *builtins[] = {
   "pwd",
 };
 int (*builtin_funcs[])(char **) = {
+  &aliascmd,
   &cdcmd,
   &echocmd,
   &execcmd,
@@ -29,15 +32,48 @@ int (*builtin_funcs[])(char **) = {
 };
 int builtinnum(void) {
   return sizeof(builtins) / sizeof(char *);
-}
+} // clang-format on
 
-// clang-format on
+int
+aliascmd(char **args) {
+  int i;
+  alias *e;
+  char *delem, *n, *v;
+
+  if (!args[1]) {
+    for (i = 0; i < ALIAS_BUCKETS; i++) {
+      if (alias_tab[i]) {
+        e = alias_tab[i];
+        while (e) {
+          printf("alias %s=%s\n", e->name, e->value);
+          e = e->next;
+        }
+      }
+    }
+    return 0;
+  }
+
+  if (!(delem = strchr(args[1], '='))) {
+    if (!(e = get_alias(args[1])))
+      return 1;
+    else
+      printf("alias %s=%s\n", e->name, e->value);
+  } else {
+    n = strndup(args[1], strlen(args[1]) - strlen(delem));
+    v = strdup(delem + 1);
+    set_alias(n, v);
+    if (n) free(n);
+    if (v) free(v);
+  }
+
+  return 0;
+}
 
 int
 argcount(char **args) {
   int argc = 0;
 
-  while (args[argc] != NULL)
+  while (args[argc])
     argc++;
 
   return argc;
@@ -80,10 +116,10 @@ cdsetpwd(char *arg) {
   getcwd(oldpwd, sizeof(oldpwd));
   if (!strcmp(arg, "-")) {
     newpwd = getenv("OLDPWD");
-    if (newpwd == NULL)
+    if (!newpwd)
       return -1;
   } else {
-    if (realpath(arg, respath) != NULL)
+    if (realpath(arg, respath))
       newpwd = realpath(arg, respath);
     else {
       perror(arg);
@@ -177,31 +213,25 @@ execcmd(char **args) {
 
   fullpath = getpath(&args[1]);
 
-  if (args[1] == NULL) {
-    perror("Missing command");
-    return 1;
-  }
-
-  if (fullpath == NULL) {
-    perror("command not found");
-    if (fullpath)
-      free(fullpath);
-    return 1;
-  }
-
-  if (execve(fullpath, &args[1], environ) < 0) {
-    perror(args[0]);
-    free(fullpath);
-    return 1;
-  }
+  if (!args[1])
+    goto fail;
+  if (!fullpath)
+    goto fail;
+  if (execve(fullpath, &args[1], environ) < 0)
+    goto fail;
   return 0;
+
+fail:
+  perror(args[0]);
+  if (fullpath) free(fullpath);
+  return 1;
 }
 
 int
 exitcmd(char **argv) {
   char **args = (char **)NULL;
   (void)argv;
-  if (args != NULL) {
+  if (args) {
     freeptr(args);
   }
   exit(0);
@@ -215,7 +245,7 @@ exportcmd(char **args) {
 
   if (argc > 1) {
     t = strchr(args[1], '=');
-    if (t == NULL) {
+    if (!t) {
       setenv(args[1], "", 0);
     } else {
       l = t - args[1];
