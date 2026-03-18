@@ -61,7 +61,7 @@ build_tree(cmd_tok *tokens, int cnt, int i) {
   args = getinput(c.cmd, " \n");
 
   /* handle empty input */
-  if (args == NULL || args[0] == NULL) {
+  if (!args || !args[0]) {
     fprintf(stderr, "unexpected operator\n");
     free(args);
     return NULL;
@@ -83,7 +83,7 @@ int
 run_commands(cmd_tree *n) {
   int l_status, r_status;
 
-  if (n == NULL)
+  if (!n)
     return 0;
 
   if (n->type == CMD) {

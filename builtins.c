@@ -6,6 +6,7 @@ int cdsetpwd(char *);
 int echo_print(int, int, char **);
 int exportcmd(char **);
 int aliascmd(char **);
+int truecmd(char **);
 
 /* the array of builtin commands */  // clang-format off
 char *builtins[] = {
@@ -18,6 +19,7 @@ char *builtins[] = {
   "false",
   "help",
   "pwd",
+  "true",
 };
 int (*builtin_funcs[])(char **) = {
   &aliascmd,
@@ -29,6 +31,7 @@ int (*builtin_funcs[])(char **) = {
   &falsecmd,
   &helpcmd,
   &pwdcmd,
+  &truecmd,
 };
 int builtinnum(void) {
   return sizeof(builtins) / sizeof(char *);
@@ -291,4 +294,10 @@ pwdcmd(char **args) {
     return 0;
   }
   return 1;
+}
+
+int
+truecmd(char **args) {
+  (void)args;
+  return 0;
 }
