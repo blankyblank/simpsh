@@ -1,4 +1,5 @@
 #include "simpsh.h"
+#include "malloc.h"
 
 int argcount(char **);
 int builtinnum(void);
