@@ -3,21 +3,21 @@
 
 
 char **
-get_argv(sh_tok *tokens, int cnt, size_t *i) {
-  // char **argv = malloc(MAX_CMDS * sizeof(char *));
-  char **argv = NULL;
+get_argv(sh_tok *tokens, size_t cnt, size_t *i) {
+  char **argv = malloc(MAX_CMDS * sizeof(char *));
+  // char **argv = NULL;
   size_t t = *i, j = 0;
   
-  while (tokens[t].type == TWORD) {
-    if (tokens[t].type == TAND || tokens[t].type == TOR || tokens[t].type == TSEMI || tokens[t].type == TEOF)
-      break;
-    if (tokens[t].type == TWORD) {
-      argv[j] = strdup(tokens[t].cmd);
-      j++;
+  while (t < cnt && tokens[t].type == TWORD) {
+    argv[j] = strdup(tokens[t].cmd);
+    if (!argv[j]) {
+      freeptr(argv);
+      return NULL;
     }
+    j++;
     t++;
   }
-  
+  argv[j] = NULL;
   *i = t;
   return argv;
 }
@@ -33,33 +33,38 @@ build_tree(sh_tok *tokens, size_t cnt) {
   if (cnt < 1 || tokens[i].type != TWORD)
     return NULL;
 
-  args = get_argv(&tokens[i], cnt, &i);
-  // args = getinput(tokens[i].cmd, " \n");
-
+  args = get_argv(tokens, cnt, &i);
   if (!args || !args[0]) {    /* handle empty input */
-    fprintf(stderr, "unexpected operator\n");
-    free(args);
+    fprintf(stderr, "somethings wrong \n");
+    freeptr(args);
     return NULL;
   }
 
   r = newcmdnode(args, 0);
-  i = 1;
+  // i = 1;
 
   while (i < cnt && tokens[i].type != TEOF) {
     t = tokens[i].type;
-    i++;
 
+    if (t != TAND && t != TOR && t != TSEMI) {
+      fprintf(stderr, "Expected Operator\n");
+      return NULL;
+    }
+    i++; //move to next command
+
+    // Must have a command after operator
     if (i >= cnt || tokens[i].type != TWORD)
       return NULL;
-
-    args = getinput(tokens[i].cmd, " \n");
+    // Get next command's arguments
+    args = get_argv(tokens, cnt, &i);
+          // args = getinput(tokens[i].cmd, " \n");
     if (!args || !args[0]) {
       freeptr(args);
       return NULL;
     }
+    // fprintf(stderr, "Creating operator node with type: %d\n", t);
     n = newcmdnode(args, 0);
-    r = newoppnode(tokens[i - 1].type, r, n);
-    i++;
+    r = newoppnode(t, r, n);
   }
   return r;
 }

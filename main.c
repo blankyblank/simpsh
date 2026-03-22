@@ -66,34 +66,30 @@ main(int argc, char **argv) {
   }
 }
 
+void print_tree(cmd_tree *n, int depth) {
+  if (!n)
+    return;
+  
+  for (int i = 0; i < depth; i++)
+    fprintf(stderr, "  ");
+  
+  if (n->type == CMD) {
+    fprintf(stderr, "CMD: ");
+    for (int i = 0; n->args[i]; i++)
+      fprintf(stderr, "%s ", n->args[i]);
+    fprintf(stderr, "\n");
+  } else if (n->type == OP) {
+    fprintf(stderr, "OP: %d\n", n->op_t);
+    print_tree(n->left, depth + 1);
+    print_tree(n->right, depth + 1);
+  }
+}
+
 int
 simpsh_run(char *line) {
   int estatus, tok_c;
   sh_tok *toks;
   cmd_tree *c;
-
-  /* variable expansion */
-  // if (line && strchr(line, '$')) {
-  //   if ((vline = exp_var_old(line)) == NULL) {
-  //     free(line);
-  //     line = vline;
-  //     return 1;
-  //   }
-  //   free(line);
-  //   line = vline;
-  // }
-
-  // toks = 
-  // if ((scan_s = scan_input(line, toks, &tok_c)) > 0) {
-  //   /* if input is empty */
-  //   free(line);
-  //   return 0;
-  //   /* if something failed*/
-  // } else if (scan_s < 0) {
-  //   fprintf(stderr, "%s: Failed to read input\n", sh_argv0);
-  //   free(line);
-  //   return 1;
-  // }
 
   if (!(toks = tokenize(line, &tok_c))) {
     perror("failed to get input (maybe)");
@@ -102,6 +98,7 @@ simpsh_run(char *line) {
 
   /* build the actual command from parsed input */
   c = build_tree(toks, tok_c);
+  // print_tree(c, tok_c);
   /* then run it */
   estatus = run_commands(c);
 

@@ -99,6 +99,7 @@ freetoks(sh_tok *toks, int c) {
     if (toks[i].cmd != NULL)
       free(toks[i].cmd);
   }
+  free(toks);
 }
 
 static inline void

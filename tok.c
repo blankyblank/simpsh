@@ -149,51 +149,68 @@ tokenize(char *line, int *cnt) {
 
   /* go until we hit the null byte */
   while (line[p]) {
-    /* save first word in the list */
-    if (!(buf = get_word(line, &p)))
-      return NULL;
-    if (buf && buf[0] != '\0') { 
-      tokens[c].type = TWORD;
-      tokens[c].cmd = buf;
-    } else {
-      free(buf);
-    }
+    // /* save first word in the list */
+    // if (!(buf = get_word(line, &p)))
+    //   return NULL;
+    // if (buf && buf[0] != '\0') { 
+    //   tokens[c].type = TWORD;
+    //   tokens[c].cmd = buf;
+    //   // maybe try this
+    //   //c++;
+    //   buf = NULL;
+    // } else {
+    //   free(buf);
+    //   buf = NULL;
+    // }
 
+    /* skip whitespace */
     while (line[p] == ' ' || line[p] == '\n' || line[p] == '\t')
       p++;
+    if (!line[p])
+      break;
 
     n = p + 1;
 
+    // removed free buff on each of these put back if needed
     if (line[p] == '&' && line[n] == '&') {
       tokens[c].type = TAND;
       tokens[c].cmd = NULL;
-      free(buf);
       c++;
       p += 2;
+      continue;
     } else if (line[p] == '|' && line[n] == '|') {
       tokens[c].type = TOR;
       tokens[c].cmd = NULL;
-      free(buf);
       c++;
       p += 2;
+      continue;
     } else if (line[p] == ';') {
       tokens[c].type = TSEMI;
       tokens[c].cmd = NULL;
-      free(buf);
       c++;
       p++;
+      continue;
     } else {
-      tokens[c].type = TWORD;
-      tokens[c].cmd = buf;
-      c++;
+
+      if (!(buf = get_word(line, &p)))
+        return NULL;
+      if (buf[0] != '\0') { 
+        tokens[c].type = TWORD;
+        tokens[c].cmd = buf;
+        c++;
+      } else {
+        free(buf);
+      }
     }
   }
   tokens[c].type = TEOF;
   tokens[c].cmd = NULL;
 
-  for (int j = 0; j < c; j++) {                                                                                                                                                               
-    fprintf(stderr, "token[%d]: type=%d cmd='%s'\n", j, tokens[j].type, tokens[j].cmd);                                                                                                       
-  }       
   *cnt = c;
   return tokens;
 }
+
+  // //debug
+  // for (int j = 0; j < c; j++) {
+  //   fprintf(stderr, "token[%d]: type=%d cmd='%s'\n", j, tokens[j].type, tokens[j].cmd);
+  // }
