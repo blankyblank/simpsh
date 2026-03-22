@@ -1,4 +1,5 @@
 #include "simpsh.h"
+#include "malloc.h"
 
 static char *getvar(char *);
 static char *var_n(char *, size_t, size_t *, size_t *);
@@ -6,20 +7,6 @@ static char *varbrace_n(char *, size_t, size_t *);
 static int is_pos(char *);
 static char *get_posparam(int);
 static char *varstatus(size_t *);
-
-static inline char *
-var_realloc(char *e_args, size_t p, size_t var_l, size_t *bufsize) {
-  char *t;
-
-  *bufsize = p + var_l + 256;
-  t = realloc(e_args, *bufsize);
-  if (!t) {
-    free(e_args);
-    return NULL;
-  }
-  e_args = t;
-  return e_args;
-}
 
 int
 is_pos(char *var) {
@@ -133,7 +120,36 @@ varbrace_n(char *args, size_t i, size_t *end) {
 }
 
 char *
-exp_var(char *args) {
+exp_var(char *line, size_t *pos, size_t *len) {
+  size_t i = *pos;
+  size_t end;
+  char *var;
+
+  if (line[i] != '$')
+    return NULL;
+
+  if (line[i + 1] == '$') {
+    var = var_pid(len);
+    *pos = i + 2;
+  } else if (line[i + 1] == '?') {
+    var = varstatus(len);
+    *pos = i + 2;
+  } else if (line[i + 1] == '{') {
+    var = varbrace_n(line, i, &end);
+    if (!var)
+      return NULL;
+    *len = strlen(var);
+    *pos = end + 1;
+  } else {
+    var = var_n(line, i, &end, len);
+    *pos = end + 1;
+  }
+
+  return var;
+}
+
+char *
+exp_var_old(char *args) {
   char *var, *e_args, *vt = NULL;
   size_t args_l = strlen(args);
   size_t bufsize = args_l * 2;
@@ -158,18 +174,18 @@ exp_var(char *args) {
         j = i + 1;
 
       } else if (args[i + 1] == '{') {
-        if ((var = varbrace_n(args, i, &j)) == NULL)
+        if (!(var = varbrace_n(args, i, &j)))
           goto fail;
         var_l = strlen(var);
         if (p + var_l > bufsize)
-          e_args = var_realloc(e_args, p, var_l, &bufsize);
+          e_args = s_realloc(e_args, &bufsize);
 
       } else {
         var = var_n(args, i, &j, &var_l);
         if (var_l != 1)
           var_l = strlen(var);
         if (p + var_l > bufsize)
-          e_args = var_realloc(e_args, p, var_l, &bufsize);
+          e_args = s_realloc(e_args, &bufsize);
       }
 
       memcpy(&e_args[p], var, var_l);
