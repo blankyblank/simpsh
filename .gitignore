@@ -12,3 +12,4 @@ obj/*.o
 *vterm*
 PROJECT.md
 notes.txt
+tmp*.md
