@@ -1,4 +1,3 @@
-// vim: set filetype=c:
 #ifndef SIMP_H
 #define SIMP_H
 
@@ -19,6 +18,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#define MAX_CMDS 256
+#define MAX_LENGTH 256
 /* alias stuff */
 #define ALIAS_BUCKETS 64
 
@@ -32,35 +33,6 @@ struct alias {
 };
 
 extern alias *alias_tab[ALIAS_BUCKETS];
-
-/* parser stuff */
-typedef enum {
-  AND,
-  OR,
-  SEMICOLON,
-  NONE,
-} cntrl;
-
-/* store commands before putting them in ast */
-typedef struct {
-  char *cmd;
-  cntrl op;
-} cmd_tok;
-
-/* tree struct to use for command parsing */
-typedef struct cmd_tree cmd_tree;
-struct cmd_tree {
-  enum {
-    CMD,
-    OP
-  } type;
-
-  char **args;
-  int c_false;
-  cntrl op_t;
-  cmd_tree *left;
-  cmd_tree *right;
-};
 
 /* shell variables */
 extern char *sh_argv0;
@@ -89,13 +61,8 @@ extern char *getpath(char **);
 extern int builtin_launch(char **);
 extern int shexec(char **);
 extern char *lineread(void);
-extern char *exp_var(char *);
-extern int scan_input(char *, cmd_tok *, int *);
-extern cntrl chk_op(char *);
-extern cmd_tree *build_tree(cmd_tok *, int, int);
-extern int run_commands(cmd_tree *);
-
-/* malloc and free (mostly free right now) or other small inlined functions */
+extern char *exp_var(char *, size_t *, size_t *);
+extern char *exp_var_old(char *);
 
 static inline unsigned int
 hash(const char *s) {
@@ -107,26 +74,5 @@ hash(const char *s) {
   return h % ALIAS_BUCKETS;
 }
 
-
-static inline void
-freeptr(char **args) {
-  if (args != NULL) {
-    int i = 0;
-    while (args[i] != NULL) {
-      free(args[i]);
-      i++;
-    }
-    free(args);
-  }
-}
-
-static inline void
-freetoks(cmd_tok *toks, int c) {
-  int i;
-  for (i = 0; i < c; i++) {
-    if (toks[i].cmd != NULL)
-      free(toks[i].cmd);
-  }
-}
-
+// vim: set filetype=c:
 #endif /* SIMP_H */
