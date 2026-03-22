@@ -101,7 +101,7 @@ RequiresClausePosition: OwnLine
 #RequiresExpressionIndentation: Keyword
 SeparateDefinitionBlocks: Leave
 ShortNamespaceLines: 0
-SortIncludes: CaseSensitive
+SortIncludes: Never
 SortJavaStaticImport: Before
 SortUsingDeclarations: true
 SpaceAfterCStyleCast: false
