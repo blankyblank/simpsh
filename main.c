@@ -1,8 +1,6 @@
-#include "parser.h"
 #include "simpsh.h"
+#include "parser.h"
 
-#define MAX_CMDS 256
-#define MAX_LENGTH 256
 int sh_argc;
 int lstatus;
 pid_t sh_pid;
@@ -70,40 +68,49 @@ main(int argc, char **argv) {
 
 int
 simpsh_run(char *line) {
-  char *vline;
-  int estatus, tok_c, scan_s;
-  cmd_tok toks[MAX_CMDS];
-  cmd_tree *r;
+  int estatus, tok_c;
+  sh_tok *toks;
+  cmd_tree *c;
 
   /* variable expansion */
-  if (line && strchr(line, '$')) {
-    if ((vline = exp_var(line)) == NULL) {
-      free(line);
-      line = vline;
-      return 1;
-    }
-    free(line);
-    line = vline;
-  }
+  // if (line && strchr(line, '$')) {
+  //   if ((vline = exp_var_old(line)) == NULL) {
+  //     free(line);
+  //     line = vline;
+  //     return 1;
+  //   }
+  //   free(line);
+  //   line = vline;
+  // }
 
-  if ((scan_s = scan_input(line, toks, &tok_c)) > 0) {
-    /* if input is empty */
-    free(line);
-    return 0;
-    /* if something failed*/
-  } else if (scan_s < 0) {
-    fprintf(stderr, "%s: Failed to read input\n", sh_argv0);
-    free(line);
-    return 1;
+  // toks = 
+  // if ((scan_s = scan_input(line, toks, &tok_c)) > 0) {
+  //   /* if input is empty */
+  //   free(line);
+  //   return 0;
+  //   /* if something failed*/
+  // } else if (scan_s < 0) {
+  //   fprintf(stderr, "%s: Failed to read input\n", sh_argv0);
+  //   free(line);
+  //   return 1;
+  // }
+
+  if (!(toks = tokenize(line, &tok_c))) {
+    perror("failed to get input (maybe)");
+    estatus = 1;
   }
 
   /* build the actual command from parsed input */
-  r = build_tree(toks, tok_c, 0);
+  c = build_tree(toks, tok_c);
   /* then run it */
-  estatus = run_commands(r);
+  estatus = run_commands(c);
 
-  freectree(r);
+  if (c) {
+    freectree(c);
+  }
+  if (line) {
+    free(line);
+  }
   freetoks(toks, tok_c);
-  free(line);
   return estatus;
 }

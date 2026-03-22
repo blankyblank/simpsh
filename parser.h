@@ -2,7 +2,55 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "simpsh.h"
+#include "malloc.h"
+
+#define BUF_S 64
+
+// NOTE: need to decide how to structure header after tok.c is done
+typedef enum {
+  TWORD,
+  TAND,
+  TOR,
+  TSEMI,
+  TEOF,
+} token;
+
+typedef enum {
+  QNONE,
+  QSINGLE,
+  QDOUBLE,
+} quoted;
+
+/* store torkens before building argv */
+typedef struct {
+  char *cmd;
+  token type;
+} sh_tok;
+
+/* tree struct to use for command parsing */
+typedef struct cmd_tree cmd_tree;
+struct cmd_tree {
+  enum {
+    CMD,
+    OP
+  } type;
+
+  char **args;
+  int c_false;
+  token op_t;
+  cmd_tree *left;
+  cmd_tree *right;
+};
+
+/* new parsing */
+char *get_word(char *, size_t *);
+sh_tok *tokenize(char *, int *);
+
+/* old parser scan input at least is being removed */
+extern int scan_input(char *, sh_tok *, int *);
+extern token chk_op(char *);
+extern cmd_tree *build_tree(sh_tok *, size_t);
+extern int run_commands(cmd_tree *);
 
 static inline cmd_tree *
 newcmdnode(char **args, int c_false) {
@@ -25,7 +73,7 @@ newcmdnode(char **args, int c_false) {
 }
 
 static inline cmd_tree *
-newoppnode(cntrl opp_t, cmd_tree *left, cmd_tree *right) {
+newoppnode(token opp_t, cmd_tree *left, cmd_tree *right) {
   cmd_tree *ot = malloc(sizeof(cmd_tree));
   if (!ot) {
     perror("malloc failed");
@@ -42,6 +90,15 @@ newoppnode(cntrl opp_t, cmd_tree *left, cmd_tree *right) {
   ot->c_false = 0;
 
   return ot;
+}
+
+static inline void
+freetoks(sh_tok *toks, int c) {
+  int i;
+  for (i = 0; i < c; i++) {
+    if (toks[i].cmd != NULL)
+      free(toks[i].cmd);
+  }
 }
 
 static inline void

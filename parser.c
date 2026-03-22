@@ -1,82 +1,67 @@
 #include "simpsh.h"
 #include "parser.h"
 
-int
-scan_input(char *line, cmd_tok *toks, int *cnt) {
-  unsigned int i, s = 0;
-  *cnt = 0;
 
-  /* check if input  is null, or empy */
-  if (line == NULL)
-    return -1;
-  if (strlen(line) == 0)
-    return 1;
-
-  /* check for operators, save the type, extract the command
-   * then increment the correct number of spaces to match their lenght */
-
-  for (i = 0; i < strlen(line); i++) {
-    if (line[i] == '&' && i + 1 < strlen(line) && line[i + 1] == '&') {
-      toks[*cnt].op = AND;
-      toks[*cnt].cmd = strndup(&line[s], i - s);
-      (*cnt)++;
-      i += 2;
-      s = i;
-    } else if (line[i] == '|' && i + 1 < strlen(line) && line[i + 1] == '|') {
-      toks[*cnt].op = OR;
-      toks[*cnt].cmd = strndup(&line[s], i - s);
-      (*cnt)++;
-      i += 2;
-      s = i;
-    } else if (line[i] == ';') {
-      toks[*cnt].op = SEMICOLON;
-      toks[*cnt].cmd = strndup(&line[s], i - s);
-      (*cnt)++;
-      i++;
-      s = i;
+char **
+get_argv(sh_tok *tokens, int cnt, size_t *i) {
+  // char **argv = malloc(MAX_CMDS * sizeof(char *));
+  char **argv = NULL;
+  size_t t = *i, j = 0;
+  
+  while (tokens[t].type == TWORD) {
+    if (tokens[t].type == TAND || tokens[t].type == TOR || tokens[t].type == TSEMI || tokens[t].type == TEOF)
+      break;
+    if (tokens[t].type == TWORD) {
+      argv[j] = strdup(tokens[t].cmd);
+      j++;
     }
+    t++;
   }
-
-  /* no operator */
-  if (s < strlen(line)) {
-    toks[*cnt].op = NONE;
-    toks[*cnt].cmd = strndup(&line[s], strlen(line) - s);
-    (*cnt)++;
-  }
-
-  return 0;
+  
+  *i = t;
+  return argv;
 }
 
 /* build command tree recursively */
 cmd_tree *
-build_tree(cmd_tok *tokens, int cnt, int i) {
-  cmd_tok c;
-  char **args;
+build_tree(sh_tok *tokens, size_t cnt) {
+  size_t i = 0;
+  char **args = NULL;
+  cmd_tree *n, *r;
+  token t;
 
-  if (i > cnt) {
+  if (cnt < 1 || tokens[i].type != TWORD)
     return NULL;
-  }
 
-  c = tokens[i];
-  args = getinput(c.cmd, " \n");
+  args = get_argv(&tokens[i], cnt, &i);
+  // args = getinput(tokens[i].cmd, " \n");
 
-  /* handle empty input */
-  if (!args || !args[0]) {
+  if (!args || !args[0]) {    /* handle empty input */
     fprintf(stderr, "unexpected operator\n");
     free(args);
     return NULL;
   }
 
-  cmd_tree *left = newcmdnode(args, 0);
+  r = newcmdnode(args, 0);
+  i = 1;
 
-  if (i == cnt - 1) {
-    return left;
+  while (i < cnt && tokens[i].type != TEOF) {
+    t = tokens[i].type;
+    i++;
+
+    if (i >= cnt || tokens[i].type != TWORD)
+      return NULL;
+
+    args = getinput(tokens[i].cmd, " \n");
+    if (!args || !args[0]) {
+      freeptr(args);
+      return NULL;
+    }
+    n = newcmdnode(args, 0);
+    r = newoppnode(tokens[i - 1].type, r, n);
+    i++;
   }
-
-  cmd_tree *right = build_tree(tokens, cnt, i + 1);
-
-  cmd_tree *root = newoppnode(c.op, left, right);
-  return root;
+  return r;
 }
 
 int
@@ -97,20 +82,20 @@ run_commands(cmd_tree *n) {
     l_status = run_commands(n->left);
 
     switch (n->op_t) {
-    case SEMICOLON:
+    case TSEMI:
       r_status = run_commands(n->right);
       return r_status;
-    case AND:
+    case TAND:
       if (l_status != 0)
         return l_status;
       r_status = run_commands(n->right);
       return r_status;
-    case OR:
+    case TOR:
       if (l_status == 0)
         return l_status;
       r_status = run_commands(n->right);
       return r_status;
-    case NONE:
+    case TEOF:
       return l_status;
     default:
       fprintf(stderr, "Unknown Operator\n");
