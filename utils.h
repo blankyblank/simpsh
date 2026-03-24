@@ -2,6 +2,7 @@
 #define MALLOC_H
 
 /* malloc and free or other small inlined functions */
+
 static inline char *
 s_realloc(char *buf, size_t *bufsize) {
   char *t;
