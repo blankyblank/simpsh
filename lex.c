@@ -1,42 +1,18 @@
 #include "simpsh.h"
-#include "parser.h"
+#include "alias.h"
+#include "builtins.h"
+#include "lex.h"
 
-char **get_argv(sh_tok *, size_t, size_t *);
+typedef enum {
+  QNONE,
+  QSINGLE,
+  QDOUBLE,
+} quoted;
 
-sh_tok * // TODO: not sure I will even need these
-copy_tokens(sh_tok *src, int start, int len) {
-  sh_tok *dst = malloc((len + 1) * sizeof(sh_tok));
-  if (!dst)
-    return NULL;
-  for (int i = 0; i < len; i++) {
-    dst[i] = src[start + i];
-    if (src[start + i].cmd)
-      dst[i].cmd = strdup(src[start + i].cmd);
-  }
-  dst[len].type = TEOF;
-  dst[len].cmd = NULL;
-  return dst;
-}
+static char **get_argv(const sh_tok *, size_t, size_t *);
 
-sh_tok * // TODO: not sure I will even need these
-concat_tokens(sh_tok *a, int cnt_a, sh_tok *b, int cnt_b) {
-  sh_tok *c = malloc((cnt_a + cnt_b + 1) * sizeof(sh_tok));
-  if (!c)
-    return NULL;
-  for (int i = 0; i < cnt_a; i++)
-    c[i] = a[i];
-  for (int i = 0; i < cnt_b; i++) {
-    c[cnt_a + i] = b[i];
-    if (b[i].cmd)
-      c[cnt_a + i].cmd = strdup(b[i].cmd);
-  }
-  c[cnt_a + cnt_b].type = TEOF;
-  c[cnt_a + cnt_b].cmd = NULL;
-  return c;
-}
-
-char **
-get_argv(sh_tok *tokens, size_t cnt, size_t *i) {
+static char **
+get_argv(const sh_tok *tokens, size_t cnt, size_t *i) {
   size_t t = *i;
   size_t j = 0;
   char **argv = malloc(MAX_CMDS * sizeof(char *));
@@ -55,6 +31,203 @@ get_argv(sh_tok *tokens, size_t cnt, size_t *i) {
   *i = t;
   return argv;
 } /* build consecutive TWORDS into command */
+
+
+/*
+ * shell language tokenizer. parses a line extracts a word, handles quoting,
+ * variable expansion, escaping.
+ *
+ * it's used in tokenize, it returns immediately if it's at the position of an
+ * opterator tokenize handles finding those. also whitespace etc.
+ *
+ * it advances the position for the caller, then the caller needs to advance
+ * through whitespace, and operators when it handles them.
+ */
+
+// TODO: eventually try moving to a stack buffer or some other method to use stack memory
+char *
+get_word(char *line, size_t *pos, int *q) {
+  quoted state;
+  size_t bufpos = 0, i = *pos;
+  size_t bufsize = BUF_S;
+  size_t var_l;
+  char *var;
+  char c, n;
+  *q = 0;
+
+  // caller frees
+  char *buf = malloc(bufsize);
+  if (!buf)
+    return NULL;
+
+  state = QNONE;
+
+  while (line[i]) {
+    c = line[i];
+    n = line[i + 1];
+    if (bufpos + 1 >= bufsize) {
+      buf = s_realloc(buf, &bufsize);
+      if (!buf)
+        return NULL;
+    }
+
+    switch (state) {
+    case QNONE:
+      if (c == ' ' || c == '\t' || c == '\n') {
+        goto done;
+      } else if (c == '&' || c == '|' || c == ';') {
+        goto done;
+      } else if (c == '\'') {
+        state = QSINGLE;
+        *q = 1;
+        i++;
+      } else if (c == '"') {
+        state = QDOUBLE;
+        *q = 1;
+        i++;
+      } else if (c == '\\') {
+        if (n == '\0') {
+          i++;
+          goto done;
+        } else {
+          buf[bufpos++] = n;
+          i += 2;
+        }
+      } else if (c == '$') {
+        var = exp_var(line, &i, &var_l); // NOTE: exp_var updates i
+        if (!var)
+          return NULL;
+        if (bufpos + var_l >= bufsize) {
+          buf = s_realloc(buf, &bufsize);
+          if (!buf) {
+            perror("realloc failed");
+            return NULL;
+          }
+        }
+        memcpy(buf + bufpos, var, var_l);
+        free(var);
+        bufpos += var_l;
+      } else {
+        buf[bufpos++] = c;
+        i++;
+      }
+      break;
+
+    case QSINGLE:
+      if (c == '\'') {
+        state = QNONE;
+        i++;
+      } else {
+        buf[bufpos++] = c;
+        i++;
+      }
+      break;
+
+    case QDOUBLE:
+      if (c == '"') {
+        state = QNONE;
+        i++;
+      } else if (c == '\\') {
+        if (n == '\n') {
+          i += 2;
+          continue;
+        } else if (n == '$' || n == '"' || n == '\\') {
+          buf[bufpos++] = n;
+          i += 2;
+        } else {
+          buf[bufpos++] = c;
+          i++;
+        }
+      } else if (c == '$') {
+        var = exp_var(line, &i, &var_l); // NOTE: exp_var updates i
+        if (!var)
+          return NULL;
+        if (bufpos + var_l >= bufsize) {
+          buf = s_realloc(buf, &bufsize);
+          if (!buf) {
+            perror("realloc failed");
+            return NULL;
+          }
+        }
+        memcpy(buf + bufpos, var, var_l);
+        free(var);
+        bufpos += var_l;
+      } else {
+        buf[bufpos++] = c;
+        i++;
+      }
+      break;
+    }
+  }
+
+done:
+  buf[bufpos] = '\0';
+  *pos = i;
+  return buf;
+}
+
+sh_tok *
+tokenize(char *line, int *cnt) {
+  size_t p = 0, c = 0, n;
+  int q;
+  *cnt = 0;
+  char *buf = NULL;
+
+  if (!line) {
+    *cnt = -1;
+    return NULL;
+  }
+  if (strlen(line) == 0)
+    return NULL;
+
+  sh_tok *tokens = malloc(MAX_CMDS * (sizeof(sh_tok)));
+  if (!tokens)
+    return NULL;
+
+  /* go until we hit the null byte */
+  while (line[p]) {
+    while (line[p] == ' ' || line[p] == '\n' || line[p] == '\t') /* skip whitespace */
+      p++;
+    if (!line[p])
+      break;
+
+    n = p + 1;
+    /* update c (count) and p (position) by the length of the operator */
+    if (line[p] == '&' && line[n] == '&') {
+      tokens[c].type = TAND;
+      tokens[c].cmd = NULL;
+      c++;
+      p += 2;
+      continue;
+    } else if (line[p] == '|' && line[n] == '|') {
+      tokens[c].type = TOR;
+      tokens[c].cmd = NULL;
+      c++;
+      p += 2;
+      continue;
+    } else if (line[p] == ';') {
+      tokens[c].type = TSEMI;
+      tokens[c].cmd = NULL;
+      c++;
+      p++;
+      continue;
+    } else {
+      if (!(buf = get_word(line, &p, &q)))
+        return NULL;
+      if (buf[0] != '\0') {
+        tokens[c].type = TWORD;
+        tokens[c].cmd = buf;
+        c++;
+      } else
+        free(buf);
+    }
+  }
+  tokens[c].type = TEOF;
+  tokens[c].cmd = NULL;
+
+  *cnt = c;
+  return tokens;
+}
 
 char *
 expand_alias(char *line) {
@@ -121,7 +294,7 @@ expand_alias(char *line) {
 }
 
 cmd_tree *
-build_tree(sh_tok *tokens, size_t cnt) {
+build_tree(const sh_tok *tokens, size_t cnt) {
   size_t i = 0;
   char **args = NULL;
   cmd_tree *n, *r;
@@ -166,7 +339,7 @@ build_tree(sh_tok *tokens, size_t cnt) {
 } /* build command tree recursively */
 
 int
-run_commands(cmd_tree *n) {
+run_commands(const cmd_tree *n) {
   int l_status, r_status;
 
   if (!n)

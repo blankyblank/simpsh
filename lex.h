@@ -1,13 +1,10 @@
-// vim: set filetype=c:
-#ifndef PARSER_H
-#define PARSER_H
+#ifndef LEX_H
+#define LEX_H
 
-#include "simpsh.h"
-#include "malloc.h"
+#include "utils.h"
 
 #define BUF_S 64
 
-// NOTE: need to decide how to structure header after tok.c is done
 typedef enum {
   TWORD,
   TAND,
@@ -15,12 +12,6 @@ typedef enum {
   TSEMI,
   TEOF,
 } token;
-
-typedef enum {
-  QNONE,
-  QSINGLE,
-  QDOUBLE,
-} quoted;
 
 /* store torkens before building argv */
 typedef struct {
@@ -43,11 +34,12 @@ struct cmd_tree {
 };
 
 /* new parsing */
-char *get_word(char *, size_t *, int *);
-sh_tok *tokenize(char *, int *);
-extern cmd_tree *build_tree(sh_tok *, size_t);
-extern int run_commands(cmd_tree *);
+extern char *get_word(char *, size_t *, int *);
+extern sh_tok *tokenize(char *, int *);
+extern cmd_tree *build_tree(const sh_tok *, size_t);
+extern int run_commands(const cmd_tree *);
 extern char *expand_alias(char *);
+extern char *exp_var(char *, size_t *, size_t *);
 
 static inline cmd_tree *
 newcmdnode(char **args, int c_false) {
@@ -101,20 +93,16 @@ freetoks(sh_tok *toks, int c) {
 
 static inline void
 freectree(cmd_tree *cmd_tree) {
-  if (cmd_tree == NULL)
+  if (!cmd_tree)
     return;
-
-  if (cmd_tree->left != NULL) {
+  if (cmd_tree->left != NULL)
     freectree(cmd_tree->left);
-  }
-  if (cmd_tree->right != NULL) {
+  if (cmd_tree->right != NULL)
     freectree(cmd_tree->right);
-  }
-  if (cmd_tree->type == CMD && cmd_tree->args != NULL) {
+  if (cmd_tree->type == CMD && cmd_tree->args != NULL)
     freeptr(cmd_tree->args);
-  }
-
   free(cmd_tree);
 }
 
-#endif /* PARSER_H */
+// vim: set filetype=c:
+#endif /* LEX_H */
