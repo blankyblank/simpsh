@@ -1,68 +1,42 @@
 #include "simpsh.h"
 
-char *getfullpath(char *, char *);
-int startsWithSlash(const char *);
+static char *getfullpath(char *, char *);
+static int startsWithSlash(const char *);
+static int pmkdir(char *path);
 
 char *
 lineread(void) {
-  /* get input for interactive shell */
-  char *line = (char *)NULL;
-
-  line = readline(" $ ");
+  char *line = readline(" $ ");
   if (line && *line)
     add_history(line);
 
   return line;
-}
+} /* get input for interactive shell */
 
-char **
-getinput(char *inputline, char *delim) {
-  char *tokens;
-  int i = 0;
-  char **lineargs = malloc(sizeof(char *) * 1024);
+int
+create_histfile(char *home, char *histfile) {
+  char *histdir = ".local/state/simpsh";
+  char buf[256];
 
-  if (inputline == NULL) {
-    return (char **)NULL;
-  }
-
-  if (!lineargs) {
-    perror("malloc failed");
-    return NULL;
-  }
-
-  /* break input line up into tokens to use later */
-  tokens = strtok(inputline, delim);
-
-  while (tokens) {
-    lineargs[i] = strdup(tokens);
-    if (!lineargs[i]) {
-      perror("strdup failed");
-      for (int j = 0; j < i; j++)
-        free(lineargs[j]);
-      free(lineargs);
-      return NULL;
-    }
-    tokens = strtok(NULL, delim);
-    i++;
-  }
-
-  lineargs[i] = NULL;
-  return lineargs;
+  snprintf(buf, 256, "%s/%s", home, histdir);
+  if (!pmkdir(buf))
+    return 0;
+  if (access(histfile, W_OK) < 0)
+    if (write_history(histfile) != 0)
+      return 0;
+  return 1;
 }
 
 int
 startsWithSlash(const char *str) {
-  /* check if command contains a / */
   if (str != NULL && str[0] == '/')
     return (1);
 
   return (0);
-}
+} /* check if command contains a / */
 
 char *
 getfullpath(char *path, char *file) {
-  /* takes the command and checks eacch directory on path until it finds the
-   * executable */
   char *pathcpy, *token;
   struct stat filepath;
   char *pathbuf = NULL;
@@ -95,12 +69,11 @@ getfullpath(char *path, char *file) {
     token = strtok(NULL, ":");
   }
   free(pathcpy);
-  goto fail;
+  if (pathbuf)
+    free(pathbuf);
 
-fail:
-  if (pathbuf) free(pathbuf);
   return NULL;
-}
+} /* takes the command and checks eacch directory on path until it finds the executable */
 
 char *
 getpath(char **file) {
@@ -112,19 +85,34 @@ getpath(char **file) {
 
   if (!path) {
     perror("PATH not set");
-    return (NULL);
+    return NULL;
   }
 
   fullpath = getfullpath(path, *file);
-  if (fullpath == NULL) {
-    return (NULL);
+  if (!fullpath) 
+    return NULL;
+  return fullpath;
+}
+
+static int
+pmkdir(char *path) {
+  char *dir;
+
+  dir = strchr(path +1, '/');
+  while (dir) {
+    *dir = 0;
+    if (access(path, F_OK) < 0 && mkdir(path, S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH) < 0)
+      return 0;
+    *dir = '/';
+    dir = strchr(dir+1, '/');
   }
-  return (fullpath);
+  if (mkdir(path, S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH) < 0)
+    return 0;
+  return 1;
 }
 
 int
 shexec(char **args) {
-  /* fork and exec the command passed to the shell */
   int wstatus, estatus;
   pid_t pid;
   char *fullpath;
@@ -132,37 +120,34 @@ shexec(char **args) {
   /* test if the command has a /, if not return the first executable
      on PATH with the command name given */
   fullpath = getpath(&args[0]);
-  if (fullpath == NULL) {
+  if (!fullpath) {
     fprintf(stderr, "%s: %s: command not found\n", sh_argv0, args[0]);
-    estatus = 1;
     goto done;
   }
 
   pid = fork();
   if (pid == -1) {
     perror("failed to create");
-    estatus = 1;
     goto done;
   }
 
-  if (pid == 0) {
-    /* if fork was successful run the command */
+  if (pid == 0) { /* if fork was successful run the command */
     if (execve(fullpath, args, environ) == -1) {
       perror(args[0]);
-      estatus = 1;
       goto done;
     }
   } else {
     waitpid(-1, &wstatus, 0);
     estatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
-
     free(fullpath);
     return estatus;
   }
-  estatus = 1;
+
   goto done;
 
 done:
-  if (fullpath) free(fullpath);
+  if (fullpath)
+    free(fullpath);
+  estatus = 1;
   return estatus;
-}
+} /* fork and exec the command passed to the shell */

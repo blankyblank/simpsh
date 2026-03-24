@@ -12,14 +12,19 @@
  * it advances the position for the caller, then the caller needs to advance
  * through whitespace, and operators when it handles them.
  */
+
+// TODO: adding in quote tracking for alias expansion
+//
+// TODO: eventually try moving to a stack buffer or some other method to use stack memory
 char *
-get_word(char *line, size_t *pos) {
+get_word(char *line, size_t *pos, int *q) {
   quoted state;
   size_t bufpos = 0, i = *pos;
   size_t bufsize = BUF_S;
   size_t var_l;
   char *var;
   char c, n;
+  *q = 0;
 
   // caller frees
   char *buf = malloc(bufsize);
@@ -45,9 +50,11 @@ get_word(char *line, size_t *pos) {
         goto done;
       } else if (c == '\'') {
         state = QSINGLE;
+        *q = 1;
         i++;
       } else if (c == '"') {
         state = QDOUBLE;
+        *q = 1;
         i++;
       } else if (c == '\\') {
         if (n == '\0') {
@@ -58,7 +65,7 @@ get_word(char *line, size_t *pos) {
           i += 2;
         }
       } else if (c == '$') {
-        var = exp_var(line, &i, &var_l); /* NOTE: exp_var updates i so no i++ */
+        var = exp_var(line, &i, &var_l); // NOTE: exp_var updates i
         if (!var)
           return NULL;
         if (bufpos + var_l >= bufsize) {
@@ -94,7 +101,7 @@ get_word(char *line, size_t *pos) {
       } else if (c == '\\') {
         if (n == '\n') {
           i += 2;
-          continue;  // ? idk
+          continue;
         } else if (n == '$' || n == '"' || n == '\\') {
           buf[bufpos++] = n;
           i += 2;
@@ -103,7 +110,7 @@ get_word(char *line, size_t *pos) {
           i++;
         }
       } else if (c == '$') {
-        var = exp_var(line, &i, &var_l); /* NOTE: exp_var updates i so no i++ */
+        var = exp_var(line, &i, &var_l); // NOTE: exp_var updates i
         if (!var)
           return NULL;
         if (bufpos + var_l >= bufsize) {
@@ -133,6 +140,7 @@ done:
 sh_tok *
 tokenize(char *line, int *cnt) {
   size_t p = 0, c = 0, n;
+  int q;
   *cnt = 0;
   char *buf = NULL;
 
@@ -149,29 +157,13 @@ tokenize(char *line, int *cnt) {
 
   /* go until we hit the null byte */
   while (line[p]) {
-    // /* save first word in the list */
-    // if (!(buf = get_word(line, &p)))
-    //   return NULL;
-    // if (buf && buf[0] != '\0') { 
-    //   tokens[c].type = TWORD;
-    //   tokens[c].cmd = buf;
-    //   // maybe try this
-    //   //c++;
-    //   buf = NULL;
-    // } else {
-    //   free(buf);
-    //   buf = NULL;
-    // }
-
-    /* skip whitespace */
-    while (line[p] == ' ' || line[p] == '\n' || line[p] == '\t')
+    while (line[p] == ' ' || line[p] == '\n' || line[p] == '\t') /* skip whitespace */
       p++;
     if (!line[p])
       break;
 
     n = p + 1;
-
-    // removed free buff on each of these put back if needed
+    /* update c (count) and p (position) by the length of the operator */
     if (line[p] == '&' && line[n] == '&') {
       tokens[c].type = TAND;
       tokens[c].cmd = NULL;
@@ -191,16 +183,14 @@ tokenize(char *line, int *cnt) {
       p++;
       continue;
     } else {
-
-      if (!(buf = get_word(line, &p)))
+      if (!(buf = get_word(line, &p, &q)))
         return NULL;
-      if (buf[0] != '\0') { 
+      if (buf[0] != '\0') {
         tokens[c].type = TWORD;
         tokens[c].cmd = buf;
         c++;
-      } else {
+      } else
         free(buf);
-      }
     }
   }
   tokens[c].type = TEOF;
@@ -209,8 +199,3 @@ tokenize(char *line, int *cnt) {
   *cnt = c;
   return tokens;
 }
-
-  // //debug
-  // for (int j = 0; j < c; j++) {
-  //   fprintf(stderr, "token[%d]: type=%d cmd='%s'\n", j, tokens[j].type, tokens[j].cmd);
-  // }

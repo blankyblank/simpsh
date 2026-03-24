@@ -21,6 +21,7 @@ char *builtins[] = {
   "help",
   "pwd",
   "true",
+  "unalias",
 };
 int (*builtin_funcs[])(char **) = {
   &aliascmd,
@@ -33,6 +34,7 @@ int (*builtin_funcs[])(char **) = {
   &helpcmd,
   &pwdcmd,
   &truecmd,
+  &unaliascmd,
 };
 int builtinnum(void) {
   return sizeof(builtins) / sizeof(char *);
@@ -58,7 +60,7 @@ aliascmd(char **args) {
   }
 
   if (!(delem = strchr(args[1], '='))) {
-    if (!(e = get_alias(args[1])))
+    if (!(e = lookup_alias(args[1])))
       return 1;
     else
       printf("alias %s=%s\n", e->name, e->value);

@@ -22,6 +22,7 @@
 #define MAX_LENGTH 256
 /* alias stuff */
 #define ALIAS_BUCKETS 64
+#define MAX_ALIAS_DEPTH 10
 
 extern char **environ;
 
@@ -35,6 +36,7 @@ struct alias {
 extern alias *alias_tab[ALIAS_BUCKETS];
 
 /* shell variables */
+extern char *progname;
 extern char *sh_argv0;
 extern char **sh_argv;
 extern int sh_argc;
@@ -50,12 +52,13 @@ int exitcmd(char **);
 int falsecmd(char **);
 int helpcmd(char **);
 int pwdcmd(char **);
+int unaliascmd(char **);
 
 /* functions for shell */
-extern alias *get_alias(char *);
+extern int create_histfile(char *, char *);
+extern alias *lookup_alias(char *);
 extern void set_alias(char *, char *);
 extern void rm_alias(char *);
-extern char **getinput(char *, char *);
 extern int getbuiltin(char **);
 extern char *getpath(char **);
 extern int builtin_launch(char **);

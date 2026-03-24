@@ -3,7 +3,7 @@
 alias *alias_tab[ALIAS_BUCKETS];
 
 alias *
-get_alias(char *name) {
+lookup_alias(char *name) {
   int i;
   alias *e;
   i = hash(name);

@@ -4,14 +4,18 @@
 int sh_argc;
 int lstatus;
 pid_t sh_pid;
+char *progname = "simpsh";
 char *sh_pid_s = NULL;
 char *sh_argv0;
 char **sh_argv;
+char histfile[265];
 static int simpsh_run(char *line);
 
 int
 main(int argc, char **argv) {
-  char *line = (char *)NULL, *cmd = NULL, buf[MAX_LENGTH];
+  char *line = (char *)NULL;
+  char *cmd = NULL, buf[MAX_LENGTH];
+  char *home;
   int estatus, cflag = 0, tflag = 0, c_arg = 0;
   setlocale(LC_ALL, "");
 
@@ -40,48 +44,43 @@ main(int argc, char **argv) {
   sh_pid_s = malloc(16);
   snprintf(sh_pid_s, 16, "%d", sh_pid);
 
-  if (cflag > 0)
+  if (cflag)
     exit(simpsh_run(strdup(cmd)));
-  else if (tflag > 0) {
+  else if (tflag) {
     estatus = 1;
     while (fgets(buf, MAX_LENGTH, stdin) != NULL)
       estatus = simpsh_run(strdup(buf));
     exit(estatus);
   } else {
+
+    /* set up history */
+    home = getenv("HOME");
+    snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
     using_history();
+    if (access(histfile, W_OK) < 0) {
+      if (!create_histfile(home, histfile)) /* create if needed */
+        perror("Failed to create simpsh_history:");
+    } else {
+      history_truncate_file(histfile, 1000);
+      if (read_history_range(histfile, 0, -1) != 0)
+        perror("Failed to read .simpsh_history");
+    }
 
     /* the main loop */
     for (;;) {
       line = lineread();
       estatus = simpsh_run(line);
+      lstatus = estatus;
     }
 
-    if (!line) {
+    if (line) {
       free(line);
       line = NULL;
     }
     if (sh_argv0)
       free(sh_argv0);
-    exit(0);
-  }
-}
 
-void print_tree(cmd_tree *n, int depth) {
-  if (!n)
-    return;
-  
-  for (int i = 0; i < depth; i++)
-    fprintf(stderr, "  ");
-  
-  if (n->type == CMD) {
-    fprintf(stderr, "CMD: ");
-    for (int i = 0; n->args[i]; i++)
-      fprintf(stderr, "%s ", n->args[i]);
-    fprintf(stderr, "\n");
-  } else if (n->type == OP) {
-    fprintf(stderr, "OP: %d\n", n->op_t);
-    print_tree(n->left, depth + 1);
-    print_tree(n->right, depth + 1);
+    exit(0);
   }
 }
 
@@ -89,25 +88,25 @@ int
 simpsh_run(char *line) {
   int estatus, tok_c;
   sh_tok *toks;
+  // char *eline;
   cmd_tree *c;
 
-  if (!(toks = tokenize(line, &tok_c))) {
-    perror("failed to get input (maybe)");
-    estatus = 1;
-  }
+  line = expand_alias(line);
+  if (!(toks = tokenize(line, &tok_c)))
+    estatus = 0;
+  if (tok_c < 0)
+    return 1;
 
   /* build the actual command from parsed input */
   c = build_tree(toks, tok_c);
-  // print_tree(c, tok_c);
   /* then run it */
   estatus = run_commands(c);
+  append_history(1, histfile);
 
-  if (c) {
+  if (c)
     freectree(c);
-  }
-  if (line) {
+  if (line)
     free(line);
-  }
   freetoks(toks, tok_c);
   return estatus;
 }

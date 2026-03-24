@@ -2,6 +2,7 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include "simpsh.h"
 #include "malloc.h"
 
 #define BUF_S 64
@@ -34,7 +35,6 @@ struct cmd_tree {
     CMD,
     OP
   } type;
-
   char **args;
   int c_false;
   token op_t;
@@ -43,14 +43,11 @@ struct cmd_tree {
 };
 
 /* new parsing */
-char *get_word(char *, size_t *);
+char *get_word(char *, size_t *, int *);
 sh_tok *tokenize(char *, int *);
-
-/* old parser scan input at least is being removed */
-extern int scan_input(char *, sh_tok *, int *);
-extern token chk_op(char *);
 extern cmd_tree *build_tree(sh_tok *, size_t);
 extern int run_commands(cmd_tree *);
+extern char *expand_alias(char *);
 
 static inline cmd_tree *
 newcmdnode(char **args, int c_false) {
@@ -119,4 +116,5 @@ freectree(cmd_tree *cmd_tree) {
 
   free(cmd_tree);
 }
+
 #endif /* PARSER_H */

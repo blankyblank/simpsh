@@ -1,38 +1,11 @@
 #include "simpsh.h"
 #include "malloc.h"
 
-static char *getvar(char *);
 static char *var_n(char *, size_t, size_t *, size_t *);
 static char *varbrace_n(char *, size_t, size_t *);
-static int is_pos(char *);
-static char *get_posparam(int);
 static char *varstatus(size_t *);
 
-int
-is_pos(char *var) {
-  size_t i;
-  size_t var_l = strlen(var);
-
-  if (!var || !*var)
-    return 0;
-  for (i = 0; i < var_l; i++) {
-    if (!isdigit(var[i]))
-      return 0;
-  }
-  return 1;
-}
-
-char *
-get_posparam(int n) {
-  if (n == 0)
-    return sh_argv0 ? sh_argv0 : "";
-
-  if (n < 0 || n > sh_argc)
-    return "";
-  return sh_argv[n - 1] ? sh_argv[n - 1] : "";
-}
-
-char *
+static inline char *
 getvar(char *vt) {
   char *var;
   if ((var = getenv(vt)) == NULL)
@@ -46,17 +19,41 @@ var_pid(size_t *var_l) {
   return sh_pid_s;
 }
 
-char *
+static inline char *
+get_posparam(int n) {
+  if (n == 0)
+    return sh_argv0 ? sh_argv0 : "";
+
+  if (n < 0 || n > sh_argc)
+    return "";
+  return sh_argv[n - 1] ? sh_argv[n - 1] : "";
+}
+
+static inline int
+is_posparam(char *var) {
+  size_t i;
+  size_t var_l = strlen(var);
+
+  if (!var || !*var)
+    return 0;
+  for (i = 0; i < var_l; i++) {
+    if (!isdigit(var[i]))
+      return 0;
+  }
+  return 1;
+}
+
+static char *
 varstatus(size_t *var_l) {
-  static char buf[12];
-  snprintf(buf, sizeof(buf), "%d", lstatus);
+  char *buf = malloc(12);
+  snprintf(buf, 12, "%d", lstatus);
   *var_l = strlen(buf);
   return buf;
 }
 
 char *
 var_n(char *args, size_t i, size_t *end, size_t *var_l) {
-  char *var, *vt;
+  char *env_var, *vt, *var;
   size_t j, vt_l;
   int n;
   for (j = i + 1;; j++) {
@@ -64,17 +61,17 @@ var_n(char *args, size_t i, size_t *end, size_t *var_l) {
       vt_l = j - (i + 1);
 
       if (vt_l == 0) {
-        var = &args[i];
+        env_var = &args[i];
         *var_l = 1;
         break;
 
       } else {
         vt = strndup(&args[i + 1], vt_l);
-        if (is_pos(vt)) {
+        if (is_posparam(vt)) {
           n = atoi(vt);
-          var = get_posparam(n);
+          env_var = get_posparam(n);
         } else {
-          var = getvar(vt);
+          env_var = getvar(vt);
         }
         free(vt);
         break;
@@ -82,14 +79,15 @@ var_n(char *args, size_t i, size_t *end, size_t *var_l) {
     }
   }
 
+  *var_l = strlen(env_var);
   *end = j - 1;
-  *var_l = strlen(var);
+  var = strdup(env_var);
   return var;
 }
 
 char *
 varbrace_n(char *args, size_t i, size_t *end) {
-  char *vt, *var;
+  char *vt, *var, *env_var;
   size_t j, vt_l;
   int n;
 
@@ -102,12 +100,12 @@ varbrace_n(char *args, size_t i, size_t *end) {
       if (vt_l == 0)
         return NULL;
       else {
-        vt = strndup(&args[i + 1], vt_l);
-        if (is_pos(vt)) {
+        vt = strndup(&args[i + 2], vt_l);
+        if (is_posparam(vt)) {
           n = atoi(vt);
-          var = get_posparam(n);
+          env_var = get_posparam(n);
         } else {
-          var = getvar(vt);
+          env_var = getvar(vt);
         }
         free(vt);
         break;
@@ -116,6 +114,7 @@ varbrace_n(char *args, size_t i, size_t *end) {
   }
 
   *end = j;
+  var = strdup(env_var);
   return var;
 }
 
