@@ -1,9 +1,20 @@
 #include "simpsh.h"
+#include "alias.h"
 
 alias *alias_tab[ALIAS_BUCKETS];
 
+static inline unsigned int
+hash(const char *s) {
+  unsigned int h = 0;
+  while (*s) {
+    h = h * 31 + (unsigned char)*s;
+    s++;
+  }
+  return h % ALIAS_BUCKETS;
+}
+
 alias *
-lookup_alias(char *name) {
+lookup_alias(const char *name) {
   int i;
   alias *e;
   i = hash(name);
@@ -18,7 +29,7 @@ lookup_alias(char *name) {
 }
 
 void
-set_alias(char *name, char *val) {
+set_alias(const char *name, const char *val) {
   int i;
   alias *e;
   i = hash(name);
@@ -41,7 +52,7 @@ set_alias(char *name, char *val) {
 }
 
 void
-rm_alias(char *name) {
+rm_alias(const char *name) {
   alias *e, *prev = NULL;
   int i;
 

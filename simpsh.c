@@ -1,6 +1,8 @@
 #include "simpsh.h"
+#include <readline/readline.h>
 
-static char *getfullpath(char *, char *);
+static int create_histfile(char *, char *);
+static char *getfullpath(const char *, const char *);
 static int startsWithSlash(const char *);
 static int pmkdir(char *path);
 
@@ -15,7 +17,7 @@ lineread(void) {
 
 int
 create_histfile(char *home, char *histfile) {
-  char *histdir = ".local/state/simpsh";
+  static const char *histdir = ".local/state/simpsh";
   char buf[256];
 
   snprintf(buf, 256, "%s/%s", home, histdir);
@@ -27,6 +29,21 @@ create_histfile(char *home, char *histfile) {
   return 1;
 }
 
+void
+init_history(void) {
+  char histfile[265];
+  snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
+  using_history();
+  if (access(histfile, W_OK) < 0) {
+    if (!create_histfile(home, histfile)) /* create if needed */
+      perror("Failed to create simpsh_history:");
+  } else {
+    history_truncate_file(histfile, 1000);
+    if (read_history_range(histfile, 0, -1) != 0)
+      perror("Failed to read .simpsh_history");
+  }
+}
+
 int
 startsWithSlash(const char *str) {
   if (str != NULL && str[0] == '/')
@@ -35,8 +52,8 @@ startsWithSlash(const char *str) {
   return (0);
 } /* check if command contains a / */
 
-char *
-getfullpath(char *path, char *file) {
+static char *
+getfullpath(const char *path, const char *file) {
   char *pathcpy, *token;
   struct stat filepath;
   char *pathbuf = NULL;
@@ -73,7 +90,7 @@ getfullpath(char *path, char *file) {
     free(pathbuf);
 
   return NULL;
-} /* takes the command and checks eacch directory on path until it finds the executable */
+} /* takes the command and checks each directory on path until it finds the executable */
 
 char *
 getpath(char **file) {

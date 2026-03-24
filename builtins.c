@@ -1,16 +1,29 @@
 #include "simpsh.h"
-#include "malloc.h"
+#include "builtins.h"
+#include "utils.h"
+#include "alias.h"
+#include <linux/limits.h>
 
-int argcount(char **);
-int builtinnum(void);
-int cdsetpwd(char *);
-int echo_print(int, int, char **);
-int exportcmd(char **);
-int aliascmd(char **);
-int truecmd(char **);
+static int argcount(char **);
+static int builtinnum(void);
+static int cdsetpwd(const char *);
+static int echo_print(int, int, char **);
+
+/* builtins */
+static int aliascmd(char **);
+static int cdcmd(char **);
+static int echocmd(char **);
+static int execcmd(char **);
+static int exitcmd(char **);
+static int exportcmd(char **);
+static int falsecmd(char **);
+static int helpcmd(char **);
+static int pwdcmd(char **);
+static int truecmd(char **);
+// static int unaliascmd(char **);
 
 /* the array of builtin commands */  // clang-format off
-char *builtins[] = {
+static const char *builtins[] = {
   "alias",
   "cd",
   "echo",
@@ -21,9 +34,9 @@ char *builtins[] = {
   "help",
   "pwd",
   "true",
-  "unalias",
+  // "unalias",
 };
-int (*builtin_funcs[])(char **) = {
+static int (* const builtin_funcs[])(char **) = {
   &aliascmd,
   &cdcmd,
   &echocmd,
@@ -34,7 +47,7 @@ int (*builtin_funcs[])(char **) = {
   &helpcmd,
   &pwdcmd,
   &truecmd,
-  &unaliascmd,
+  // &unaliascmd,
 };
 int builtinnum(void) {
   return sizeof(builtins) / sizeof(char *);
@@ -114,7 +127,7 @@ builtin_launch(char **args) {
 }
 
 int
-cdsetpwd(char *arg) {
+cdsetpwd(const char *arg) {
   char respath[PATH_MAX], oldpwd[PATH_MAX];
   char *newpwd = NULL;
 
@@ -143,11 +156,10 @@ cdsetpwd(char *arg) {
 
 int
 cdcmd(char **args) {
-  char *homedir = getenv("HOME");
   char **dir = args;
 
   if (dir[1] == 0) {
-    cdsetpwd(homedir);
+    cdsetpwd(home);
   } else if (cdsetpwd(dir[1]) == -1) {
     return 1;
   }
@@ -275,7 +287,7 @@ falsecmd(char **args) {
 int
 helpcmd(char **args) {
   (void)args;
-  char **helparray = builtins;
+  char const **helparray = builtins;
   int i, n = builtinnum();
 
   printf("These are the builtin commands included with simpsh:\n\n");

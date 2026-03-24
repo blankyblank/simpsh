@@ -1,26 +1,21 @@
 #include "simpsh.h"
-#include "malloc.h"
+#include "ctype.h"
 
 static char *var_n(char *, size_t, size_t *, size_t *);
-static char *varbrace_n(char *, size_t, size_t *);
+static char *varbrace_n(const char *, size_t, size_t *);
 static char *varstatus(size_t *);
 
-static inline char *
-getvar(char *vt) {
+static inline char * getvar(const char *vt) {
   char *var;
   if ((var = getenv(vt)) == NULL)
     var = "";
   return var;
 }
-
-static inline char *
-var_pid(size_t *var_l) {
+static inline char * var_pid(size_t *var_l) {
   *var_l = strlen(sh_pid_s);
   return sh_pid_s;
 }
-
-static inline char *
-get_posparam(int n) {
+static inline char * get_posparam(int n) {
   if (n == 0)
     return sh_argv0 ? sh_argv0 : "";
 
@@ -28,9 +23,7 @@ get_posparam(int n) {
     return "";
   return sh_argv[n - 1] ? sh_argv[n - 1] : "";
 }
-
-static inline int
-is_posparam(char *var) {
+static inline int is_posparam(const char *var) {
   size_t i;
   size_t var_l = strlen(var);
 
@@ -42,9 +35,7 @@ is_posparam(char *var) {
   }
   return 1;
 }
-
-static char *
-varstatus(size_t *var_l) {
+static char * varstatus(size_t *var_l) {
   char *buf = malloc(12);
   snprintf(buf, 12, "%d", lstatus);
   *var_l = strlen(buf);
@@ -86,7 +77,7 @@ var_n(char *args, size_t i, size_t *end, size_t *var_l) {
 }
 
 char *
-varbrace_n(char *args, size_t i, size_t *end) {
+varbrace_n(const char *args, size_t i, size_t *end) {
   char *vt, *var, *env_var;
   size_t j, vt_l;
   int n;
@@ -145,64 +136,4 @@ exp_var(char *line, size_t *pos, size_t *len) {
   }
 
   return var;
-}
-
-char *
-exp_var_old(char *args) {
-  char *var, *e_args, *vt = NULL;
-  size_t args_l = strlen(args);
-  size_t bufsize = args_l * 2;
-  size_t i, j, p = 0;
-  size_t var_l;
-
-  e_args = malloc(bufsize);
-  if (!e_args) {
-    perror("malloc failed");
-    return NULL;
-  }
-
-  for (i = 0; i < args_l; i++) {
-    if (args[i] == '$') {
-
-      if (args[i + 1] == '$') {
-        var = var_pid(&var_l);
-        j = i + 1;
-
-      } else if (args[i + 1] == '?') {
-        var = varstatus(&var_l);
-        j = i + 1;
-
-      } else if (args[i + 1] == '{') {
-        if (!(var = varbrace_n(args, i, &j)))
-          goto fail;
-        var_l = strlen(var);
-        if (p + var_l > bufsize)
-          e_args = s_realloc(e_args, &bufsize);
-
-      } else {
-        var = var_n(args, i, &j, &var_l);
-        if (var_l != 1)
-          var_l = strlen(var);
-        if (p + var_l > bufsize)
-          e_args = s_realloc(e_args, &bufsize);
-      }
-
-      memcpy(&e_args[p], var, var_l);
-      if (vt) free(vt);
-      p += var_l;
-      i = j;
-
-    } else {
-      e_args[p] = args[i];
-      p++;
-    }
-  }
-
-  e_args[p] = '\0';
-  return e_args;
-
-fail:
-  fprintf(stderr, "%s: Bad substitution\n", sh_argv0);
-  if (e_args) free(e_args);
-  return NULL;
 }
