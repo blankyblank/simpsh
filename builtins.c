@@ -20,7 +20,7 @@ static int falsecmd(char **);
 static int helpcmd(char **);
 static int pwdcmd(char **);
 static int truecmd(char **);
-// static int unaliascmd(char **);
+static int unaliascmd(char **);
 
 /* the array of builtin commands */  // clang-format off
 static const char *builtins[] = {
@@ -34,7 +34,7 @@ static const char *builtins[] = {
   "help",
   "pwd",
   "true",
-  // "unalias",
+  "unalias",
 };
 static int (* const builtin_funcs[])(char **) = {
   &aliascmd,
@@ -47,12 +47,28 @@ static int (* const builtin_funcs[])(char **) = {
   &helpcmd,
   &pwdcmd,
   &truecmd,
-  // &unaliascmd,
+  &unaliascmd,
 };
 int builtinnum(void) {
   return sizeof(builtins) / sizeof(char *);
 } // clang-format on
 
+static int
+unaliascmd(char **args) {
+  alias *e;
+  // int i;
+  // char *n, *v;
+
+  e = lookup_alias(args[1]);
+  if (e) {
+    rm_alias(args[1]);
+  } else {
+    fprintf(stderr, "unalias: %s: alias not found\n", args[1]);
+    return 1;
+  }
+
+  return 0;
+}
 int
 aliascmd(char **args) {
   int i;
@@ -290,7 +306,7 @@ helpcmd(char **args) {
   char const **helparray = builtins;
   int i, n = builtinnum();
 
-  printf("These are the builtin commands included with simpsh:\n\n");
+  printf("simpsh version idk.2 (still pre alpha) - put git repo here\n\nThese are the builtin commands included with simpsh:\n\n");
   for (i = 0; i < n; i++) {
     printf("%s \n", helparray[i]);
   }
