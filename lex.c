@@ -193,7 +193,12 @@ tokenize(char *line, int *cnt) {
 
     n = p + 1;
     /* update c (count) and p (position) by the length of the operator */
-    if (line[p] == '&' && line[n] == '&') {
+    if (line[p] == '!') {
+      tokens[c].type = TNOT;
+      tokens[c].cmd = NULL;
+      c++;
+      p++;
+    } else if (line[p] == '&' && line[n] == '&') {
       tokens[c].type = TAND;
       tokens[c].cmd = NULL;
       c++;
@@ -247,6 +252,7 @@ expand_alias(char *line) {
       p++;
     if (!eline[p])
       break;
+
     n = p + 1;
     if ((eline[p] == '&' && eline[n] == '&') ||
         (eline[p] == '|' && eline[n] == '|') ||
@@ -260,32 +266,50 @@ expand_alias(char *line) {
       break;
     if (q) {
       free(word);
-      continue;
-    }
-
-    a = lookup_alias(word);
-    if (word)
-      free(word);
-    if (a) {
-      if (depth < MAX_ALIAS_DEPTH) {
-        nl = malloc(strlen(eline) + strlen(a->value) + 1);
-        if (!nl) {
+      // continue;
+    } else {
+      a = lookup_alias(word);
+      if (word)
+        free(word);
+      if (a) {
+        if (depth < MAX_ALIAS_DEPTH) {
+          nl = malloc(strlen(eline) + strlen(a->value) + 1);
+          if (!nl) {
+            free(eline);
+            return line;
+          }
+          strncpy(nl, eline, s);
+          nl[s] = '\0';
+          strcat(nl, a->value);
+          strcat(nl, eline + p);
           free(eline);
-          return line; // not sure this is the way to handle this. maybe return null instead.
+          eline = nl;
+          p = 0; // p = s + strlen(a->value);
+          depth++;
+          continue;
+        } else {
+          fprintf(stderr, "alias: too many levels of recursion");
+          free(eline);
+          return line;
         }
-        strncpy(nl, eline, s);
-        nl[s] = '\0';
-        strcat(nl, a->value);
-        strcat(nl, eline + p);
-        free(eline);
-        eline = nl;
-        p = s + strlen(a->value);
-        depth++;
-      } else {
-        fprintf(stderr, "alias: too many levels of recursion");
-        free(eline);
-        return line;
       }
+    }
+    while (eline[p]) {
+      while (eline[p] == ' ' || eline[p] == '\n' || eline[p] == '\t')
+        p++;
+      if (!eline[p])
+        break;
+
+      n = p + 1;
+      if ((eline[p] == '&' && eline[n] == '&') ||
+          (eline[p] == '|' && eline[n] == '|') ||
+          eline[p] == ';') {
+        // p += (eline[p] == eline[n]) ? 2 : 1;
+        break;
+      }
+      if (!(word = get_word(eline, &p, &q)))
+        break;
+      free(word);
     }
   }
   if (line)
@@ -293,6 +317,7 @@ expand_alias(char *line) {
   return eline;
 }
 
+// TODO: add in negation parsing logic, also run_commands needs ot handle it.
 cmd_tree *
 build_tree(const sh_tok *tokens, size_t cnt) {
   size_t i = 0;

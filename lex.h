@@ -6,6 +6,7 @@
 #define BUF_S 64
 
 typedef enum {
+  TNOT,
   TWORD,
   TAND,
   TOR,
