@@ -306,10 +306,11 @@ helpcmd(char **args) {
   char const **helparray = builtins;
   int i, n = builtinnum();
 
-  printf("simpsh version idk.2 (still pre alpha) - put git repo here\n\nThese are the builtin commands included with simpsh:\n\n");
+  printf("simpsh version idk.2 (still pre alpha) - https://codeberg.org/someoneelse/simpsh.git\n\nThese are the builtin commands included with simpsh:\n\n");
   for (i = 0; i < n; i++) {
     printf("%s \n", helparray[i]);
   }
+  printf("\n");
   return 0;
 }
 
