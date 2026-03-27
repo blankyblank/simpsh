@@ -53,22 +53,6 @@ int builtinnum(void) {
   return sizeof(builtins) / sizeof(char *);
 } // clang-format on
 
-static int
-unaliascmd(char **args) {
-  alias *e;
-  // int i;
-  // char *n, *v;
-
-  e = lookup_alias(args[1]);
-  if (e) {
-    rm_alias(args[1]);
-  } else {
-    fprintf(stderr, "unalias: %s: alias not found\n", args[1]);
-    return 1;
-  }
-
-  return 0;
-}
 int
 aliascmd(char **args) {
   int i;
@@ -331,5 +315,22 @@ pwdcmd(char **args) {
 int
 truecmd(char **args) {
   (void)args;
+  return 0;
+}
+
+static int
+unaliascmd(char **args) {
+  alias *e;
+  // int i;
+  // char *n, *v;
+
+  e = lookup_alias(args[1]);
+  if (e) {
+    rm_alias(args[1]);
+  } else {
+    fprintf(stderr, "unalias: %s: alias not found\n", args[1]);
+    return 1;
+  }
+
   return 0;
 }

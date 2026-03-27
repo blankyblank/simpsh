@@ -33,6 +33,7 @@ struct cmd_tree {
     OP
   } type;
   char **args;
+  char **sh_vars;
   cmd_false negate;
   token op_t;
   cmd_tree *left;

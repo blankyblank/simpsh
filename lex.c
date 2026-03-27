@@ -1,6 +1,7 @@
 #include "simpsh.h"
 #include "alias.h"
 #include "builtins.h"
+#include <ctype.h>
 #include "lex.h"
 
 typedef enum {
@@ -10,6 +11,7 @@ typedef enum {
 } quoted;
 
 static char **get_argv(const sh_tok *, size_t, size_t *);
+static int is_assn(char *);
 
 static char **
 get_argv(const sh_tok *tokens, size_t cnt, size_t *i) {
@@ -32,6 +34,24 @@ get_argv(const sh_tok *tokens, size_t cnt, size_t *i) {
   return argv;
 } /* build consecutive TWORDS into command */
 
+static int is_assn(char *cmd) {
+  char *eq = strchr(cmd, '=');
+  const char *p = cmd;
+
+  if (!eq || eq == cmd)
+    return 0;
+
+  for (p = cmd; p < eq; p++) {
+    if (p == cmd) {
+      if (!isalpha(*p) && *p != '_')
+        return 0;
+    } else {
+      if (!isalnum(*p) && *p != '_')
+        return 0;
+    }
+  }
+  return 1;
+}
 
 /*
  * shell language tokenizer. parses a line extracts a word, handles quoting,
@@ -234,6 +254,116 @@ tokenize(char *line, int *cnt) {
   return tokens;
 }
 
+cmd_tree *
+build_tree(const sh_tok *tokens, size_t cnt) {
+  size_t i = 0;
+  char **args = NULL;
+  cmd_tree *nxt, *r;
+  cmd_false negate = FALSE, neg = 0;
+  token t;
+
+  while (i < cnt && tokens[i].type == TNOT) { /* look for '!' */
+    i++;
+    neg++;
+  }
+  negate = (neg % 2) ? TRUE : FALSE;
+  neg = 0;
+
+  if (i >= cnt || tokens[i].type != TWORD) /* check for command */
+    return NULL;
+
+  args = get_argv(tokens, cnt, &i);
+
+  if (!args || !args[0]) { /* handle empty input */
+    fprintf(stderr, "somethings wrong \n");
+    freeptr(args);
+    return NULL;
+  }
+
+  r = newcmdnode(args, negate);
+  negate = FALSE;
+
+  while (i < cnt && tokens[i].type != TEOF) {
+    t = tokens[i].type;
+
+    if (t != TAND && t != TOR && t != TSEMI) {
+      // FIXME: I'm leaking memory here I'm pretty sure
+      fprintf(stderr, "Expected Operator\n");
+      return NULL;
+    }
+    i++;  /* move to next command */
+
+    if (i >= cnt || tokens[i].type != TWORD) /* check for command */
+      return NULL;
+
+    while (tokens[i].type == TNOT) { /* look for '!' */
+      i++;
+      neg++;
+    }
+    negate = (neg % 2) ? TRUE : FALSE;
+    neg = 0;
+
+    args = get_argv(tokens, cnt, &i); /* Get next command's arguments */
+    if (!args || !args[0]) {
+      freeptr(args);
+      return NULL;
+    }
+
+    nxt = newcmdnode(args, negate);
+    negate = FALSE;
+    r = newoppnode(t, r, nxt);
+  }
+  return r;
+} /* build command abstract syntax tree */
+
+int
+run_commands(const cmd_tree *n) {
+  int l_status, r_status;
+
+  if (!n)
+    return 0;
+
+  if (n->type == CMD) {
+    if (getbuiltin(n->args) == 1)
+      if (n->negate == TRUE)
+        return !builtin_launch(n->args);
+      else
+        return builtin_launch(n->args);
+    else
+      if (n->negate == TRUE)
+        return !shexec(n->args);
+      else
+        return shexec(n->args);
+  }
+
+  if (n->type == OP) {
+    l_status = run_commands(n->left);
+
+    switch (n->op_t) {
+    case TSEMI:
+      r_status = run_commands(n->right);
+      return r_status;
+    case TAND:
+      if (l_status != 0)
+        return l_status;
+      r_status = run_commands(n->right);
+      return r_status;
+    case TOR:
+      if (l_status == 0)
+        return l_status;
+      r_status = run_commands(n->right);
+      return r_status;
+    case TEOF:
+      return l_status;
+    default:
+      fprintf(stderr, "Unknown Operator\n");
+      return 1;
+    }
+  }
+
+  return 0;
+} /* run the commands previously built into the tree  */
+
 char *
 expand_alias(char *line) {
   char *eline = strdup(line);
@@ -317,115 +447,3 @@ expand_alias(char *line) {
   return eline;
 }
 
-// TODO: add in negation parsing logic, also run_commands needs ot handle it.
-cmd_tree *
-build_tree(const sh_tok *tokens, size_t cnt) {
-  size_t i = 0;
-  char **args = NULL;
-  cmd_tree *n, *r;
-  cmd_false negate = FALSE, neg = 0;
-  token t;
-
-  /* Skip leading TNOT tokens first */
-  while (i < cnt && tokens[i].type == TNOT) {
-    i++;
-    neg++;
-  }
-  negate = (neg % 2) ? TRUE : FALSE;
-  neg = 0;
-
-  /* Now validate we have a TWORD */
-  if (i >= cnt || tokens[i].type != TWORD)
-    return NULL;
-
-  args = get_argv(tokens, cnt, &i);
-
-  if (!args || !args[0]) { /* handle empty input */
-    fprintf(stderr, "somethings wrong \n");
-    freeptr(args);
-    return NULL;
-  }
-
-  r = newcmdnode(args, negate);
-  negate = FALSE;
-
-  while (i < cnt && tokens[i].type != TEOF) {
-    t = tokens[i].type;
-
-    if (t != TAND && t != TOR && t != TSEMI) {
-      // FIXME: I'm leaking memory here I'm pretty sure
-      fprintf(stderr, "Expected Operator\n");
-      return NULL;
-    }
-    i++;  /* move to next command */
-
-    if (i >= cnt || tokens[i].type != TWORD) /* Must have a command after operator */
-      return NULL;
-
-    while (tokens[i].type == TNOT) {
-      i++;
-      neg++;
-    }
-    negate = (neg % 2) ? TRUE : FALSE;
-    neg = 0;
-
-    args = get_argv(tokens, cnt, &i); /* Get next command's arguments */
-    if (!args || !args[0]) {
-      freeptr(args);
-      return NULL;
-    }
-
-    n = newcmdnode(args, negate);
-    negate = FALSE;
-    r = newoppnode(t, r, n);
-  }
-  return r;
-} /* build command abstract syntax tree */
-
-int
-run_commands(const cmd_tree *n) {
-  int l_status, r_status;
-
-  if (!n)
-    return 0;
-
-  if (n->type == CMD) {
-    if (getbuiltin(n->args) == 1)
-      if (n->negate == TRUE)
-        return !builtin_launch(n->args);
-      else
-        return builtin_launch(n->args);
-    else
-      if (n->negate == TRUE)
-        return !shexec(n->args);
-      else
-        return shexec(n->args);
-  }
-
-  if (n->type == OP) {
-    l_status = run_commands(n->left);
-
-    switch (n->op_t) {
-    case TSEMI:
-      r_status = run_commands(n->right);
-      return r_status;
-    case TAND:
-      if (l_status != 0)
-        return l_status;
-      r_status = run_commands(n->right);
-      return r_status;
-    case TOR:
-      if (l_status == 0)
-        return l_status;
-      r_status = run_commands(n->right);
-      return r_status;
-    case TEOF:
-      return l_status;
-    default:
-      fprintf(stderr, "Unknown Operator\n");
-      return 1;
-    }
-  }
-
-  return 0;
-} /* run the commands previously built into the tree  */
