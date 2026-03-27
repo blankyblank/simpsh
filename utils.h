@@ -28,5 +28,15 @@ freeptr(char **args) {
   }
 }
 
+static inline unsigned int
+hash(const char *s, unsigned int buckets) {
+  unsigned int h = 0;
+  while (*s) {
+    h = h * 31 + (unsigned char)*s;
+    s++;
+  }
+  return h % buckets;
+}
+
 // vim: set filetype=c:
 #endif // !MALLOC_H

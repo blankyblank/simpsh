@@ -1,45 +1,37 @@
 #include "simpsh.h"
 #include "ctype.h"
+#include "var.h"
+#include "utils.h"
+
+shvar *var_tab[VAR_BUCKETS] = {NULL};
 
 static char *var_n(char *, size_t, size_t *, size_t *);
 static char *varbrace_n(const char *, size_t, size_t *);
-static char *varstatus(size_t *);
+int setvar(const char *, const char *, int);
 
-static inline char * getvar(const char *vt) {
-  char *var;
-  if ((var = getenv(vt)) == NULL)
-    var = "";
-  return var;
-}
-static inline char * var_pid(size_t *var_l) {
-  *var_l = strlen(sh_pid_s);
-  return sh_pid_s;
-}
-static inline char * get_posparam(int n) {
-  if (n == 0)
-    return sh_argv0 ? sh_argv0 : "";
+int
+setvar(const char *name, const char *val, int exp) {
+  int i;
+  shvar *v;
+  i = hash(name, VAR_BUCKETS);
+  v = var_tab[i];
 
-  if (n < 0 || n > sh_argc)
-    return "";
-  return sh_argv[n - 1] ? sh_argv[n - 1] : "";
-}
-static inline int is_posparam(const char *var) {
-  size_t i;
-  size_t var_l = strlen(var);
-
-  if (!var || !*var)
-    return 0;
-  for (i = 0; i < var_l; i++) {
-    if (!isdigit(var[i]))
-      return 0;
+  while (v) {
+    if (strcmp(v->name, name) == 0) {
+      free(v->value);
+      v->value = strdup(val);
+      return 1;
+    }
+    v = v->next;
   }
+
+  v = malloc(sizeof(shvar));
+  v->name = strdup(name);
+  v->value = strdup(val);
+  v->next = var_tab[i];
+  var_tab[i] = v;
+
   return 1;
-}
-static char * varstatus(size_t *var_l) {
-  char *buf = malloc(12);
-  snprintf(buf, 12, "%d", lstatus);
-  *var_l = strlen(buf);
-  return buf;
 }
 
 char *
@@ -122,7 +114,7 @@ exp_var(char *line, size_t *pos, size_t *len) {
     var = var_pid(len);
     *pos = i + 2;
   } else if (line[i + 1] == '?') {
-    var = varstatus(len);
+    var = statusvar(len);
     *pos = i + 2;
   } else if (line[i + 1] == '{') {
     var = varbrace_n(line, i, &end);
