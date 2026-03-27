@@ -326,14 +326,17 @@ build_tree(const sh_tok *tokens, size_t cnt) {
   cmd_false negate = FALSE, neg = 0;
   token t;
 
-  if (cnt < 1 || tokens[i].type != TWORD)
-    return NULL;
-
-  while (tokens[i].type == TNOT) {
+  /* Skip leading TNOT tokens first */
+  while (i < cnt && tokens[i].type == TNOT) {
     i++;
     neg++;
   }
   negate = (neg % 2) ? TRUE : FALSE;
+  neg = 0;
+
+  /* Now validate we have a TWORD */
+  if (i >= cnt || tokens[i].type != TWORD)
+    return NULL;
 
   args = get_argv(tokens, cnt, &i);
 
@@ -344,7 +347,7 @@ build_tree(const sh_tok *tokens, size_t cnt) {
   }
 
   r = newcmdnode(args, negate);
-  negate = 0;
+  negate = FALSE;
 
   while (i < cnt && tokens[i].type != TEOF) {
     t = tokens[i].type;
@@ -364,6 +367,7 @@ build_tree(const sh_tok *tokens, size_t cnt) {
       neg++;
     }
     negate = (neg % 2) ? TRUE : FALSE;
+    neg = 0;
 
     args = get_argv(tokens, cnt, &i); /* Get next command's arguments */
     if (!args || !args[0]) {
@@ -371,7 +375,7 @@ build_tree(const sh_tok *tokens, size_t cnt) {
       return NULL;
     }
 
-    n = newcmdnode(args, 0);
+    n = newcmdnode(args, negate);
     negate = FALSE;
     r = newoppnode(t, r, n);
   }
@@ -387,9 +391,15 @@ run_commands(const cmd_tree *n) {
 
   if (n->type == CMD) {
     if (getbuiltin(n->args) == 1)
-      return builtin_launch(n->args);
+      if (n->negate == TRUE)
+        return !builtin_launch(n->args);
+      else
+        return builtin_launch(n->args);
     else
-      return shexec(n->args);
+      if (n->negate == TRUE)
+        return !shexec(n->args);
+      else
+        return shexec(n->args);
   }
 
   if (n->type == OP) {
