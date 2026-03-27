@@ -323,10 +323,17 @@ build_tree(const sh_tok *tokens, size_t cnt) {
   size_t i = 0;
   char **args = NULL;
   cmd_tree *n, *r;
+  cmd_false negate = FALSE, neg = 0;
   token t;
 
   if (cnt < 1 || tokens[i].type != TWORD)
     return NULL;
+
+  while (tokens[i].type == TNOT) {
+    i++;
+    neg++;
+  }
+  negate = (neg % 2) ? TRUE : FALSE;
 
   args = get_argv(tokens, cnt, &i);
 
@@ -336,32 +343,40 @@ build_tree(const sh_tok *tokens, size_t cnt) {
     return NULL;
   }
 
-  r = newcmdnode(args, 0);
+  r = newcmdnode(args, negate);
+  negate = 0;
 
   while (i < cnt && tokens[i].type != TEOF) {
     t = tokens[i].type;
 
     if (t != TAND && t != TOR && t != TSEMI) {
+      // FIXME: I'm leaking memory here I'm pretty sure
       fprintf(stderr, "Expected Operator\n");
       return NULL;
     }
-    i++;  /* move to next command */ 
+    i++;  /* move to next command */
 
-    // Must have a command after operator
-    if (i >= cnt || tokens[i].type != TWORD)
+    if (i >= cnt || tokens[i].type != TWORD) /* Must have a command after operator */
       return NULL;
-    /* Get next command's arguments */
-    args = get_argv(tokens, cnt, &i);
+
+    while (tokens[i].type == TNOT) {
+      i++;
+      neg++;
+    }
+    negate = (neg % 2) ? TRUE : FALSE;
+
+    args = get_argv(tokens, cnt, &i); /* Get next command's arguments */
     if (!args || !args[0]) {
       freeptr(args);
       return NULL;
     }
 
     n = newcmdnode(args, 0);
+    negate = FALSE;
     r = newoppnode(t, r, n);
   }
   return r;
-} /* build command tree recursively */
+} /* build command abstract syntax tree */
 
 int
 run_commands(const cmd_tree *n) {

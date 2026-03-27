@@ -14,6 +14,11 @@ typedef enum {
   TEOF,
 } token;
 
+typedef enum {
+  FALSE,
+  TRUE,
+} cmd_false;
+
 /* store torkens before building argv */
 typedef struct {
   char *cmd;
@@ -28,7 +33,7 @@ struct cmd_tree {
     OP
   } type;
   char **args;
-  int c_false;
+  cmd_false negate;
   token op_t;
   cmd_tree *left;
   cmd_tree *right;
@@ -43,7 +48,7 @@ extern char *expand_alias(char *);
 extern char *exp_var(char *, size_t *, size_t *);
 
 static inline cmd_tree *
-newcmdnode(char **args, int c_false) {
+newcmdnode(char **args, cmd_false negate) {
   cmd_tree *ct = malloc(sizeof(cmd_tree));
   if (!ct) {
     perror("malloc failed");
@@ -52,7 +57,7 @@ newcmdnode(char **args, int c_false) {
 
   ct->type = CMD;
   ct->args = args;
-  ct->c_false = c_false;
+  ct->negate = negate;
 
   /* cmd tree has no children, and doesn't have an operator in it */
   ct->left = NULL;
@@ -77,7 +82,7 @@ newoppnode(token opp_t, cmd_tree *left, cmd_tree *right) {
 
   /* opp tree doesn't have a command stored and doesn't use the ! opperator */
   ot->args = NULL;
-  ot->c_false = 0;
+  ot->negate = 0;
 
   return ot;
 }
