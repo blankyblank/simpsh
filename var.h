@@ -1,6 +1,8 @@
 #ifndef VAR_H
 #define VAR_H
 
+#include "ctype.h"
+
 #define VAR_BUCKETS 39
 
 typedef struct shvar shvar;
@@ -11,6 +13,7 @@ struct shvar {
 };
 
 extern shvar *var_tab[VAR_BUCKETS];
+extern char *exp_var(char *, size_t, size_t *);
 
 static inline char *
 getvar(const char *vt) {
@@ -20,19 +23,17 @@ getvar(const char *vt) {
   return var;
 }
 
-static char *
-statusvar(size_t *var_l) {
+static inline char *
+statusvar(void) {
   char *buf = malloc(12);
   snprintf(buf, 12, "%d", lstatus);
-  *var_l = strlen(buf);
   return buf;
 }
 
 
 static inline char *
-var_pid(size_t *var_l) {
-  *var_l = strlen(sh_pid_s);
-  return sh_pid_s;
+var_pid(void) {
+  return strdup(sh_pid_s);
 }
 
 static inline char *
@@ -59,5 +60,6 @@ is_posparam(const char *var) {
   return 1;
 }
 
+// vim: set filetype=c:
 #endif /* VAR_H */
 
