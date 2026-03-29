@@ -12,5 +12,6 @@ simsh.geany
 *.ede
 *.seer
 *.bk
+AGENTS.md
 PROJECT.md
 tmp*.md
