@@ -19,9 +19,22 @@ typedef enum {
   TRUE,
 } cmd_false;
 
+typedef enum {
+  QNONE,
+  QDOUBLE,
+  QSINGLE,
+} quoted;
+/* refactoring to use word fragments from tokenization */
+typedef struct wf wf;
+struct wf {
+  char *word;
+  quoted qs;
+  wf *next;
+};
+
 /* store torkens before building argv */
 typedef struct {
-  char *cmd;
+  wf *cmd;
   token type;
 } sh_tok;
 
@@ -32,7 +45,7 @@ struct cmd_tree {
     CMD,
     OP
   } type;
-  char **args;
+  wf **args;
   char **sh_vars;
   cmd_false negate;
   token op_t;
@@ -41,15 +54,13 @@ struct cmd_tree {
 };
 
 /* new parsing */
-extern char *get_word(char *, size_t *, int *);
+extern wf *get_wf(char *, size_t *);
 extern sh_tok *tokenize(char *, int *);
 extern cmd_tree *build_tree(const sh_tok *, size_t);
-extern int run_commands(const cmd_tree *);
 extern char *expand_alias(char *);
-extern char *exp_var(char *, size_t *, size_t *);
 
 static inline cmd_tree *
-newcmdnode(char **args, cmd_false negate) {
+newcmdnode(wf **args, cmd_false negate) {
   cmd_tree *ct = malloc(sizeof(cmd_tree));
   if (!ct) {
     perror("malloc failed");
@@ -72,7 +83,7 @@ static inline cmd_tree *
 newoppnode(token opp_t, cmd_tree *left, cmd_tree *right) {
   cmd_tree *ot = malloc(sizeof(cmd_tree));
   if (!ot) {
-    perror("malloc failed");
+    fprintf(stderr, "malloc failed");
     return NULL;
   }
 
@@ -89,11 +100,32 @@ newoppnode(token opp_t, cmd_tree *left, cmd_tree *right) {
 }
 
 static inline void
+freewf(wf *f) {
+  wf *t;
+  while (f) {
+    t = f->next;
+    free(f->word);
+    free(f);
+    f = t;
+  }
+}
+
+static inline void
+free_argv(wf **args) {
+  if (!args)
+    return;
+  for (int i = 0; args[i]; i++) {
+    wf *f = args[i];
+    freewf(f);
+  }
+  free(args);
+}
+
+static inline void
 freetoks(sh_tok *toks, int c) {
   int i;
   for (i = 0; i < c; i++) {
-    if (toks[i].cmd != NULL)
-      free(toks[i].cmd);
+    toks[i].cmd = NULL;
   }
   free(toks);
 }
@@ -102,12 +134,12 @@ static inline void
 freectree(cmd_tree *cmd_tree) {
   if (!cmd_tree)
     return;
-  if (cmd_tree->left != NULL)
+  if (cmd_tree->left)
     freectree(cmd_tree->left);
-  if (cmd_tree->right != NULL)
+  if (cmd_tree->right)
     freectree(cmd_tree->right);
-  if (cmd_tree->type == CMD && cmd_tree->args != NULL)
-    freeptr(cmd_tree->args);
+  if (cmd_tree->type == CMD && cmd_tree->args)
+    free_argv(cmd_tree->args);
   free(cmd_tree);
 }
 
