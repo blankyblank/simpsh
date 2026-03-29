@@ -1,11 +1,9 @@
 #include "simpsh.h"
-#include "builtins.h"
 #include "utils.h"
 #include "alias.h"
+#include "builtins.h"
 #include <linux/limits.h>
 
-static int argcount(char **);
-static int builtinnum(void);
 static int cdsetpwd(const char *);
 static int echo_print(int, int, char **);
 
@@ -23,7 +21,7 @@ static int truecmd(char **);
 static int unaliascmd(char **);
 
 /* the array of builtin commands */  // clang-format off
-static const char *builtins[] = {
+const char *builtins[] = {
   "alias",
   "cd",
   "echo",
@@ -36,7 +34,7 @@ static const char *builtins[] = {
   "true",
   "unalias",
 };
-static int (* const builtin_funcs[])(char **) = {
+int (* const builtin_funcs[])(char **) = {
   &aliascmd,
   &cdcmd,
   &echocmd,
@@ -73,7 +71,7 @@ aliascmd(char **args) {
   }
 
   if (!(delem = strchr(args[1], '='))) {
-    if (!(e = lookup_alias(args[1])))
+    if (!(e = find_alias(args[1])))
       return 1;
     else
       printf("alias %s=%s\n", e->name, e->value);
@@ -81,49 +79,11 @@ aliascmd(char **args) {
     n = strndup(args[1], strlen(args[1]) - strlen(delem));
     v = strdup(delem + 1);
     set_alias(n, v);
-    if (n) free(n);
-    if (v) free(v);
+    free(n);
+    free(v);
   }
 
   return 0;
-}
-
-int
-argcount(char **args) {
-  int argc = 0;
-
-  while (args[argc])
-    argc++;
-
-  return argc;
-}
-
-int
-getbuiltin(char **args) {
-  /* check if string matches builtin command */
-  int n = builtinnum();
-  int i;
-
-  for (i = 0; i < n; i++) {
-    if (!strcmp(args[0], builtins[i])) {
-      return 1;
-    }
-  }
-  return 0;
-}
-
-int
-builtin_launch(char **args) {
-  /* launch builtin */
-  int n = builtinnum();
-  int i;
-  for (i = 0; i < n; i++) {
-    if (!strcmp(*args, builtins[i])) {
-      return (*builtin_funcs[i])(args);
-    }
-  }
-  printf("something didn't work");
-  return 1;
 }
 
 int
@@ -171,7 +131,7 @@ echocmd(char *args[]) {
   int n;
   int stat, argc;
 
-  argc = argcount(args);
+  argc = arrlen(args);
 
   if (argc >= 2) {
     if (strcmp(args[1], "-n") == 0 && argc > 2) {
@@ -241,7 +201,7 @@ execcmd(char **args) {
 
 fail:
   perror(args[0]);
-  if (fullpath) free(fullpath);
+  free(fullpath);
   return 1;
 }
 
@@ -259,7 +219,7 @@ int
 exportcmd(char **args) {
   int argc, l;
   char *n, *t, *val;
-  argc = argcount(args);
+  argc = arrlen(args);
 
   if (argc > 1) {
     t = strchr(args[1], '=');
@@ -324,7 +284,7 @@ unaliascmd(char **args) {
   // int i;
   // char *n, *v;
 
-  e = lookup_alias(args[1]);
+  e = find_alias(args[1]);
   if (e) {
     rm_alias(args[1]);
   } else {

@@ -1,7 +1,9 @@
 #ifndef BUILTIN_H
 #define BUILTIN_H
 
-extern int getbuiltin(char **);
-extern int builtin_launch(char **);
+extern const char *builtins[];
+extern int (* const builtin_funcs[])(char **);
+int builtinnum(void);
 
-#endif /* BUITIN_H */
+// vim: set filetype=c:
+#endif /* BUILTIN_H */
