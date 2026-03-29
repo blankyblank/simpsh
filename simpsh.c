@@ -86,8 +86,7 @@ getfullpath(const char *path, const char *file) {
     token = strtok(NULL, ":");
   }
   free(pathcpy);
-  if (pathbuf)
-    free(pathbuf);
+  free(pathbuf);
 
   return NULL;
 } /* takes the command and checks each directory on path until it finds the executable */
@@ -128,43 +127,3 @@ pmkdir(char *path) {
   return 1;
 }
 
-int
-shexec(char **args) {
-  int wstatus, estatus;
-  pid_t pid;
-  char *fullpath;
-
-  /* test if the command has a /, if not return the first executable
-     on PATH with the command name given */
-  fullpath = getpath(&args[0]);
-  if (!fullpath) {
-    fprintf(stderr, "%s: %s: command not found\n", sh_argv0, args[0]);
-    goto done;
-  }
-
-  pid = fork();
-  if (pid == -1) {
-    perror("failed to create");
-    goto done;
-  }
-
-  if (pid == 0) { /* if fork was successful run the command */
-    if (execve(fullpath, args, environ) == -1) {
-      perror(args[0]);
-      goto done;
-    }
-  } else {
-    waitpid(-1, &wstatus, 0);
-    estatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
-    free(fullpath);
-    return estatus;
-  }
-
-  goto done;
-
-done:
-  if (fullpath)
-    free(fullpath);
-  estatus = 1;
-  return estatus;
-} /* fork and exec the command passed to the shell */

@@ -1,5 +1,6 @@
 #include "simpsh.h"
 #include "lex.h"
+#include "exec.h"
 #include <locale.h>
 
 int lstatus;

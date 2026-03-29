@@ -35,7 +35,6 @@ extern char *home;
 
 /* functions for shell */
 extern char *getpath(char **);
-extern int shexec(char **);
 extern char *lineread(void);
 extern void init_history(void);
 
