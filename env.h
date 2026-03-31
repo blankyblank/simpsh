@@ -26,14 +26,9 @@ extern char *exp_var(char *, size_t, size_t *);
 extern alias *find_alias(const char *);
 extern void set_alias(const char *, const char *);
 extern void rm_alias(const char *);
-
-static inline char *
-getvar(const char *vt) {
-  char *var;
-  if ((var = getenv(vt)) == NULL)
-    var = "";
-  return var;
-}
+void setvar(const char *name, const char *val);
+void unset_var(const char *name);
+shvar * find_var(const char *name);
 
 static inline char *
 statusvar(void) {

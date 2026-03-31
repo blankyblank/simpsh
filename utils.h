@@ -7,6 +7,22 @@
 #include <stddef.h>
 /* malloc and free or other small inlined functions */
 
+static inline void
+read_assn(const char *assn, char **name, char **value) {
+  char *eq;
+  int l;
+  eq = (char *)strchr(assn, '=');
+  if (!eq) {
+    *name = strdup(assn);
+    *value = NULL;
+  } else {
+    l = eq - assn;
+    *name = strndup(assn, l);
+    *value = strdup(eq + 1);
+  }
+}
+
+
 static inline size_t arrlen(char **arr) {
   size_t n = 0;
   while (arr[n]) n++;

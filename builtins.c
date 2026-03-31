@@ -1,6 +1,6 @@
 #include "simpsh.h"
 #include "utils.h"
-#include "alias.h"
+#include "env.h"
 #include "builtins.h"
 #include <linux/limits.h>
 
@@ -217,21 +217,21 @@ exitcmd(char **argv) {
 
 int
 exportcmd(char **args) {
-  int argc, l;
-  char *n, *t, *val;
+  int argc, i;
+  char *n, *val;
   argc = arrlen(args);
 
   if (argc > 1) {
-    t = strchr(args[1], '=');
-    if (!t) {
-      setenv(args[1], "", 0);
-    } else {
-      l = t - args[1];
-      n = strndup(args[1], l);
-      val = strdup(t + 1);
-      setenv(n, val, 1);
-      free(val);
-      free(n);
+    for (i = 1; i < argc; i++) {
+      read_assn(args[i], &n, &val);
+      if (!val) {
+        setenv(args[i], "", 0);
+        free(n);
+      } else {
+        setenv(n, val, 1);
+        free(val);
+        free(n);
+      }
     }
   }
 

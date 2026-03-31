@@ -60,7 +60,7 @@ extern cmd_tree *build_tree(const sh_tok *, size_t);
 extern char *expand_alias(char *);
 
 static inline cmd_tree *
-newcmdnode(wf **args, cmd_false negate) {
+newcmdnode(wf **args, cmd_false negate, char **sh_vars) {
   cmd_tree *ct = malloc(sizeof(cmd_tree));
   if (!ct) {
     perror("malloc failed");
@@ -70,6 +70,7 @@ newcmdnode(wf **args, cmd_false negate) {
   ct->type = CMD;
   ct->args = args;
   ct->negate = negate;
+  ct->sh_vars = sh_vars;
 
   /* cmd tree has no children, and doesn't have an operator in it */
   ct->left = NULL;
@@ -138,8 +139,12 @@ freectree(cmd_tree *cmd_tree) {
     freectree(cmd_tree->left);
   if (cmd_tree->right)
     freectree(cmd_tree->right);
-  if (cmd_tree->type == CMD && cmd_tree->args)
-    free_argv(cmd_tree->args);
+  if (cmd_tree->type == CMD) {
+    if (cmd_tree->args)
+      free_argv(cmd_tree->args);
+    if (cmd_tree->sh_vars)
+      freeptr(cmd_tree->sh_vars);
+  }
   free(cmd_tree);
 }
 

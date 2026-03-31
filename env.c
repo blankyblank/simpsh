@@ -10,39 +10,17 @@ void setvar(const char *, const char *);
 // int setvar(const char *, const char *, int);
 static char * lookupvar (char *);
 
-shvar *
-find_var(const char *name) {
+static inline char *
+getvar(const char *vt) {
+  char *var;
   shvar *v;
-  HASH_LOOKUP(var_tab, VAR_BUCKETS, name, name, shvar, v);
-  return v;
+  if ((v = find_var(vt))) {
+    var = v->value;
+  } else if ((var = getenv(vt)) == NULL)
+    var = "";
+  return var;
 }
 
-void
-setvar(const char *name, const char *val) {
-  HASH_INSERT(var_tab, VAR_BUCKETS, name, val, shvar, name, value);
-}
-
-void
-unset_var(const char *name) {
-  HASH_DELETE(var_tab, VAR_BUCKETS, name, shvar, name, value);
-}
-
-alias *
-find_alias(const char *name) {
-  alias *a;
-  HASH_LOOKUP(alias_tab, ALIAS_BUCKETS, name, name, alias, a);
-  return a;
-}
-
-void
-set_alias(const char *name, const char *val) {
-  HASH_INSERT(alias_tab, ALIAS_BUCKETS, name, val, alias, name, value);
-}
-
-void
-rm_alias(const char *name) {
-  HASH_DELETE(alias_tab, ALIAS_BUCKETS, name, alias, name, value);
-}
 char *
 var_n(char *args, size_t i, size_t *end) {
   char *env_var, *vt, *var;
@@ -58,7 +36,6 @@ var_n(char *args, size_t i, size_t *end) {
       } else {
         vt = strndup(&args[i + 1], vt_l);
         env_var = lookupvar(vt);
-        free(vt);
         break;
       }
     }
@@ -95,7 +72,7 @@ varbrace_n(const char *args, size_t i, size_t *end) {
   return var;
 }
 
-char * lookupvar (char * vt) {
+char * lookupvar(char * vt) {
   char *var;
   int n;
 
@@ -126,5 +103,39 @@ exp_var(char *word, size_t s, size_t *e) {
   } else {
     return var_n(word, s, e);
   }
+}
+
+shvar *
+find_var(const char *name) {
+  shvar *v;
+  HASH_LOOKUP(var_tab, VAR_BUCKETS, name, name, shvar, v);
+  return v;
+}
+
+void
+setvar(const char *name, const char *val) {
+  HASH_INSERT(var_tab, VAR_BUCKETS, name, val, shvar, name, value);
+}
+
+void
+unset_var(const char *name) {
+  HASH_DELETE(var_tab, VAR_BUCKETS, name, shvar, name, value);
+}
+
+alias *
+find_alias(const char *name) {
+  alias *a;
+  HASH_LOOKUP(alias_tab, ALIAS_BUCKETS, name, name, alias, a);
+  return a;
+}
+
+void
+set_alias(const char *name, const char *val) {
+  HASH_INSERT(alias_tab, ALIAS_BUCKETS, name, val, alias, name, value);
+}
+
+void
+rm_alias(const char *name) {
+  HASH_DELETE(alias_tab, ALIAS_BUCKETS, name, alias, name, value);
 }
 

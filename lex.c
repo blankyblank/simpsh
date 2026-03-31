@@ -1,12 +1,14 @@
 #include "simpsh.h"
-#include "alias.h"
+#include "env.h"
 #include "lex.h"
 #include "utils.h"
+#include "expand.h"
 
 static wf **get_argv(const sh_tok *, size_t, size_t *);
-static char * get_word(const char *line, size_t *p);
-static void append_wfrag(wf **, wf **, char *, size_t , int);
-// static int is_assn(char *);
+static wf **get_assn(wf **, char ***);
+static char *get_word(const char *line, size_t *p);
+static void append_wfrag(wf **, wf **, char *, size_t, int);
+static int is_assn(wf *);
 
 static wf **
 get_argv(const sh_tok *tokens, size_t cnt, size_t *i) {
@@ -36,14 +38,14 @@ get_word(const char *line, size_t *p) {
     return NULL;
 
   while (line[s + len] &&
-         line[s + len] != ' ' &&
-         line[s + len] != '\t' &&
-         line[s + len] != '\n' &&
-         line[s + len] != '&' &&
-         line[s + len] != '|' &&
-         line[s + len] != ';' &&
-         line[s + len] != '"' &&
-         line[s + len] != '\'') 
+      line[s + len] != ' ' &&
+      line[s + len] != '\t' &&
+      line[s + len] != '\n' &&
+      line[s + len] != '&' &&
+      line[s + len] != '|' &&
+      line[s + len] != ';' &&
+      line[s + len] != '"' &&
+      line[s + len] != '\'')
     len++;
   if (len == 0)
     return NULL;
@@ -51,16 +53,18 @@ get_word(const char *line, size_t *p) {
   return strndup(line + s, len);
 }
 
+static int
+is_assn(wf *cmd) {
+  char *eq = strchr(cmd->word, '=');
+  const char *p = cmd->word;
 
-/* static int is_assn(char *cmd) {
-  char *eq = strchr(cmd, '=');
-  const char *p = cmd;
-
-  if (!eq || eq == cmd)
+  if (cmd->qs != QNONE)
+    return 0;
+  if (!eq || eq == cmd->word)
     return 0;
 
-  for (p = cmd; p < eq; p++) {
-    if (p == cmd) {
+  for (p = cmd->word; p < eq; p++) {
+    if (p == cmd->word) {
       if (!isalpha(*p) && *p != '_')
         return 0;
     } else {
@@ -69,7 +73,62 @@ get_word(const char *line, size_t *p) {
     }
   }
   return 1;
-} */
+}
+
+char *
+cat_wf(wf *wordf) {
+  size_t bufsize = 0;  // = BUF_S
+  size_t buflen = 0, len;
+  wf *f = wordf;
+
+  for (; f; f = f->next)
+    bufsize += strlen(f->word);
+  char *buf = malloc(bufsize + 1);
+  if (!buf)
+    return NULL;
+  buf[0] = '\0';
+
+  f = wordf;
+  while (f) {
+    len = strlen(f->word);
+    bufcat(&buf, &bufsize, &buflen, f->word, len);
+    if (!buf)
+      return NULL;
+    f = f->next;
+  }
+  return buf;
+}
+
+wf **
+get_assn(wf **args, char ***sh_vars) {
+  int i, j, k, a_c;
+  *sh_vars = NULL;
+
+  if (!args)
+    return NULL;
+
+  for (i = 0; args[i]; i++)
+    if (!is_assn(args[i]))
+      break;
+  a_c = i;
+  if (!a_c) {
+    *sh_vars = NULL;
+    return args;
+  }
+  *sh_vars = malloc((a_c + 1) * sizeof(char *));
+  if (!*sh_vars)
+    return NULL;
+
+  for (j = 0; j < a_c; j++)
+    (*sh_vars)[j] = cat_wf(args[j]); /* NOTE: remember cat_wf returns null check that if bugs pop up from this */
+  (*sh_vars)[a_c] = NULL;
+
+  for (k = a_c; args[k]; k++)
+    args[k - a_c] = args[k];
+  args[k - a_c] = NULL;
+
+  return args;
+}
 
 static void
 append_wfrag(wf **head, wf **tail, char *buf, size_t len, int quoted) {
@@ -77,12 +136,12 @@ append_wfrag(wf **head, wf **tail, char *buf, size_t len, int quoted) {
   f->word = strndup(buf, len);
   f->qs = quoted;
   f->next = NULL;
-  
+
   if (!*head)
     *head = f;
   else
     (*tail)->next = f;
-  
+
   *tail = f;
 }
 
@@ -96,7 +155,6 @@ append_wfrag(wf **head, wf **tail, char *buf, size_t len, int quoted) {
  * it advances the position for the caller, then the caller needs to advance
  * through whitespace, and operators when it handles them.
  */
-
 
 wf *
 get_wf(char *line, size_t *pos) {
@@ -132,13 +190,13 @@ get_wf(char *line, size_t *pos) {
       } else if (c == '&' || c == '|' || c == ';') {
         goto done;
       } else if (c == '\'') {
-        if (bufpos > 0)  /* save unquoted frag if nonempty */
+        if (bufpos > 0) /* save unquoted frag if nonempty */
           append_wfrag(&head, &tail, buf, bufpos, state);
         bufpos = 0;
         state = QSINGLE;
         i++;
       } else if (c == '"') {
-        if (bufpos > 0)  /* save unquoted frag if nonempty */
+        if (bufpos > 0) /* save unquoted frag if nonempty */
           append_wfrag(&head, &tail, buf, bufpos, state);
         bufpos = 0;
         state = QDOUBLE;
@@ -172,7 +230,6 @@ get_wf(char *line, size_t *pos) {
 
     case QDOUBLE:
       if (c == '"') {
-        // TODO: check if using state instead of the enum itself works
         if (bufpos > 0) /* save double quoted frag if nonempty */
           append_wfrag(&head, &tail, buf, bufpos, state);
         bufpos = 0;
@@ -223,7 +280,6 @@ tokenize(char *line, int *cnt) {
 
   /* go until we hit the null byte */
   while (line[p]) {
-
     p = skip_ws(line + p) - line; /* skip whitespace */
     if (!line[p])
       break;
@@ -278,6 +334,7 @@ build_tree(const sh_tok *tokens, size_t cnt) {
   wf **args = NULL;
   cmd_tree *nxt, *r;
   cmd_false negate = FALSE, neg = 0;
+  char **sh_vars = NULL;
   token t;
 
   while (i < cnt && tokens[i].type == TNOT) { /* look for '!' */
@@ -290,19 +347,22 @@ build_tree(const sh_tok *tokens, size_t cnt) {
     return NULL;
   args = get_argv(tokens, cnt, &i);
   if (!args || !args[0]) { /* handle empty input */
-    fprintf(stderr, "somethings wrong \n");
+    fprintf(stderr, "somethings wrong \n");  // TODO: double check this at some point
     free_argv(args);
     return NULL;
   }
+  args = get_assn(args, &sh_vars);
+  /* if (sh_vars && (!args || !args[0])) {
+  } */
 
-  r = newcmdnode(args, negate);
+  r = newcmdnode(args, negate, sh_vars);
   negate = FALSE;
 
   while (i < cnt && tokens[i].type != TEOF) {
     t = tokens[i].type;
     if (t != TAND && t != TOR && t != TSEMI)
       goto cleanup;
-    i++;  /* move to next command */
+    i++; /* move to next command */
 
     if (i >= cnt || tokens[i].type != TWORD)
       goto cleanup;
@@ -316,7 +376,8 @@ build_tree(const sh_tok *tokens, size_t cnt) {
     args = get_argv(tokens, cnt, &i); /* Get next command's arguments */
     if (!args || !args[0])
       goto cleanup;
-    nxt = newcmdnode(args, negate);
+    args = get_assn(args, &sh_vars);
+    nxt = newcmdnode(args, negate, sh_vars);
     negate = FALSE;
     r = newoppnode(t, r, nxt);
   }
@@ -376,7 +437,7 @@ expand_alias(char *line) {
           strcat(nl, eline + p);
           free(eline);
           eline = nl;
-          p = 0; // p = s + strlen(a->value);
+          p = 0;  // p = s + strlen(a->value);
           depth++;
           continue;
         } else {
@@ -408,4 +469,3 @@ expand_alias(char *line) {
     free(line);
   return eline;
 }
-

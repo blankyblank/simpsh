@@ -3,6 +3,7 @@
 #include "expand.h"
 #include "exec.h"
 #include "builtins.h"
+#include "env.h"
 
 int
 getbuiltin(char **args) {
@@ -36,9 +37,21 @@ int
 run_commands(const cmd_tree *n) {
   int l_status, r_status, status;
   char **final = NULL;
+  char *name, *val;
+  int i;
 
   if (!n)
     return 0;
+
+  if (n->sh_vars && (!n->args || !n->args[0])) {
+    for (i = 0; n->sh_vars[i]; i++) {
+      read_assn(n->sh_vars[i], &name, &val);
+      setvar(name, val);
+    }
+    free(name);
+    free(val);
+    return 0;
+  }
 
   if (n->type == CMD) {
     final = expand_argv(n->args);

@@ -5,9 +5,7 @@
 #include "utils.h"
 
 
-static void bufcat(char **, size_t *, size_t *, const char *, size_t );
-
-static void
+void
 bufcat(char **buf, size_t *bufsize, size_t *buflen, const char *src, size_t n) {
     if (*buflen + n + 1 > *bufsize) {
         *buf = s_realloc(*buf, bufsize);
