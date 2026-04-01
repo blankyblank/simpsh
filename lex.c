@@ -124,8 +124,10 @@ get_assn(wf **args, char ***sh_vars) {
   if (!*sh_vars)
     return NULL;
 
-  for (j = 0; j < a_c; j++)
-    (*sh_vars)[j] = cat_wf(args[j]); /* NOTE: remember cat_wf returns null check that if bugs pop up from this */
+  for (j = 0; j < a_c; j++) {
+      (*sh_vars)[j] = cat_wf(args[j]); /* NOTE: remember cat_wf returns null check that if bugs pop up from this */
+      freewf(args[j]);
+     }
   (*sh_vars)[a_c] = NULL;
 
   for (k = a_c; args[k]; k++)
@@ -388,6 +390,7 @@ build_tree(const sh_tok *tokens, size_t cnt) {
 
 cleanup:
   fprintf(stderr, "Syntax error\n");
+  freeptr(sh_vars);
   freectree(r);
   return NULL;
 } /* build command abstract syntax tree */
@@ -405,7 +408,7 @@ expand_alias(char *line) {
 
   while (eline[p]) {
     q = 0;
-    p = skip_ws(line + p) - line; /* skip whitespace */
+    p = skip_ws(eline + p) - eline; /* skip whitespace */
     if (!eline[p])
       break;
 
@@ -451,8 +454,9 @@ expand_alias(char *line) {
       }
     }
     while (eline[p]) {
-      while (eline[p] == ' ' || eline[p] == '\n' || eline[p] == '\t')
-        p++;
+      p = skip_ws(eline + p) - eline;
+      /* while (eline[p] == ' ' || eline[p] == '\n' || eline[p] == '\t')
+        p++; */ // keep until i find segfault cause
       if (!eline[p])
         break;
 

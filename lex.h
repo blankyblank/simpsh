@@ -94,6 +94,7 @@ newoppnode(token opp_t, cmd_tree *left, cmd_tree *right) {
   ot->right = right;
 
   /* opp tree doesn't have a command stored and doesn't use the ! opperator */
+  ot->sh_vars = NULL;
   ot->args = NULL;
   ot->negate = 0;
 
