@@ -2,6 +2,7 @@ simpsh
 obj/*.o
 .cache/
 compile_commands.json
+.clangd
 doc
 bak
 notes.txt

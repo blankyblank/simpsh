@@ -43,7 +43,7 @@ run_commands(const cmd_tree *n) {
   if (!n)
     return 0;
 
-  if (n->sh_vars && (!n->args || !n->args[0])) {
+  if (n->sh_vars && n->sh_vars[0] && (!n->args || !n->args[0])) {
     for (i = 0; n->sh_vars[i]; i++) {
       read_assn(n->sh_vars[i], &name, &val);
       setvar(name, val);

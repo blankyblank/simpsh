@@ -131,7 +131,7 @@ echocmd(char *args[]) {
   int n;
   int stat, argc;
 
-  argc = arrlen(args);
+  argc = array_len(args);
 
   if (argc >= 2) {
     if (strcmp(args[1], "-n") == 0 && argc > 2) {
@@ -219,7 +219,7 @@ int
 exportcmd(char **args) {
   int argc, i;
   char *n, *val;
-  argc = arrlen(args);
+  argc = array_len(args);
 
   if (argc > 1) {
     for (i = 1; i < argc; i++) {

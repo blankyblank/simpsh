@@ -23,7 +23,7 @@ read_assn(const char *assn, char **name, char **value) {
 }
 
 
-static inline size_t arrlen(char **arr) {
+static inline size_t array_len(char **arr) {
   size_t n = 0;
   while (arr[n]) n++;
   return n;
