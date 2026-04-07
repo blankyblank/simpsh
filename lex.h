@@ -149,5 +149,5 @@ freectree(cmd_tree *cmd_tree) {
   free(cmd_tree);
 }
 
-// vim: set filetype=c:
+/* vim: set filetype=c: */
 #endif /* LEX_H */

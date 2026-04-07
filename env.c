@@ -7,10 +7,44 @@ shvar *var_tab[VAR_BUCKETS] = {NULL};
 static char *var_n(char *, size_t, size_t *);
 static char *varbrace_n(const char *, size_t, size_t *);
 void setvar(const char *, const char *);
-// int setvar(const char *, const char *, int);
+/* int setvar(const char *, const char *, int); */
 static char * lookupvar (char *);
 
-static inline char *
+
+void
+init_env(void) {
+  size_t i, env_c;
+  char *name, *val;
+  char **env;
+
+  env_c = array_len(environ);
+
+
+  for (i = 0; i < env_c; i++) {
+    read_assn(environ[i], &name, &val);
+    setvar(name, val);
+  }
+}
+/* 
+ * NOTE:
+ *      When initializing shell variables from environ in init_env(), you should treat setting the value and setting the exported flag as parts of the same operation - creating a complete shell variable entry with all its properties.
+ *      Conceptual approach for each environ entry:
+ *      1. Parse the "NAME=VALUE" string to extract name and value components
+ *      2. Create/add a shvar entry to var_tab with:
+ *       - name: the parsed variable name
+ *       - value: the parsed variable value 
+ *       - exported: set to 1 (since it came from environ, per POSIX)
+ *       - readonly: set to 0 (default unless you have special logic)
+ *       - null: set appropriately based on whether value is empty string (distinguishes set-to-empty from unset)
+ *      Key insight: These aren't separate steps to perform sequentially. When you're creating the shvar node during initialization, you're establishing its complete state - including both its value and its export status - all at once.
+ *      This differs from runtime operations like export VAR where you might modify an existing shell variable's export status. But for initialization, you're building new variable entries that should immediately reflect their exported nature since they came from the environment.
+ *      The focus should be on creating properly initialized shvar entries that correctly represent environment variables as exported shell variables from shell startup.
+ *
+ */
+
+
+/* static inline char * */
+char *
 getvar(const char *vt) {
   char *var;
   shvar *v;

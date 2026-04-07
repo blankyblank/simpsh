@@ -5,5 +5,5 @@ extern const char *builtins[];
 extern int (* const builtin_funcs[])(char **);
 int builtinnum(void);
 
-// vim: set filetype=c:
+/* vim: set filetype=c: */
 #endif /* BUILTIN_H */

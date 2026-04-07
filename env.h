@@ -13,6 +13,9 @@ typedef struct shvar shvar;
 struct shvar {
   char *name;
   char *value;
+  int exported;
+  int readonly;
+  int null;
   shvar *next;
 };
 
@@ -67,6 +70,6 @@ is_posparam(const char *var) {
   return 1;
 }
 
-// vim: set filetype=c:
+/* vim: set filetype=c: */
 #endif /* VAR_H */
 

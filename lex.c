@@ -27,7 +27,7 @@ get_argv(const sh_tok *tokens, size_t cnt, size_t *i) {
   argv[j] = NULL;
   *i = t;
   return argv;
-} // get_argv
+} /* get_argv */
 
 /* get word in char * line (not operators) */
 static char *
@@ -55,7 +55,7 @@ get_word(const char *line, size_t *p) {
 
   *p = s + len;
   return strndup(line + s, len);
-} // get_word
+} /* get_word */
 
 /* check if word is name=value */
 static int
@@ -78,7 +78,7 @@ is_assn(wf *cmd) {
     }
   }
   return 1;
-} // is_assn
+} /* is_assn */
 
 /* takes word fragment and returns (char *) */
 static char *
@@ -425,7 +425,7 @@ expand_alias(char *line) {
       break;
     if (q) {
       free(word);
-      // continue;
+      /* continue; */
     } else {
       a = find_alias(word);
       if (word)
@@ -443,7 +443,7 @@ expand_alias(char *line) {
           strcat(nl, eline + p);
           free(eline);
           eline = nl;
-          p = 0;  // p = s + strlen(a->value);
+          p = 0;  /* p = s + strlen(a->value); */
           depth++;
           continue;
         } else {
@@ -456,7 +456,7 @@ expand_alias(char *line) {
     while (eline[p]) {
       p = skip_ws(eline + p) - eline;
       /* while (eline[p] == ' ' || eline[p] == '\n' || eline[p] == '\t')
-        p++; */ // keep until i find segfault cause
+        p++; */ /* keep until i find segfault cause */
       if (!eline[p])
         break;
 
@@ -465,7 +465,7 @@ expand_alias(char *line) {
           (eline[p] == '|' && eline[n] == '|') ||
           eline[p] == ';') {
         break;
-        // p += (eline[p] == eline[n]) ? 2 : 1;
+        /* p += (eline[p] == eline[n]) ? 2 : 1; */
       }
       if (!(word = get_word(eline, &p)))
         break;

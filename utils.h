@@ -164,5 +164,5 @@ hash(const char *s, unsigned int buckets) {
     } \
   } while (0)
 
-// vim: set filetype=c:
-#endif // !MALLOC_H
+/* vim: set filetype=c: */
+#endif /* !MALLOC_H */

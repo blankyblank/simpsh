@@ -20,7 +20,7 @@ static int pwdcmd(char **);
 static int truecmd(char **);
 static int unaliascmd(char **);
 
-/* the array of builtin commands */  // clang-format off
+/* the array of builtin commands */  /* clang-format off */
 const char *builtins[] = {
   "alias",
   "cd",
@@ -49,7 +49,7 @@ int (* const builtin_funcs[])(char **) = {
 };
 int builtinnum(void) {
   return sizeof(builtins) / sizeof(char *);
-} // clang-format on
+} /* clang-format on */
 
 int
 aliascmd(char **args) {
@@ -281,8 +281,8 @@ truecmd(char **args) {
 static int
 unaliascmd(char **args) {
   alias *e;
-  // int i;
-  // char *n, *v;
+  /* int i;
+   char *n, *v; */
 
   e = find_alias(args[1]);
   if (e) {

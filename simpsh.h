@@ -3,7 +3,7 @@
 
 #define _GNU_SOURCE
 #include <errno.h>
-// #include <signal.h>
+/* #include <signal.h> */
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,5 +38,5 @@ extern char *getpath(char **);
 extern char *lineread(void);
 extern void init_history(void);
 
-// vim: set filetype=c:
+/* vim: set filetype=c: */
 #endif /* SIMP_H */

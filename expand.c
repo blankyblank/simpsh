@@ -41,12 +41,13 @@ expand_word(wf *wordf) {
   size_t buflen = 0, len;
   size_t end, p;
   size_t cp_len, next_v;
+  wf *f;
   char *buf = malloc(bufsize), *expanded;
   if (!buf)
     return NULL;
   buf[0] = '\0';
 
-  for (wf *f = wordf; f; f = f->next) {
+  for (f = wordf; f; f = f->next) {
     switch (f->qs) {
     case QSINGLE:
       len = strlen(f->word);
