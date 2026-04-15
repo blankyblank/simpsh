@@ -1,3 +1,4 @@
+/* lex.h - tokenizer and parser functions and declarations */
 #ifndef LEX_H
 #define LEX_H
 
@@ -24,23 +25,39 @@ typedef enum {
   QDOUBLE,
   QSINGLE,
 } quoted;
-/* refactoring to use word fragments from tokenization */
+
 typedef struct wf wf;
+/**
+ * word fragment
+ * @field wf pointer to next node
+ * @field string word
+ * @field enum quoted qs
+ */
 struct wf {
+  wf *next;
   char *word;
   quoted qs;
-  wf *next;
 };
 
-/* store torkens before building argv */
+/** store tokens before building argv */
 typedef struct {
   wf *cmd;
   token type;
 } sh_tok;
 
-/* tree struct to use for command parsing */
 typedef struct cmd_tree cmd_tree;
+/**
+ * AST node for commands
+ * @field node left
+ * @field node right
+ * @field enum node type
+ * @field word fragment array args
+ * @field cmd_false negate
+ * @field token op_t
+ */
 struct cmd_tree {
+  cmd_tree *left;
+  cmd_tree *right;
   enum {
     CMD,
     OP
@@ -49,29 +66,29 @@ struct cmd_tree {
   char **sh_vars;
   cmd_false negate;
   token op_t;
-  cmd_tree *left;
-  cmd_tree *right;
 };
 
-/* new parsing */
+/** Get word fragment */
 extern wf *get_wf(char *, size_t *);
+/** create sh_toks out of line */
 extern sh_tok *tokenize(char *, int *);
+/** build ast tree */
 extern cmd_tree *build_tree(const sh_tok *, size_t);
+/** replace alias with it's command */
 extern char *expand_alias(char *);
 
 static inline cmd_tree *
-newcmdnode(wf **args, cmd_false negate, char **sh_vars) {
+newcmdnode(wf **args, cmd_false negate, char **sh_vars)
+{
   cmd_tree *ct = malloc(sizeof(cmd_tree));
   if (!ct) {
     perror("malloc failed");
     return NULL;
   }
-
   ct->type = CMD;
   ct->args = args;
   ct->negate = negate;
   ct->sh_vars = sh_vars;
-
   /* cmd tree has no children, and doesn't have an operator in it */
   ct->left = NULL;
   ct->right = NULL;
@@ -81,18 +98,17 @@ newcmdnode(wf **args, cmd_false negate, char **sh_vars) {
 }
 
 static inline cmd_tree *
-newoppnode(token opp_t, cmd_tree *left, cmd_tree *right) {
+newoppnode(token opp_t, cmd_tree *left, cmd_tree *right)
+{
   cmd_tree *ot = malloc(sizeof(cmd_tree));
   if (!ot) {
     fprintf(stderr, "malloc failed");
     return NULL;
   }
-
   ot->type = OP;
   ot->op_t = opp_t;
   ot->left = left;
   ot->right = right;
-
   /* opp tree doesn't have a command stored and doesn't use the ! opperator */
   ot->sh_vars = NULL;
   ot->args = NULL;
@@ -102,7 +118,8 @@ newoppnode(token opp_t, cmd_tree *left, cmd_tree *right) {
 }
 
 static inline void
-freewf(wf *f) {
+freewf(wf *f)
+{
   wf *t;
   while (f) {
     t = f->next;
@@ -113,7 +130,8 @@ freewf(wf *f) {
 }
 
 static inline void
-free_argv(wf **args) {
+free_argv(wf **args)
+{
   if (!args)
     return;
   for (int i = 0; args[i]; i++) {
@@ -124,7 +142,8 @@ free_argv(wf **args) {
 }
 
 static inline void
-freetoks(sh_tok *toks, int c) {
+freetoks(sh_tok *toks, int c)
+{
   int i;
   for (i = 0; i < c; i++) {
     toks[i].cmd = NULL;
@@ -133,7 +152,8 @@ freetoks(sh_tok *toks, int c) {
 }
 
 static inline void
-freectree(cmd_tree *cmd_tree) {
+freectree(cmd_tree *cmd_tree)
+{
   if (!cmd_tree)
     return;
   if (cmd_tree->left)

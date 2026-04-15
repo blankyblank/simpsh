@@ -1,3 +1,4 @@
+/* lex.c - tokenizer and parser functions */
 #include "simpsh.h"
 #include "env.h"
 #include "lex.h"
@@ -9,11 +10,12 @@ static wf **get_assn(wf **, char ***);
 static char *get_word(const char *line, size_t *p);
 static void append_wf(wf **, wf **, char *, size_t, int);
 static int is_assn(wf *);
-static char * cat_wf(wf *wordf);
+static char *cat_wf(wf *wordf);
 
 /* build consecutive TWORDS into command returned in word fragments */
 static wf **
-get_argv(const sh_tok *tokens, size_t cnt, size_t *i) {
+get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
+{
   size_t t = *i;
   size_t j = 0;
   wf **argv = malloc(MAX_CMDS * sizeof(wf *));
@@ -31,7 +33,8 @@ get_argv(const sh_tok *tokens, size_t cnt, size_t *i) {
 
 /* get word in char * line (not operators) */
 static char *
-get_word(const char *line, size_t *p) {
+get_word(const char *line, size_t *p)
+{
   size_t s = *p;
   size_t len = 0;
 
@@ -40,7 +43,7 @@ get_word(const char *line, size_t *p) {
   if (!line[s])
     return NULL;
 
-  while (line[s + len] &&
+  while (line[s + len] && /* clang-format off */
       line[s + len] != ' ' &&
       line[s + len] != '\t' &&
       line[s + len] != '\n' &&
@@ -49,6 +52,7 @@ get_word(const char *line, size_t *p) {
       line[s + len] != ';' &&
       line[s + len] != '"' &&
       line[s + len] != '\'')
+    /* clang-format on */
     len++;
   if (len == 0)
     return NULL;
@@ -59,7 +63,8 @@ get_word(const char *line, size_t *p) {
 
 /* check if word is name=value */
 static int
-is_assn(wf *cmd) {
+is_assn(wf *cmd)
+{
   char *eq = strchr(cmd->word, '=');
   const char *p = cmd->word;
 
@@ -82,7 +87,8 @@ is_assn(wf *cmd) {
 
 /* takes word fragment and returns (char *) */
 static char *
-cat_wf(wf *wordf) {
+cat_wf(wf *wordf)
+{
   size_t bufsize = 0;
   size_t buflen = 0, len;
   wf *f = wordf;
@@ -105,7 +111,8 @@ cat_wf(wf *wordf) {
 }
 
 wf **
-get_assn(wf **args, char ***sh_vars) {
+get_assn(wf **args, char ***sh_vars)
+{
   int i, j, k, a_c;
   *sh_vars = NULL;
 
@@ -125,9 +132,10 @@ get_assn(wf **args, char ***sh_vars) {
     return NULL;
 
   for (j = 0; j < a_c; j++) {
-      (*sh_vars)[j] = cat_wf(args[j]); /* NOTE: remember cat_wf returns null check that if bugs pop up from this */
-      freewf(args[j]);
-     }
+    /* NOTE: remember cat_wf returns null check that if bugs pop up from this */
+    (*sh_vars)[j] = cat_wf(args[j]);
+    freewf(args[j]);
+  }
   (*sh_vars)[a_c] = NULL;
 
   for (k = a_c; args[k]; k++)
@@ -137,9 +145,12 @@ get_assn(wf **args, char ***sh_vars) {
   return args;
 }
 
-/* add word fragment onto the end of the linked list */
+/**
+ * add word fragment onto the end of the linked list
+ */
 static void
-append_wf(wf **head, wf **tail, char *buf, size_t len, int quoted) {
+append_wf(wf **head, wf **tail, char *buf, size_t len, int quoted)
+{
   wf *f = malloc(sizeof(wf));
   f->word = strndup(buf, len);
   f->qs = quoted;
@@ -153,21 +164,22 @@ append_wf(wf **head, wf **tail, char *buf, size_t len, int quoted) {
   *tail = f;
 }
 
-/*
- * parses a line extracts a word, handles quoting, escaping.
- *
- * used in tokenize, it returns immediately if it's at the position of an
- * opterator tokenize handles finding those. also whitespace etc.
- * it advances the position for the caller, then the caller needs to advance
- * through whitespace, and operators when it handles them.
- *
- * it returns word fragments, they're a linked list for (char *)s
- * that are used to track the quoting state of the line later
- * (maybe other metadate too later, if needed)
- */
-
 wf *
-get_wf(char *line, size_t *pos) {
+get_wf(char *line, size_t *pos)
+{
+  /*
+   * parses a line extracts a word, handles quoting, escaping.
+   *
+   * used in tokenize, it returns immediately if it's at the position of an
+   * opterator tokenize handles finding those. also whitespace etc.
+   * it advances the position for the caller, then the caller needs to advance
+   * through whitespace, and operators when it handles them.
+   *
+   * it returns word fragments, they're a linked list for (char *)s
+   * that are used to track the quoting state of the line later
+   * (maybe other metadate too later, if needed)
+   */
+
   wf *head = NULL;
   wf *tail = NULL;
   wf *f = NULL;
@@ -261,15 +273,16 @@ get_wf(char *line, size_t *pos) {
     }
   }
 
-  done:
-    append_wf(&head, &tail, buf, bufpos, state); /* save double quoted frag */
-    free(buf);
-    *pos = i;
-    return head;
+done:
+  append_wf(&head, &tail, buf, bufpos, state); /* save double quoted frag */
+  free(buf);
+  *pos = i;
+  return head;
 }
 
 sh_tok *
-tokenize(char *line, int *cnt) {
+tokenize(char *line, int *cnt)
+{
   size_t p = 0, c = 0, n;
   *cnt = 0;
   wf *f;
@@ -336,7 +349,8 @@ tokenize(char *line, int *cnt) {
 }
 
 cmd_tree *
-build_tree(const sh_tok *tokens, size_t cnt) {
+build_tree(const sh_tok *tokens, size_t cnt)
+{
   size_t i = 0;
   wf **args = NULL;
   cmd_tree *nxt, *r;
@@ -358,8 +372,6 @@ build_tree(const sh_tok *tokens, size_t cnt) {
     return NULL;
   }
   args = get_assn(args, &sh_vars);
-  /* if (sh_vars && (!args || !args[0])) {
-  } */
 
   r = newcmdnode(args, negate, sh_vars);
   negate = FALSE;
@@ -368,17 +380,16 @@ build_tree(const sh_tok *tokens, size_t cnt) {
     t = tokens[i].type;
     if (t != TAND && t != TOR && t != TSEMI)
       goto cleanup;
-    i++; /* move to next command */
-
+    /* move to next command */
+    i++;
     if (i >= cnt || tokens[i].type != TWORD)
       goto cleanup;
-
     for (; i < cnt && tokens[i].type == TNOT; i++)
       neg++;
     negate = (neg % 2) ? TRUE : FALSE;
     neg = 0;
-
-    args = get_argv(tokens, cnt, &i); /* Get next command's arguments */
+    /* Get next command's arguments */
+    args = get_argv(tokens, cnt, &i);
     if (!args || !args[0])
       goto cleanup;
     args = get_assn(args, &sh_vars);
@@ -396,7 +407,8 @@ cleanup:
 } /* build command abstract syntax tree */
 
 char *
-expand_alias(char *line) {
+expand_alias(char *line)
+{
   char *eline = strdup(line);
   char *word, *nl;
   size_t s, p, n;
@@ -414,8 +426,7 @@ expand_alias(char *line) {
 
     n = p + 1;
     if ((eline[p] == '&' && eline[n] == '&') ||
-        (eline[p] == '|' && eline[n] == '|') ||
-        eline[p] == ';') {
+        (eline[p] == '|' && eline[n] == '|') || eline[p] == ';') {
       p += (eline[p] == eline[n]) ? 2 : 1;
       continue;
     }
@@ -443,7 +454,7 @@ expand_alias(char *line) {
           strcat(nl, eline + p);
           free(eline);
           eline = nl;
-          p = 0;  /* p = s + strlen(a->value); */
+          p = 0; /* p = s + strlen(a->value); */
           depth++;
           continue;
         } else {
@@ -453,25 +464,22 @@ expand_alias(char *line) {
         }
       }
     }
+
     while (eline[p]) {
       p = skip_ws(eline + p) - eline;
-      /* while (eline[p] == ' ' || eline[p] == '\n' || eline[p] == '\t')
-        p++; */ /* keep until i find segfault cause */
       if (!eline[p])
         break;
-
       n = p + 1;
       if ((eline[p] == '&' && eline[n] == '&') ||
-          (eline[p] == '|' && eline[n] == '|') ||
-          eline[p] == ';') {
+          (eline[p] == '|' && eline[n] == '|') || eline[p] == ';') {
         break;
-        /* p += (eline[p] == eline[n]) ? 2 : 1; */
       }
       if (!(word = get_word(eline, &p)))
         break;
       free(word);
     }
   }
+
   if (line)
     free(line);
   return eline;

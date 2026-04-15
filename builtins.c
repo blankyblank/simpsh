@@ -1,3 +1,4 @@
+/* builtins.c - builtin shell commands */
 #include "simpsh.h"
 #include "utils.h"
 #include "env.h"
@@ -20,7 +21,7 @@ static int pwdcmd(char **);
 static int truecmd(char **);
 static int unaliascmd(char **);
 
-/* the array of builtin commands */  /* clang-format off */
+/* the array of builtin commands */ /* clang-format off */
 const char *builtins[] = {
   "alias",
   "cd",
@@ -52,7 +53,8 @@ int builtinnum(void) {
 } /* clang-format on */
 
 int
-aliascmd(char **args) {
+aliascmd(char **args)
+{
   int i;
   alias *e;
   char *delem, *n, *v;
@@ -87,7 +89,8 @@ aliascmd(char **args) {
 }
 
 int
-cdsetpwd(const char *arg) {
+cdsetpwd(const char *arg)
+{
   char respath[PATH_MAX], oldpwd[PATH_MAX];
   char *newpwd = NULL;
 
@@ -115,7 +118,8 @@ cdsetpwd(const char *arg) {
 }
 
 int
-cdcmd(char **args) {
+cdcmd(char **args)
+{
   char **dir = args;
 
   if (dir[1] == 0) {
@@ -127,7 +131,8 @@ cdcmd(char **args) {
 }
 
 int
-echocmd(char *args[]) {
+echocmd(char *args[])
+{
   int n;
   int stat, argc;
 
@@ -159,7 +164,8 @@ echocmd(char *args[]) {
 }
 
 int
-echo_print(int argc, int n, char *args[]) {
+echo_print(int argc, int n, char *args[])
+{
   int i;
   char s = ' ';
   if (n == 1) {
@@ -186,7 +192,8 @@ echo_print(int argc, int n, char *args[]) {
 }
 
 int
-execcmd(char **args) {
+execcmd(char **args)
+{
   char *fullpath;
 
   fullpath = getpath(&args[1]);
@@ -206,7 +213,8 @@ fail:
 }
 
 int
-exitcmd(char **argv) {
+exitcmd(char **argv)
+{
   char **args = (char **)NULL;
   (void)argv;
   if (args) {
@@ -216,18 +224,32 @@ exitcmd(char **argv) {
 }
 
 int
-exportcmd(char **args) {
+exportcmd(char **args)
+{
   int argc, i;
   char *n, *val;
+  shvar *var;
   argc = array_len(args);
 
   if (argc > 1) {
     for (i = 1; i < argc; i++) {
       read_assn(args[i], &n, &val);
       if (!val) {
-        setenv(args[i], "", 0);
+        var = find_var(n);
+        if (var) {
+          var->flags.exported = 1;
+          setvar(var->name, var->value, var->flags);
+          setenv(var->name, var->value, 1);
+        } else {
+          shvar_flag flags = { .exported = 1, .readonly = 0, .null = 1 };
+          setvar(n, "", flags);
+        }
         free(n);
       } else {
+        shvar_flag flags = { .exported = 1,
+                             .readonly = 0,
+                             .null = (val[0] == '\0') };
+        setvar(n, val, flags);
         setenv(n, val, 1);
         free(val);
         free(n);
@@ -239,18 +261,22 @@ exportcmd(char **args) {
 }
 
 int
-falsecmd(char **args) {
+falsecmd(char **args)
+{
   (void)args;
   return 1;
 }
 
 int
-helpcmd(char **args) {
+helpcmd(char **args)
+{
   (void)args;
-  char const **helparray = builtins;
+  const char **helparray = builtins;
   int i, n = builtinnum();
 
-  printf("simpsh version idk.2 (still pre alpha) - https://codeberg.org/someoneelse/simpsh.git\n\nThese are the builtin commands included with simpsh:\n\n");
+  printf("simpsh version idk.2 (still pre alpha) - "
+         "https://codeberg.org/someoneelse/simpsh.git\n\n"
+         "These are the builtin commands included with simpsh:\n");
   for (i = 0; i < n; i++) {
     printf("%s \n", helparray[i]);
   }
@@ -259,7 +285,8 @@ helpcmd(char **args) {
 }
 
 int
-pwdcmd(char **args) {
+pwdcmd(char **args)
+{
   (void)args;
   char *pwdbuf = NULL;
   char *pwd;
@@ -273,13 +300,15 @@ pwdcmd(char **args) {
 }
 
 int
-truecmd(char **args) {
+truecmd(char **args)
+{
   (void)args;
   return 0;
 }
 
 static int
-unaliascmd(char **args) {
+unaliascmd(char **args)
+{
   alias *e;
   /* int i;
    char *n, *v; */

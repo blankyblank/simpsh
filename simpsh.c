@@ -1,3 +1,4 @@
+/* simpsh.c - functions for running the shell */
 #include "simpsh.h"
 #include <readline/readline.h>
 
@@ -7,7 +8,8 @@ static int startsWithSlash(const char *);
 static int pmkdir(char *path);
 
 char *
-lineread(void) {
+lineread(void)
+{
   char *line = readline(" $ ");
   if (line && *line)
     add_history(line);
@@ -16,7 +18,8 @@ lineread(void) {
 } /* get input for interactive shell */
 
 int
-create_histfile(char *home, char *histfile) {
+create_histfile(char *home, char *histfile)
+{
   static const char *histdir = ".local/state/simpsh";
   char buf[256];
 
@@ -30,7 +33,8 @@ create_histfile(char *home, char *histfile) {
 }
 
 void
-init_history(void) {
+init_history(void)
+{
   char histfile[265];
   snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
   using_history();
@@ -45,7 +49,8 @@ init_history(void) {
 }
 
 int
-startsWithSlash(const char *str) {
+startsWithSlash(const char *str)
+{
   if (str != NULL && str[0] == '/')
     return (1);
 
@@ -53,7 +58,8 @@ startsWithSlash(const char *str) {
 } /* check if command contains a / */
 
 static char *
-getfullpath(const char *path, const char *file) {
+getfullpath(const char *path, const char *file)
+{
   char *pathcpy, *token;
   struct stat filepath;
   char *pathbuf = NULL;
@@ -89,10 +95,12 @@ getfullpath(const char *path, const char *file) {
   free(pathbuf);
 
   return NULL;
-} /* takes the command and checks each directory on path until it finds the executable */
+} /* takes the command and checks each directory on path until it finds the
+     executable */
 
 char *
-getpath(char **file) {
+getpath(char **file)
+{
   char *fullpath;
   char *path = getenv("PATH");
 
@@ -105,14 +113,15 @@ getpath(char **file) {
   }
 
   fullpath = getfullpath(path, *file);
-  if (!fullpath) 
+  if (!fullpath)
     return NULL;
   return fullpath;
 }
 
 static int
-pmkdir(char *path) {
-  char *dir;
+pmkdir(char *path)
+{
+  char *dir; /* clang-format off */
 
   dir = strchr(path +1, '/');
   while (dir) {
@@ -125,5 +134,5 @@ pmkdir(char *path) {
   if (mkdir(path, S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH) < 0)
     return 0;
   return 1;
+  /* clang-format on */
 }
-

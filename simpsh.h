@@ -1,3 +1,4 @@
+/* simpsh.h - functions for running the shell global variables and declarations */
 #ifndef SIMP_H
 #define SIMP_H
 

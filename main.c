@@ -1,8 +1,10 @@
+/* simpsh - a simple posix shell */
 #define _POSIX_C_SOURCE 200809L
 
 #include "simpsh.h"
 #include "lex.h"
 #include "exec.h"
+#include "env.h"
 #include <locale.h>
 
 int lstatus;
@@ -21,7 +23,8 @@ char *home;
 static int simpsh_run(char *line);
 
 int
-main(int argc, char **argv) {
+main(int argc, char **argv)
+{
   char *line = (char *)NULL;
   char *cmd = NULL, buf[MAX_LENGTH];
   int estatus = -1, cflag = 0, tflag = 0;
@@ -50,6 +53,8 @@ main(int argc, char **argv) {
   snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
   snprintf(sh_pid_s, 16, "%d", sh_pid);
 
+  init_env();
+
   if (cflag) {
     exit(simpsh_run(strdup(cmd)));
   } else if (tflag) {
@@ -75,7 +80,8 @@ main(int argc, char **argv) {
 }
 
 int
-simpsh_run(char *line) {
+simpsh_run(char *line)
+{
   int estatus, tok_c;
   sh_tok *toks;
   cmd_tree *c;

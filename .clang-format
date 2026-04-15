@@ -1,6 +1,6 @@
 AccessModifierOffset: 0
 AlignAfterOpenBracket: Align
-AlignArrayOfStructures: None
+AlignArrayOfStructures: Left
 AlignConsecutiveAssignments:
   Enabled: false
 AlignConsecutiveBitFields:
@@ -37,7 +37,7 @@ BitFieldColonSpacing: Both
 BreakAfterJavaFieldAnnotations: false
 #BreakArrays: false
 BreakBeforeBinaryOperators: None
-# BreakBeforeBraces: WebKit
+BreakBeforeBraces: WebKit
 BreakBeforeConceptDeclarations: Always
 #BreakBeforeInlineASMColon: Always
 BreakBeforeTernaryOperators: false

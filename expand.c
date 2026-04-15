@@ -1,24 +1,26 @@
+/* expand.c - string expandsion logic */
 #include "simpsh.h"
 #include "lex.h"
 #include "env.h"
 #include "expand.h"
 #include "utils.h"
 
-
 void
-bufcat(char **buf, size_t *bufsize, size_t *buflen, const char *src, size_t n) {
-    if (*buflen + n + 1 > *bufsize) {
-        *buf = s_realloc(*buf, bufsize);
-        if (!*buf)
-         return;
-    }
-    memcpy(*buf + *buflen, src, n);
-    *buflen += n;
-    (*buf)[*buflen] = '\0';
+bufcat(char **buf, size_t *bufsize, size_t *buflen, const char *src, size_t n)
+{
+  if (*buflen + n + 1 > *bufsize) {
+    *buf = s_realloc(*buf, bufsize);
+    if (!*buf)
+      return;
+  }
+  memcpy(*buf + *buflen, src, n);
+  *buflen += n;
+  (*buf)[*buflen] = '\0';
 }
 
 char **
-expand_argv(wf **args) {
+expand_argv(wf **args)
+{
   size_t i, argc = 0;
   while (args[argc])
     argc++;
@@ -36,7 +38,8 @@ expand_argv(wf **args) {
 }
 
 char *
-expand_word(wf *wordf) {
+expand_word(wf *wordf)
+{
   size_t bufsize = BUF_S;
   size_t buflen = 0, len;
   size_t end, p;
@@ -89,4 +92,3 @@ expand_word(wf *wordf) {
 
   return buf;
 }
-

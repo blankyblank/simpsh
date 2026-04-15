@@ -1,3 +1,4 @@
+/* exec.c - functions surrounding running external programs or builtins */
 #include "simpsh.h"
 #include "lex.h"
 #include "expand.h"
@@ -5,8 +6,18 @@
 #include "builtins.h"
 #include "env.h"
 
+/**sh_env aware free*/
+static inline void
+free_env(char **env)
+{
+  char *buf = *((char **)env - 1);
+  free(buf);
+  free(env - 1);
+}
+
 int
-getbuiltin(char **args) {
+getbuiltin(char **args)
+{
   /* check if string matches builtin command */
   int n = builtinnum();
   int i;
@@ -20,7 +31,8 @@ getbuiltin(char **args) {
 }
 
 int
-builtin_launch(char **args) {
+builtin_launch(char **args)
+{
   /* launch builtin */
   int n = builtinnum();
   int i;
@@ -34,34 +46,44 @@ builtin_launch(char **args) {
 }
 
 int
-run_commands(const cmd_tree *n) {
+run_commands(const cmd_tree *n)
+{
   int l_status, r_status, status;
-  char **final = NULL;
   char *name, *val;
+  char **final = NULL;
+  char **env = NULL;
   int i;
 
   if (!n)
     return 0;
 
-  if (n->sh_vars && n->sh_vars[0] && (!n->args || !n->args[0])) {
-    for (i = 0; n->sh_vars[i]; i++) {
-      read_assn(n->sh_vars[i], &name, &val);
-      setvar(name, val);
-    }
-    free(name);
-    free(val);
-    return 0;
-  }
-
   if (n->type == CMD) {
     final = expand_argv(n->args);
-    if (!final)
-      return 1;
-    if (getbuiltin(final) == 1)
+    if (!final || !final[0]) {
+      if (n->sh_vars && n->sh_vars[0]) {
+        for (i = 0; n->sh_vars[i]; i++) {
+          read_assn(n->sh_vars[i], &name, &val);
+          shvar_flag flags = {
+            .exported = 0,
+            .readonly = 0,
+            .null = (val[0] == '\0'),
+          };
+          setvar(name, val, flags);
+          free(name);
+          free(val);
+        }
+        return 0;
+      } else {
+        return 1;
+      }
+    }
+    if (getbuiltin(final) == 1) {
       status = builtin_launch(final);
-    else
-      status = shexec(final);
-
+    } else {
+      env = build_env(n->sh_vars);
+      status = shexec(final, env);
+      free_env(env);
+    }
     if (n->negate == TRUE)
       status = !status;
     freeptr(final);
@@ -97,7 +119,8 @@ run_commands(const cmd_tree *n) {
 } /* run the commands previously built into the tree  */
 
 int
-shexec(char **args) {
+shexec(char **args, char **env)
+{
   int wstatus, estatus;
   pid_t pid;
   char *fullpath;
@@ -117,7 +140,7 @@ shexec(char **args) {
   }
 
   if (pid == 0) { /* if fork was successful run the command */
-    if (execve(fullpath, args, environ) == -1) {
+    if (execve(fullpath, args, env) == -1) {
       perror(args[0]);
       goto done;
     }
