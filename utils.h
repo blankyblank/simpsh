@@ -8,7 +8,8 @@
 #include <stddef.h>
 /* malloc and free or other small inlined functions */
 
-/** brief find name and value from name=value pair */
+
+/**  brief find name and value from name=value pair  */
 static inline void
 read_assn(const char *assn, char **name, char **value) {
   char *eq;
@@ -45,6 +46,19 @@ skip_ws(const char *s) {
   while (is_ws(*s))
     s++;
   return s;
+}
+
+
+/**  strdup using memcpy  */
+static inline char *
+s_strdup(char *s) {
+  size_t len = strlen(s);
+  char *dup = malloc(len + 1);
+  if (dup) {
+    memcpy(dup, s, len);
+    dup[len] = '\0';
+  }
+  return dup;
 }
 
 /** reallocate buffer to bufsize */
