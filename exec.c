@@ -6,6 +6,15 @@
 #include "builtins.h"
 #include "env.h"
 
+#define MAX_TMP_VARS 40
+
+typedef struct {
+  char *name;
+  char *oval;
+  shvar_flag oflags;
+  int set;
+} tmp_var;
+
 /**sh_env aware free*/
 static inline void
 free_env(char **env)
@@ -52,7 +61,8 @@ run_commands(const cmd_tree *n)
   char *name, *val;
   char **final = NULL;
   char **env = NULL;
-  int i;
+  shvar *v;
+  int i, vc = 0;
 
   if (!n)
     return 0;
@@ -60,6 +70,7 @@ run_commands(const cmd_tree *n)
   if (n->type == CMD) {
     final = expand_argv(n->args);
     if (!final || !final[0]) {
+      /*  if no command only name=value  */
       if (n->sh_vars && n->sh_vars[0]) {
         for (i = 0; n->sh_vars[i]; i++) {
           read_assn(n->sh_vars[i], &name, &val);
@@ -72,13 +83,54 @@ run_commands(const cmd_tree *n)
           free(name);
           free(val);
         }
+        free(final);
         return 0;
       } else {
+        free(final);
         return 1;
       }
     }
+
     if (getbuiltin(final) == 1) {
-      status = builtin_launch(final);
+      /*  handle name=value cmd  */
+      if (n->sh_vars && n->sh_vars[0]) {
+        tmp_var tmp_vars[MAX_TMP_VARS];
+        for (i = 0; n->sh_vars[i]; i++) {
+          read_assn(n->sh_vars[i], &name, &val);
+          v = find_var(name);
+          if (v) {
+            tmp_vars[vc].set = 1;
+            tmp_vars[vc].name = v->name;
+            tmp_vars[vc].oval = s_strdup(v->value);
+            tmp_vars[vc].oflags = v->flags;
+            vc++;
+          } else {
+            tmp_vars[vc].set = 0;
+            tmp_vars[vc].name = s_strdup(name);
+            vc++;
+          }
+          shvar_flag flags = {
+            .exported = 0,
+            .readonly = 0,
+            .null = (val[0] == '\0'),
+          };
+          setvar(name, val, flags);
+          free(name);
+          free(val);
+        }
+        status = builtin_launch(final);
+        for (i = 0; i < vc; i++) {
+          if (tmp_vars[i].set) {
+            setvar(tmp_vars[i].name, tmp_vars[i].oval, tmp_vars[i].oflags);
+            free(tmp_vars[i].oval);
+          } else {
+            unset_var(tmp_vars[i].name);
+            free(tmp_vars[i].name);
+          }
+        }
+      } else {
+        status = builtin_launch(final);
+      }
     } else {
       env = build_env(n->sh_vars);
       status = shexec(final, env);
@@ -92,7 +144,6 @@ run_commands(const cmd_tree *n)
 
   if (n->type == OP) {
     l_status = run_commands(n->left);
-
     switch (n->op_t) {
     case TSEMI:
       r_status = run_commands(n->right);
