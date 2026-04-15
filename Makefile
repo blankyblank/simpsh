@@ -18,7 +18,7 @@ OBJ 	 	   := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
 TARGET		   := simpsh
 CFLAGS		   := $(CFLAGS) $(SANITIZE_FLAGS)
 
-.PHONY: all clean install uninstall
+.PHONY: all clean test install uninstall
 
 all: $(TARGET)
 
@@ -44,3 +44,6 @@ uninstall:
 
 clean:
 	rm -f simpsh obj/*.o
+
+test:
+	cd tests && ./runtests.sh
