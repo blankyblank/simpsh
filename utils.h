@@ -1,6 +1,6 @@
 /* util.h - misc helper functions */
-#ifndef MALLOC_H
-#define MALLOC_H
+#ifndef UTILS_H
+#define UTILS_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -100,4 +100,4 @@ hash(const char *s, unsigned int buckets) {
 }
 
 /* vim: set filetype=c: */
-#endif /* !MALLOC_H */
+#endif /* !UTILS_H */
