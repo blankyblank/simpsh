@@ -3,13 +3,12 @@
 /* #include "utils.h" */
 #include "malloc.h"
 
-
 /*@NOTE:
  *      this stack allocator is directly inspired by dash's stack allocator
  *      I don't know if anyone will ever use this shell but I felt like I should
- *      give credit to them for it. I'm mostly doing this to learn. Because I want
- *      understand how this kind of memory management works, and how to write optimized
- *      code like dash uses.
+ *      give credit to them for it. I'm mostly doing this to learn. Because I
+ *      want understand how this kind of memory management works, and how to write
+ *      optimized code like dash uses.
  */
 
 /* TODO:
@@ -34,13 +33,15 @@ stack_seg stackbase;
 stack_seg *current = &stackbase;
 char *stnext = stackbase.buf;
 size_t stleft = MINSTACK_S;
+char *stend;
 
 /** allocate new stack block */
 void *
-st_alloc(size_t dsize) {
+st_alloc(size_t dsize)
+{
   size_t asize;
   asize = align_mem(dsize);
-  
+
   if (asize >= stleft) {
     stack_seg *nseg;
     if (asize < MINSTACK_S)
@@ -50,15 +51,65 @@ st_alloc(size_t dsize) {
     current = nseg;
     stnext = nseg->buf;
     stleft = asize;
+    stend = stnext + stleft;
   }
   char *rp = stnext;
   stnext += asize;
   stleft -= asize;
+  stend = stnext + stleft;
   return rp;
 }
 
+void *
+grow_stack(size_t msize)
+{
+  size_t nsize, used;
+  stack_seg *nb;
+
+  nsize = stleft * 2;
+  if (nsize < msize)
+    nsize = msize;
+  nsize = align_mem(nsize + 128);  // NOTE: see why + 128
+
+  used = stnext - current->buf;
+  if (!used && !current->prev) {
+    nb = realloc(current, nsize);
+    if (!nb)
+      return NULL;
+    current = nb;
+    stnext = nb->buf;
+    stleft = nsize;
+    stend = stnext + stleft;
+    return stnext;
+  } else {
+    nb = st_alloc(nsize);
+    memcpy(nb, current->buf, used);
+    stnext = nb->buf + used;
+    stleft = nsize - used;
+    stend = stnext + stleft;
+    return stnext;
+  }
+}
+
+char *
+grab_str(char *end)
+{
+  size_t len = end - stack_ptr();
+  char *start = end - len;
+  char *res;
+  res = st_strndup(start, len);
+  st_unalloc(end);
+  return res;
+
+  /* ai suggestion */
+  /* res = st_alloc(len + 1);
+  memcpy(res, start, len);
+  res[len] = '\0'; */
+}
+
 void
-stack_clear(void) {
+stack_clear(void)
+{
   stack_seg *tmp;
   while (current->prev != NULL) {
     tmp = current->prev;
@@ -68,6 +119,7 @@ stack_clear(void) {
   current = &stackbase;
   stnext = stackbase.buf;
   stleft = MINSTACK_S;
+  stend = stnext + stleft;
 }
 
 void
@@ -76,6 +128,5 @@ init_stack(void)
   current = &stackbase;
   stnext = stackbase.buf;
   stleft = MINSTACK_S;
+  stend = stnext + stleft;
 }
-
-

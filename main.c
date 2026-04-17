@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "simpsh.h"
+#include "malloc.h"
 #include "lex.h"
 #include "exec.h"
 #include "env.h"
@@ -102,5 +103,6 @@ simpsh_run(char *line)
   if (line)
     free(line);
   freetoks(toks, tok_c);
+  stack_clear();
   return estatus;
 }

@@ -3,14 +3,23 @@
 #include "env.h"
 #include "lex.h"
 #include "utils.h"
-#include "expand.h"
+#include "malloc.h"
 
 static wf **get_argv(const sh_tok *, size_t, size_t *);
 static wf **get_assn(wf **, char ***);
-static char *get_word(const char *line, size_t *p);
-static void append_wf(wf **, wf **, char *, size_t, int);
+static char *get_word(char *line, size_t *p);
+static void append_wf(wf **, wf **, char *, int);
 static int is_assn(wf *);
 static char *cat_wf(wf *wordf);
+
+static inline char *
+cmd_end(char *s)
+{
+  while (*s && !(*s == ' ' || *s == '\t' || *s == '\n' || *s == '&' ||
+                 *s == '|' || *s == ';' || *s == '"' || *s == '\''))
+    s++;
+  return s;
+}
 
 /* build consecutive TWORDS into command returned in word fragments */
 static wf **
@@ -18,8 +27,16 @@ get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
 {
   size_t t = *i;
   size_t j = 0;
-  wf **argv = malloc(MAX_CMDS * sizeof(wf *));
+  size_t wc = 0;
 
+  while (t < cnt && tokens[t].type == TWORD) {
+  /* find how many wf's we need */
+    t++;
+    wc++;
+  }
+  wf **argv = st_alloc((wc + 1) * sizeof(wf *));
+
+  t = *i;
   while (t < cnt && tokens[t].type == TWORD) {
     argv[j] = tokens[t].cmd;
     j++;
@@ -33,33 +50,29 @@ get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
 
 /* get word in char * line (not operators) */
 static char *
-get_word(const char *line, size_t *p)
+get_word(char *line, size_t *p)
 {
   size_t s = *p;
   size_t len = 0;
+  size_t i;
+  char *m = stack_ptr();
+  char *e;
 
   s = skip_ws(line + s) - line; /* skip whitespace */
-
   if (!line[s])
     return NULL;
 
-  while (line[s + len] && /* clang-format off */
-      line[s + len] != ' ' &&
-      line[s + len] != '\t' &&
-      line[s + len] != '\n' &&
-      line[s + len] != '&' &&
-      line[s + len] != '|' &&
-      line[s + len] != ';' &&
-      line[s + len] != '"' &&
-      line[s + len] != '\'')
-    /* clang-format on */
-    len++;
-  if (len == 0)
-    return NULL;
+  e = cmd_end(line + s);
+  len = e - (line +s);
 
+  for (i = 0; i < len; i++)
+    m = st_putc(line[s + i], m);
+
+  if (m == stack_ptr())
+    return NULL;
   *p = s + len;
-  return strndup(line + s, len);
-} /* get_word */
+  return grab_str(m);
+}
 
 /* check if word is name=value */
 static int
@@ -89,25 +102,17 @@ is_assn(wf *cmd)
 static char *
 cat_wf(wf *wordf)
 {
-  size_t bufsize = 0;
-  size_t buflen = 0, len;
   wf *f = wordf;
+  char *s;
+  char *p = stack_ptr();
 
-  for (; f; f = f->next)
-    bufsize += strlen(f->word);
-  char *buf = malloc(bufsize + 1);
-  if (!buf)
-    return NULL;
-  buf[0] = '\0';
-
-  f = wordf;
   for (; f; f = f->next) {
-    len = strlen(f->word);
-    bufcat(&buf, &bufsize, &buflen, f->word, len);
-    if (!buf)
-      return NULL;
+    for (s = f->word; *s; s++) {
+      p = st_putc(*s, p);
+    }
   }
-  return buf;
+
+  return grab_str(p);
 }
 
 wf **
@@ -127,14 +132,14 @@ get_assn(wf **args, char ***sh_vars)
     *sh_vars = NULL;
     return args;
   }
-  *sh_vars = malloc((a_c + 1) * sizeof(char *));
+  *sh_vars = st_alloc((a_c + 1) * sizeof(char *));
   if (!*sh_vars)
     return NULL;
 
   for (j = 0; j < a_c; j++) {
-    /* NOTE: remember cat_wf returns null check that if bugs pop up from this */
+    /*  NOTE: remember cat_wf returns null check that if bugs pop up from this  */
+    /*  WARN: this still needs refactoring I need to verify cat_wf is working correctly  */
     (*sh_vars)[j] = cat_wf(args[j]);
-    freewf(args[j]);
   }
   (*sh_vars)[a_c] = NULL;
 
@@ -149,18 +154,16 @@ get_assn(wf **args, char ***sh_vars)
  * add word fragment onto the end of the linked list
  */
 static void
-append_wf(wf **head, wf **tail, char *buf, size_t len, int quoted)
+append_wf(wf **head, wf **tail, char *w, int quoted)
 {
-  wf *f = malloc(sizeof(wf));
-  f->word = strndup(buf, len);
+  wf *f = st_alloc(sizeof(wf));
+  f->word = w;
   f->qs = quoted;
   f->next = NULL;
-
   if (!*head)
     *head = f;
   else
     (*tail)->next = f;
-
   *tail = f;
 }
 
@@ -182,28 +185,18 @@ get_wf(char *line, size_t *pos)
 
   wf *head = NULL;
   wf *tail = NULL;
-  wf *f = NULL;
   quoted state;
-  size_t bufpos = 0, i = *pos;
-  size_t bufsize = BUF_S;
+  size_t i = *pos;
   char c, n;
-  char *buf = malloc(bufsize);
-  if (!buf)
-    return NULL;
+  char *w;
+  char *p = stack_ptr();
+  char *s = p;
 
   state = QNONE;
 
   while (line[i]) {
     c = line[i];
     n = line[i + 1];
-    if (bufpos + 1 >= bufsize) {
-      buf = s_realloc(buf, &bufsize);
-      if (!buf) {
-        f = head;
-        freewf(f);
-        return NULL;
-      }
-    }
     switch (state) {
     case QNONE:
       if (c == ' ' || c == '\t' || c == '\n') {
@@ -211,15 +204,23 @@ get_wf(char *line, size_t *pos)
       } else if (c == '&' || c == '|' || c == ';') {
         goto done;
       } else if (c == '\'') {
-        if (bufpos > 0) /* save unquoted frag if nonempty */
-          append_wf(&head, &tail, buf, bufpos, state);
-        bufpos = 0;
+        /* save unquoted frag if nonempty */
+        if (p > s) {
+          w = grab_str(p);
+          append_wf(&head, &tail, w, state);
+          p = stack_ptr();
+          s = p;
+        }
         state = QSINGLE;
         i++;
       } else if (c == '"') {
-        if (bufpos > 0) /* save unquoted frag if nonempty */
-          append_wf(&head, &tail, buf, bufpos, state);
-        bufpos = 0;
+        /* save unquoted frag if nonempty */
+        if (p > s) {
+          w = grab_str(p);
+          append_wf(&head, &tail, w, state);
+          p = stack_ptr();
+          s = p;
+        }
         state = QDOUBLE;
         i++;
       } else if (c == '\\') {
@@ -227,31 +228,40 @@ get_wf(char *line, size_t *pos)
           i++;
           goto done;
         } else {
-          buf[bufpos++] = n;
+          // i think I should use n where I already used n
+          p = st_putc(n, p);
           i += 2;
         }
       } else {
-        buf[bufpos++] = c;
+        p = st_putc(c, p);
         i++;
       }
       break;
     case QSINGLE:
       if (c == '\'') {
-        if (bufpos > 0) /* save single quoted frag if nonempty */
-          append_wf(&head, &tail, buf, bufpos, state);
-        bufpos = 0;
+        /* save single quoted frag if nonempty */
+        if (p > s) {
+          w = grab_str(p);
+          append_wf(&head, &tail, w, state);
+          p = stack_ptr();
+          s = p;
+        }
         state = QNONE;
         i++;
       } else {
-        buf[bufpos++] = c;
+        p = st_putc(c, p);
         i++;
       }
       break;
     case QDOUBLE:
       if (c == '"') {
-        if (bufpos > 0) /* save double quoted frag if nonempty */
-          append_wf(&head, &tail, buf, bufpos, state);
-        bufpos = 0;
+        /* save double quoted frag if nonempty */
+        if (p > s) {
+          w = grab_str(p);
+          append_wf(&head, &tail, w, state);
+          p = stack_ptr();
+          s = p;
+        }
         state = QNONE;
         i++;
       } else if (c == '\\') {
@@ -259,14 +269,14 @@ get_wf(char *line, size_t *pos)
           i += 2;
           continue;
         } else if (n == '$' || n == '"' || n == '\\') {
-          buf[bufpos++] = n;
+          p = st_putc(n, p);
           i += 2;
         } else {
-          buf[bufpos++] = c;
+          p = st_putc(c, p);
           i++;
         }
       } else {
-        buf[bufpos++] = c;
+        p = st_putc(c, p);
         i++;
       }
       break;
@@ -274,8 +284,13 @@ get_wf(char *line, size_t *pos)
   }
 
 done:
-  append_wf(&head, &tail, buf, bufpos, state); /* save double quoted frag */
-  free(buf);
+  /*  one last save  */
+  if (p > s) {
+    w = grab_str(p);
+    append_wf(&head, &tail, w, state);
+    p = stack_ptr();
+    s = p;
+  }
   *pos = i;
   return head;
 }
@@ -284,6 +299,7 @@ sh_tok *
 tokenize(char *line, int *cnt)
 {
   size_t p = 0, c = 0, n;
+  size_t tc = 0;
   *cnt = 0;
   wf *f;
 
@@ -294,7 +310,32 @@ tokenize(char *line, int *cnt)
   if (strlen(line) == 0)
     return NULL;
 
-  sh_tok *tokens = malloc(MAX_CMDS * (sizeof(sh_tok)));
+  /* see what we need to allocate */
+  while (line[p]) {
+    p = skip_ws(line + p) - line;
+    if (!line[p])
+      break;
+    n = p + 1;
+    if (line[p] == '!') {
+      tc++;
+      p++;
+    } else if (line[p] == '&' && line[n] == '&') {
+      tc++;
+      p += 2;
+    } else if (line[p] == '|' && line[n] == '|') {
+      tc++;
+      p += 2;
+    } else if (line[p] == ';') {
+      tc++;
+      p++;
+    } else {
+      /* It's a word - skip to end of word */
+      p = cmd_end(line + p) - line;
+    }
+  }
+
+  sh_tok *tokens = st_alloc((tc + 1) * (sizeof(sh_tok)));
+  p = 0;
   if (!tokens)
     return NULL;
 
@@ -336,8 +377,6 @@ tokenize(char *line, int *cnt)
         tokens[c].type = TWORD;
         tokens[c].cmd = f;
         c++;
-      } else {
-        freewf(f);
       }
     }
   }
@@ -348,6 +387,7 @@ tokenize(char *line, int *cnt)
   return tokens;
 }
 
+ /**  build command abstract syntax tree  */
 cmd_tree *
 build_tree(const sh_tok *tokens, size_t cnt)
 {
@@ -404,7 +444,7 @@ cleanup:
   freeptr(sh_vars);
   freectree(r);
   return NULL;
-} /* build command abstract syntax tree */
+}
 
 char *
 expand_alias(char *line)
@@ -434,13 +474,8 @@ expand_alias(char *line)
     s = p;
     if (!(word = get_word(eline, &p)))
       break;
-    if (q) {
-      free(word);
-      /* continue; */
-    } else {
+    if (!q) {
       a = find_alias(word);
-      if (word)
-        free(word);
       if (a) {
         if (depth < MAX_ALIAS_DEPTH) {
           nl = malloc(strlen(eline) + strlen(a->value) + 1);
@@ -476,7 +511,6 @@ expand_alias(char *line)
       }
       if (!(word = get_word(eline, &p)))
         break;
-      free(word);
     }
   }
 

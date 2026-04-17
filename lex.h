@@ -4,7 +4,7 @@
 
 #include "utils.h"
 
-#define BUF_S 64
+#define BUF_S 32
 
 typedef enum {
   TNOT,
@@ -120,13 +120,6 @@ newoppnode(token opp_t, cmd_tree *left, cmd_tree *right)
 static inline void
 freewf(wf *f)
 {
-  wf *t;
-  while (f) {
-    t = f->next;
-    free(f->word);
-    free(f);
-    f = t;
-  }
 }
 
 static inline void
