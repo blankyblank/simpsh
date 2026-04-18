@@ -7,8 +7,8 @@
  *      this stack allocator is directly inspired by dash's stack allocator
  *      I don't know if anyone will ever use this shell but I felt like I should
  *      give credit to them for it. I'm mostly doing this to learn. Because I
- *      want understand how this kind of memory management works, and how to write
- *      optimized code like dash uses.
+ *      want understand how this kind of memory management works, and how to
+ * write optimized code like dash uses.
  */
 
 /* TODO:
@@ -39,20 +39,35 @@ char *stend;
 void *
 st_alloc(size_t dsize)
 {
-  size_t asize;
-  asize = align_mem(dsize);
+  size_t asize = align_mem(dsize);
 
   if (asize >= stleft) {
     stack_seg *nseg;
-    if (asize < MINSTACK_S)
-      asize = MINSTACK_S;
-    nseg = malloc(sizeof(stack_seg) - MINSTACK_S + asize);
+    size_t need = asize;
+    if (need < MINSTACK_S)
+      need = MINSTACK_S;
+    nseg = malloc(sizeof(stack_seg) - MINSTACK_S + need);
+    if (!nseg)
+      return NULL;
     nseg->prev = current;
     current = nseg;
     stnext = nseg->buf;
-    stleft = asize;
+    stleft = need;
     stend = stnext + stleft;
   }
+
+  /*
+   * Alignment disabled for testing
+   * size_t align_offset = ((size_t)stnext & (sizeof(void *) - 1));
+   * if (align_offset) {
+   *   size_t pad = sizeof(void *) - align_offset;
+   *   if (pad > stleft)
+   *     return grow_stack(asize);
+   *   stnext += pad;
+   *   stleft -= pad;
+   * }
+   */
+
   char *rp = stnext;
   stnext += asize;
   stleft -= asize;
@@ -72,18 +87,20 @@ grow_stack(size_t msize)
   nsize = align_mem(nsize + 128);  // NOTE: see why + 128
 
   used = stnext - current->buf;
-  if (!used && !current->prev) {
-    nb = realloc(current, nsize);
+  if (!used && current != &stackbase) {
+    nb = malloc(sizeof(stack_seg) - MINSTACK_S + nsize);
     if (!nb)
       return NULL;
+    memcpy(nb->buf, stackbase.buf, used);
+    nb->prev = NULL;
     current = nb;
-    stnext = nb->buf;
-    stleft = nsize;
+    stnext = nb->buf + used;
+    stleft = nsize - used;
     stend = stnext + stleft;
     return stnext;
   } else {
     nb = st_alloc(nsize);
-    memcpy(nb, current->buf, used);
+    memcpy(nb->buf, current->buf, used);
     stnext = nb->buf + used;
     stleft = nsize - used;
     stend = stnext + stleft;
@@ -97,14 +114,16 @@ grab_str(char *end)
   size_t len = end - stack_ptr();
   char *start = end - len;
   char *res;
-  res = st_strndup(start, len);
+
+  /* Use st_alloc for the arena pattern - strings are cleaned up by stack_clear
+   */
+  res = st_alloc(len + 1);
+  if (res) {
+    memcpy(res, start, len);
+    res[len] = '\0';
+  }
   st_unalloc(end);
   return res;
-
-  /* ai suggestion */
-  /* res = st_alloc(len + 1);
-  memcpy(res, start, len);
-  res[len] = '\0'; */
 }
 
 void

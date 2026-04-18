@@ -30,7 +30,7 @@ get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
   size_t wc = 0;
 
   while (t < cnt && tokens[t].type == TWORD) {
-  /* find how many wf's we need */
+    /* find how many wf's we need */
     t++;
     wc++;
   }
@@ -63,7 +63,7 @@ get_word(char *line, size_t *p)
     return NULL;
 
   e = cmd_end(line + s);
-  len = e - (line +s);
+  len = e - (line + s);
 
   for (i = 0; i < len; i++)
     m = st_putc(line[s + i], m);
@@ -137,8 +137,10 @@ get_assn(wf **args, char ***sh_vars)
     return NULL;
 
   for (j = 0; j < a_c; j++) {
-    /*  NOTE: remember cat_wf returns null check that if bugs pop up from this  */
-    /*  WARN: this still needs refactoring I need to verify cat_wf is working correctly  */
+    /*  NOTE: remember cat_wf returns null check that if bugs pop up from this
+     */
+    /*  WARN: this still needs refactoring I need to verify cat_wf is working
+     * correctly  */
     (*sh_vars)[j] = cat_wf(args[j]);
   }
   (*sh_vars)[a_c] = NULL;
@@ -387,7 +389,7 @@ tokenize(char *line, int *cnt)
   return tokens;
 }
 
- /**  build command abstract syntax tree  */
+/**  build command abstract syntax tree  */
 cmd_tree *
 build_tree(const sh_tok *tokens, size_t cnt)
 {
