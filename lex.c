@@ -7,10 +7,12 @@
 
 static wf **get_argv(const sh_tok *, size_t, size_t *);
 static wf **get_assn(wf **, char ***);
-static char *get_word(char *line, size_t *p);
 static void append_wf(wf **, wf **, char *, int);
 static int is_assn(wf *);
 static char *cat_wf(wf *wordf);
+static void expand_alias(char *val, sh_tok *tokens, size_t *c);
+
+static int alias_depth = 0;
 
 static inline char *
 cmd_end(char *s)
@@ -39,6 +41,7 @@ get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
   t = *i;
   while (t < cnt && tokens[t].type == TWORD) {
     argv[j] = tokens[t].cmd;
+    fprintf(stderr, "get_argv: setting args[%zu]=%p from tokens[%zu].cmd=%p\n", j, (void*)argv[j], t, (void*)tokens[t].cmd);
     j++;
     t++;
   }
@@ -47,32 +50,6 @@ get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
   *i = t;
   return argv;
 } /* get_argv */
-
-/* get word in char * line (not operators) */
-static char *
-get_word(char *line, size_t *p)
-{
-  size_t s = *p;
-  size_t len = 0;
-  size_t i;
-  char *m = stack_ptr();
-  char *e;
-
-  s = skip_ws(line + s) - line; /* skip whitespace */
-  if (!line[s])
-    return NULL;
-
-  e = cmd_end(line + s);
-  len = e - (line + s);
-
-  for (i = 0; i < len; i++)
-    m = st_putc(line[s + i], m);
-
-  if (m == stack_ptr())
-    return NULL;
-  *p = s + len;
-  return grab_str(m);
-}
 
 /* check if word is name=value */
 static int
@@ -208,8 +185,10 @@ get_wf(char *line, size_t *pos)
       } else if (c == '\'') {
         /* save unquoted frag if nonempty */
         if (p > s) {
+          fprintf(stderr, "get_wf: before grab_str - p=%p, s=%p\n", p, s);
           w = grab_str(p);
           append_wf(&head, &tail, w, state);
+          fprintf(stderr, "get_wf: after grab_str - stack_ptr=%p\n", stack_ptr());
           p = stack_ptr();
           s = p;
         }
@@ -303,7 +282,9 @@ tokenize(char *line, int *cnt)
   size_t p = 0, c = 0, n;
   size_t tc = 0;
   *cnt = 0;
-  wf *f;
+  wf *f = NULL;
+  char *word;
+  alias *a;
 
   if (!line) {
     *cnt = -1;
@@ -369,12 +350,27 @@ tokenize(char *line, int *cnt)
     } else if (line[p] == ';') {
       tokens[c].type = TSEMI;
       tokens[c].cmd = NULL;
+      fprintf(stderr, "tokenize: setting tokens[%zu].cmd=%p (wf)\n", c, (void*)f);
       c++;
       p++;
       continue;
     } else {
       if (!(f = get_wf(line, &p)))
         return NULL;
+      if (f && f->qs == QNONE && f->next == NULL) {
+        word = cat_wf(f);
+        a = find_alias(word);
+        if (a) {
+          if (alias_depth >= MAX_ALIAS_DEPTH) {
+            fprintf(stderr, "alias: too many levels of recursion\n");
+            return NULL;
+          }
+          alias_depth++;
+          expand_alias(a->value, tokens, &c);
+          alias_depth--;
+          continue;
+        }
+      }
       if (f->word && f->word[0] != '\0') {
         tokens[c].type = TWORD;
         tokens[c].cmd = f;
@@ -408,9 +404,9 @@ build_tree(const sh_tok *tokens, size_t cnt)
   if (i >= cnt || tokens[i].type != TWORD) /* check for command */
     return NULL;
   args = get_argv(tokens, cnt, &i);
+  fprintf(stderr, "build_tree: calling newcmdnode with args[0]=%p\n", (void*)args[0]);
   if (!args || !args[0]) { /* handle empty input */
     fprintf(stderr, "TODO: double check this at some point \n");
-    free_argv(args);
     return NULL;
   }
   args = get_assn(args, &sh_vars);
@@ -443,80 +439,71 @@ build_tree(const sh_tok *tokens, size_t cnt)
 
 cleanup:
   fprintf(stderr, "Syntax error\n");
-  freeptr(sh_vars);
-  freectree(r);
   return NULL;
 }
 
-char *
-expand_alias(char *line)
+// wf *
+// expand_alias_w(char *word)
+// {
+//   alias *a;
+//   char *val;
+//   size_t pos;
+//   wf *res;
+//
+//   a = find_alias(word);
+//   if (!a)
+//     return NULL;
+//   if (alias_depth >= MAX_ALIAS_DEPTH) {
+//     fprintf(stderr, "alias: too many levels of recursion\n");
+//     return NULL;
+//   }
+//   val = a->value;
+//   pos = 0;
+//
+//   res = get_wf(val, &pos);
+//   return res;
+// }
+
+static void
+expand_alias(char *val, sh_tok *tokens, size_t *c)
 {
-  char *eline = strdup(line);
-  char *word, *nl;
-  size_t s, p, n;
-  int depth, q;
+  wf *f;
   alias *a;
+  char *word;
+  size_t pos = 0;
 
-  p = 0;
-  depth = 0;
-
-  while (eline[p]) {
-    q = 0;
-    p = skip_ws(eline + p) - eline; /* skip whitespace */
-    if (!eline[p])
+  while (val[pos]) {
+    pos = skip_ws(val + pos) - val;
+    if (!val[pos])
       break;
 
-    n = p + 1;
-    if ((eline[p] == '&' && eline[n] == '&') ||
-        (eline[p] == '|' && eline[n] == '|') || eline[p] == ';') {
-      p += (eline[p] == eline[n]) ? 2 : 1;
-      continue;
-    }
-
-    s = p;
-    if (!(word = get_word(eline, &p)))
+    if (val[pos] == '&' || val[pos] == '|' || val[pos] == ';')
       break;
-    if (!q) {
+
+    f = get_wf(val, &pos);
+    if (!f)
+      break;
+
+    if (f && f->qs == QNONE && f->next == NULL) {
+      word = cat_wf(f);
       a = find_alias(word);
       if (a) {
-        if (depth < MAX_ALIAS_DEPTH) {
-          nl = malloc(strlen(eline) + strlen(a->value) + 1);
-          if (!nl) {
-            free(eline);
-            return line;
-          }
-          strncpy(nl, eline, s);
-          nl[s] = '\0';
-          strcat(nl, a->value);
-          strcat(nl, eline + p);
-          free(eline);
-          eline = nl;
-          p = 0; /* p = s + strlen(a->value); */
-          depth++;
-          continue;
-        } else {
-          fprintf(stderr, "alias: too many levels of recursion");
-          free(eline);
-          return line;
+        if (alias_depth >= MAX_ALIAS_DEPTH) {
+          fprintf(stderr, "alias: too many levels of recursion\n");
+          return;
         }
+        alias_depth++;
+        expand_alias(a->value, tokens, c);
+        alias_depth--;
+        continue;
       }
     }
 
-    while (eline[p]) {
-      p = skip_ws(eline + p) - eline;
-      if (!eline[p])
-        break;
-      n = p + 1;
-      if ((eline[p] == '&' && eline[n] == '&') ||
-          (eline[p] == '|' && eline[n] == '|') || eline[p] == ';') {
-        break;
-      }
-      if (!(word = get_word(eline, &p)))
-        break;
+    if (f->word && f->word[0] != '\0') {
+      tokens[*c].type = TWORD;
+      tokens[*c].cmd = f;
+      (*c)++;
     }
   }
-
-  if (line)
-    free(line);
-  return eline;
 }
+

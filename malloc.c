@@ -15,7 +15,7 @@
  *      test different sizes, and see what impact
  *      they have on performance if any
  */
-#define MINSTACK_S 512
+#define MINSTACK_S align_mem(512)
 
 typedef struct stack_seg stack_seg;
 struct stack_seg {
@@ -35,11 +35,19 @@ char *stnext = stackbase.buf;
 size_t stleft = MINSTACK_S;
 char *stend;
 
+char *
+stack_ptr(void)
+{
+  return stnext;
+}
+
 /** allocate new stack block */
 void *
 st_alloc(size_t dsize)
 {
   size_t asize = align_mem(dsize);
+
+  fprintf(stderr, "1: st_alloc: before - stnext=%p, stleft=%zu, asize=%zu\n", stnext, stleft, asize);
 
   if (asize >= stleft) {
     stack_seg *nseg;
@@ -58,20 +66,22 @@ st_alloc(size_t dsize)
 
   /*
    * Alignment disabled for testing
-   * size_t align_offset = ((size_t)stnext & (sizeof(void *) - 1));
-   * if (align_offset) {
-   *   size_t pad = sizeof(void *) - align_offset;
-   *   if (pad > stleft)
-   *     return grow_stack(asize);
-   *   stnext += pad;
-   *   stleft -= pad;
-   * }
    */
+  size_t align_offset = ((size_t)stnext & (sizeof(void *) - 1));
+  if (align_offset) {
+    size_t pad = sizeof(void *) - align_offset;
+    if (pad > stleft)
+      return grow_stack(asize);
+    stnext += pad;
+    stleft -= pad;
+  }
 
   char *rp = stnext;
   stnext += asize;
   stleft -= asize;
   stend = stnext + stleft;
+  fprintf(stderr, "2: st_alloc: before - stnext=%p, stleft=%zu, asize=%zu\n", stnext, stleft, asize);
+  memset(rp, 0, asize);
   return rp;
 }
 
@@ -87,6 +97,7 @@ grow_stack(size_t msize)
   nsize = align_mem(nsize + 128);  // NOTE: see why + 128
 
   used = stnext - current->buf;
+  fprintf(stderr, "1: grow_stack: called with msize=%zu, stnext=%p\n", msize, stnext);
   if (!used && current != &stackbase) {
     nb = malloc(sizeof(stack_seg) - MINSTACK_S + nsize);
     if (!nb)
@@ -97,6 +108,7 @@ grow_stack(size_t msize)
     stnext = nb->buf + used;
     stleft = nsize - used;
     stend = stnext + stleft;
+    fprintf(stderr, "2: grow_stack: called with msize=%zu, stnext=%p\n", msize, stnext);
     return stnext;
   } else {
     nb = st_alloc(nsize);
@@ -104,6 +116,7 @@ grow_stack(size_t msize)
     stnext = nb->buf + used;
     stleft = nsize - used;
     stend = stnext + stleft;
+    fprintf(stderr, "3: grow_stack: called with msize=%zu, stnext=%p\n", msize, stnext);
     return stnext;
   }
 }
@@ -114,6 +127,7 @@ grab_str(char *end)
   size_t len = end - stack_ptr();
   char *start = end - len;
   char *res;
+  fprintf(stderr, "1: grab_str: end=%p, start=%p, len=%zu\n", end, start, len);
 
   /* Use st_alloc for the arena pattern - strings are cleaned up by stack_clear
    */
@@ -123,6 +137,7 @@ grab_str(char *end)
     res[len] = '\0';
   }
   st_unalloc(end);
+  fprintf(stderr, "2: grab_str: end=%p, start=%p, len=%zu\n", end, start, len);
   return res;
 }
 

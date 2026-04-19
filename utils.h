@@ -6,12 +6,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
+#include "malloc.h"
 /* malloc and free or other small inlined functions */
-
 
 /**  brief find name and value from name=value pair  */
 static inline void
-read_assn(const char *assn, char **name, char **value) {
+read_assn(const char *assn, char **name, char **value)
+{
   char *eq;
   int l;
   eq = (char *)strchr(assn, '=');
@@ -25,9 +26,27 @@ read_assn(const char *assn, char **name, char **value) {
   }
 }
 
+/**  stack-based version - for temporary parsing  */
+static inline void
+read_assn_stack(const char *assn, char **name, char **value)
+{
+  char *eq;
+  int l;
+  eq = (char *)strchr(assn, '=');
+  if (!eq) {
+    *name = st_strdup(assn);
+    *value = NULL;
+  } else {
+    l = eq - assn;
+    *name = st_strndup(assn, l);
+    *value = st_strdup(eq + 1);
+  }
+}
+
 /** get length of char* array */
 static inline size_t
-array_len(char **arr) {
+array_len(char **arr)
+{
   size_t n = 0;
   while (arr[n])
     n++;
@@ -36,22 +55,24 @@ array_len(char **arr) {
 
 /** check if char is whitespace */
 static inline int
-is_ws(char c) {
+is_ws(char c)
+{
   return c == ' ' || c == '\t' || c == '\n';
 }
 
 /** skip whitespace */
 static inline const char *
-skip_ws(const char *s) {
+skip_ws(const char *s)
+{
   while (is_ws(*s))
     s++;
   return s;
 }
 
-
 /**  strdup using memcpy  */
 static inline char *
-s_strdup(char *s) {
+s_strdup(char *s)
+{
   size_t len = strlen(s);
   char *dup = malloc(len + 1);
   if (dup) {
@@ -63,7 +84,8 @@ s_strdup(char *s) {
 
 /** reallocate buffer to bufsize */
 static inline char *
-s_realloc(char *buf, size_t *bufsize) {
+s_realloc(char *buf, size_t *bufsize)
+{
   char *t;
 
   *bufsize *= 2;
@@ -77,7 +99,8 @@ s_realloc(char *buf, size_t *bufsize) {
 
 /** free char* array */
 static inline void
-freeptr(char **args) {
+freeptr(char **args)
+{
   if (args != NULL) {
     int i = 0;
     while (args[i] != NULL) {
@@ -90,7 +113,8 @@ freeptr(char **args) {
 
 /** hash string to put in hash table */
 static inline unsigned int
-hash(const char *s, unsigned int buckets) {
+hash(const char *s, unsigned int buckets)
+{
   unsigned int h = 0;
   while (*s) {
     h = h * 31 + (unsigned char)*s;

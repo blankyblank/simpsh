@@ -73,20 +73,16 @@ run_commands(const cmd_tree *n)
       /*  if no command only name=value  */
       if (n->sh_vars && n->sh_vars[0]) {
         for (i = 0; n->sh_vars[i]; i++) {
-          read_assn(n->sh_vars[i], &name, &val);
+          read_assn_stack(n->sh_vars[i], &name, &val);
           shvar_flag flags = {
             .exported = 0,
             .readonly = 0,
             .null = (val[0] == '\0'),
           };
           setvar(name, val, flags);
-          free(name);
-          free(val);
         }
-        free(final);
         return 0;
       } else {
-        free(final);
         return 1;
       }
     }
@@ -96,17 +92,17 @@ run_commands(const cmd_tree *n)
       if (n->sh_vars && n->sh_vars[0]) {
         tmp_var tmp_vars[MAX_TMP_VARS];
         for (i = 0; n->sh_vars[i]; i++) {
-          read_assn(n->sh_vars[i], &name, &val);
+          read_assn_stack(n->sh_vars[i], &name, &val);
           v = find_var(name);
           if (v) {
             tmp_vars[vc].set = 1;
             tmp_vars[vc].name = v->name;
-            tmp_vars[vc].oval = s_strdup(v->value);
+            tmp_vars[vc].oval = st_strdup(v->value);
             tmp_vars[vc].oflags = v->flags;
             vc++;
           } else {
             tmp_vars[vc].set = 0;
-            tmp_vars[vc].name = s_strdup(name);
+            tmp_vars[vc].name = st_strdup(name);
             vc++;
           }
           shvar_flag flags = {
@@ -115,18 +111,13 @@ run_commands(const cmd_tree *n)
             .null = (val[0] == '\0'),
           };
           setvar(name, val, flags);
-          free(name);
-          free(val);
         }
         status = builtin_launch(final);
         for (i = 0; i < vc; i++) {
-          if (tmp_vars[i].set) {
+          if (tmp_vars[i].set)
             setvar(tmp_vars[i].name, tmp_vars[i].oval, tmp_vars[i].oflags);
-            free(tmp_vars[i].oval);
-          } else {
+          else
             unset_var(tmp_vars[i].name);
-            free(tmp_vars[i].name);
-          }
         }
       } else {
         status = builtin_launch(final);
@@ -138,7 +129,6 @@ run_commands(const cmd_tree *n)
     }
     if (n->negate == TRUE)
       status = !status;
-    freeptr(final);
     return status;
   }
 

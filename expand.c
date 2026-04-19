@@ -21,17 +21,17 @@ bufcat(char **buf, size_t *bufsize, size_t *buflen, const char *src, size_t n)
 char **
 expand_argv(wf **args)
 {
+  fprintf(stderr, "expand_argv: entering, args=%p\n", (void*)args);
   size_t i, argc = 0;
   while (args[argc])
     argc++;
 
-  char **argv = malloc((argc + 1) * sizeof(char *));
+  char **argv = st_alloc((argc + 1) * sizeof(char *));
   for (i = 0; i < argc; i++) {
+    fprintf(stderr, "expand_argv: calling expand_word for args[%zu]=%p\n", i, (void*)args[i]);
     argv[i] = expand_word(args[i]);
-    if (!argv[i]) {
-      freeptr(argv);
+    if (!argv[i])
       return NULL;
-    }
   }
   argv[argc] = NULL;
   return argv;
@@ -40,49 +40,38 @@ expand_argv(wf **args)
 char *
 expand_word(wf *wordf)
 {
-  size_t bufsize = BUF_S;
-  size_t buflen = 0, len;
-  size_t end, p;
-  size_t cp_len, next_v;
+  fprintf(stderr, "expand_word: wordf=%p\n", (void*)wordf);
+  char *p = stack_ptr();
+  char *expanded;
+  size_t end, idx;
+  size_t len;
   wf *f;
-  char *buf = malloc(bufsize), *expanded;
-  if (!buf)
-    return NULL;
-  buf[0] = '\0';
+  char *s;
 
   for (f = wordf; f; f = f->next) {
+    fprintf(stderr, "expand_word: f=%p, f->qs=%d, f->word=%p\n", (void*)f, f->qs, (void*)f->word);
     switch (f->qs) {
     case QSINGLE:
-      len = strlen(f->word);
-      bufcat(&buf, &bufsize, &buflen, f->word, len);
-      if (!buf)
-        return NULL;
+      for (s = f->word; *s; s++)
+        p = st_putc(*s, p);
       break;
     case QDOUBLE:
     case QNONE:
-      p = 0;
+      idx = 0;
       len = strlen(f->word);
-      while (p < len) {
-        if (f->word[p] != '$') {
-          next_v = p;
-          while (next_v < len && f->word[next_v] != '$')
-            next_v++;
-          cp_len = next_v - p;
-          bufcat(&buf, &bufsize, &buflen, f->word + p, cp_len);
-          if (!buf)
-            return NULL;
-          p = next_v;
+      while (idx < len) {
+        if (f->word[idx] != '$') {
+          p = st_putc(f->word[idx], p);
+          idx++;
         } else {
-          expanded = exp_var(f->word, p, &end);
+          expanded = exp_var(f->word, idx, &end);
           if (expanded) {
-            bufcat(&buf, &bufsize, &buflen, expanded, strlen(expanded));
-            if (!buf)
-              return NULL;
-            free(expanded);
-            p = end;
+            for (s = expanded; *s; s++)
+              p = st_putc(*s, p);
+            idx = end;
           } else {
-            free(buf);
-            return NULL;
+            p = st_putc('$', p);
+            idx++;
           }
         }
       }
@@ -90,5 +79,5 @@ expand_word(wf *wordf)
     }
   }
 
-  return buf;
+  return grab_str(p);
 }

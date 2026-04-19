@@ -79,7 +79,7 @@ aliascmd(char **args)
       printf("alias %s=%s\n", e->name, e->value);
   } else {
     n = strndup(args[1], strlen(args[1]) - strlen(delem));
-    v = strdup(delem + 1);
+    v = s_strdup(delem + 1);
     set_alias(n, v);
     free(n);
     free(v);

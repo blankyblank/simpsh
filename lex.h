@@ -3,6 +3,7 @@
 #define LEX_H
 
 #include "utils.h"
+#include "malloc.h"
 
 #define BUF_S 32
 
@@ -74,15 +75,13 @@ extern wf *get_wf(char *, size_t *);
 extern sh_tok *tokenize(char *, int *);
 /** build ast tree */
 extern cmd_tree *build_tree(const sh_tok *, size_t);
-/** replace alias with it's command */
-extern char *expand_alias(char *);
 
 static inline cmd_tree *
 newcmdnode(wf **args, cmd_false negate, char **sh_vars)
 {
-  cmd_tree *ct = malloc(sizeof(cmd_tree));
+  cmd_tree *ct = st_alloc(sizeof(cmd_tree));
   if (!ct) {
-    perror("malloc failed");
+    perror("st_alloc failed");
     return NULL;
   }
   ct->type = CMD;
@@ -100,9 +99,9 @@ newcmdnode(wf **args, cmd_false negate, char **sh_vars)
 static inline cmd_tree *
 newoppnode(token opp_t, cmd_tree *left, cmd_tree *right)
 {
-  cmd_tree *ot = malloc(sizeof(cmd_tree));
+  cmd_tree *ot = st_alloc(sizeof(cmd_tree));
   if (!ot) {
-    fprintf(stderr, "malloc failed");
+    fprintf(stderr, "st_alloc failed");
     return NULL;
   }
   ot->type = OP;
@@ -118,7 +117,7 @@ newoppnode(token opp_t, cmd_tree *left, cmd_tree *right)
 }
 
 static inline void
-freewf(wf *f)
+freewf(void)
 {
 }
 
@@ -128,8 +127,7 @@ free_argv(wf **args)
   if (!args)
     return;
   for (int i = 0; args[i]; i++) {
-    wf *f = args[i];
-    freewf(f);
+    freewf();
   }
   free(args);
 }
