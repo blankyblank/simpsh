@@ -80,8 +80,9 @@ static char *
 cat_wf(wf *wordf)
 {
   wf *f = wordf;
-  char *s;
-  char *p = stack_ptr();
+  char *s, *b, *p;
+  p = stack_ptr();
+  b = stack_ptr();
 
   for (; f; f = f->next) {
     for (s = f->word; *s; s++) {
@@ -89,7 +90,7 @@ cat_wf(wf *wordf)
     }
   }
 
-  return grab_str(p);
+  return grab_str(b,p);
 }
 
 wf **
@@ -186,7 +187,7 @@ get_wf(char *line, size_t *pos)
         /* save unquoted frag if nonempty */
         if (p > s) {
           fprintf(stderr, "get_wf: before grab_str - p=%p, s=%p\n", p, s);
-          w = grab_str(p);
+          w = grab_str(s,p);
           append_wf(&head, &tail, w, state);
           fprintf(stderr, "get_wf: after grab_str - stack_ptr=%p\n", stack_ptr());
           p = stack_ptr();
@@ -197,7 +198,7 @@ get_wf(char *line, size_t *pos)
       } else if (c == '"') {
         /* save unquoted frag if nonempty */
         if (p > s) {
-          w = grab_str(p);
+          w = grab_str(s,p);
           append_wf(&head, &tail, w, state);
           p = stack_ptr();
           s = p;
@@ -222,7 +223,7 @@ get_wf(char *line, size_t *pos)
       if (c == '\'') {
         /* save single quoted frag if nonempty */
         if (p > s) {
-          w = grab_str(p);
+          w = grab_str(s,p);
           append_wf(&head, &tail, w, state);
           p = stack_ptr();
           s = p;
@@ -238,7 +239,7 @@ get_wf(char *line, size_t *pos)
       if (c == '"') {
         /* save double quoted frag if nonempty */
         if (p > s) {
-          w = grab_str(p);
+          w = grab_str(s,p);
           append_wf(&head, &tail, w, state);
           p = stack_ptr();
           s = p;
@@ -267,7 +268,7 @@ get_wf(char *line, size_t *pos)
 done:
   /*  one last save  */
   if (p > s) {
-    w = grab_str(p);
+    w = grab_str(s,p);
     append_wf(&head, &tail, w, state);
     p = stack_ptr();
     s = p;

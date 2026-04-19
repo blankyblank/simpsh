@@ -122,10 +122,10 @@ grow_stack(size_t msize)
 }
 
 char *
-grab_str(char *end)
+grab_str(char *start, char *end)
 {
-  size_t len = end - stack_ptr();
-  char *start = end - len;
+  size_t len = end - start;
+  // char *start = end - len;
   char *res;
   fprintf(stderr, "1: grab_str: end=%p, start=%p, len=%zu\n", end, start, len);
 

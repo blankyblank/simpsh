@@ -11,7 +11,7 @@ extern size_t stleft;
 extern void *st_alloc(size_t);
 extern void stack_clear(void);
 extern void *grow_stack(size_t);
-extern char *grab_str(char *);
+extern char *grab_str(char *, char *);
 extern char *stack_ptr(void);
 
 static inline size_t

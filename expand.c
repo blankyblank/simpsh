@@ -41,17 +41,18 @@ char *
 expand_word(wf *wordf)
 {
   fprintf(stderr, "expand_word: wordf=%p\n", (void*)wordf);
-  char *p = stack_ptr();
-  char *expanded;
   size_t end, idx;
   size_t len;
   wf *f;
-  char *s;
+  char *s, *b;
+  char *p = stack_ptr();
+  char *expanded;
 
   for (f = wordf; f; f = f->next) {
     fprintf(stderr, "expand_word: f=%p, f->qs=%d, f->word=%p\n", (void*)f, f->qs, (void*)f->word);
     switch (f->qs) {
     case QSINGLE:
+      b = stack_ptr();
       for (s = f->word; *s; s++)
         p = st_putc(*s, p);
       break;
@@ -59,6 +60,8 @@ expand_word(wf *wordf)
     case QNONE:
       idx = 0;
       len = strlen(f->word);
+
+      b = stack_ptr();
       while (idx < len) {
         if (f->word[idx] != '$') {
           p = st_putc(f->word[idx], p);
@@ -79,5 +82,5 @@ expand_word(wf *wordf)
     }
   }
 
-  return grab_str(p);
+  return grab_str(b,p);
 }
