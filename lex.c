@@ -278,7 +278,6 @@ sh_tok *
 tokenize(char *line, int *cnt)
 {
   size_t p = 0, c = 0, n;
-  size_t tc = 0;
   *cnt = 0;
   wf *f = NULL;
   char *word;
@@ -291,31 +290,7 @@ tokenize(char *line, int *cnt)
   if (strlen(line) == 0)
     return NULL;
 
-  /* see what we need to allocate */
-  while (line[p]) {
-    p = skip_ws(line + p) - line;
-    if (!line[p])
-      break;
-    n = p + 1;
-    if (line[p] == '!') {
-      tc++;
-      p++;
-    } else if (line[p] == '&' && line[n] == '&') {
-      tc++;
-      p += 2;
-    } else if (line[p] == '|' && line[n] == '|') {
-      tc++;
-      p += 2;
-    } else if (line[p] == ';') {
-      tc++;
-      p++;
-    } else {
-      /* It's a word - skip to end of word */
-      p = cmd_end(line + p) - line;
-    }
-  }
-
-  sh_tok *tokens = st_alloc((tc + 1) * (sizeof(sh_tok)));
+  sh_tok *tokens = st_alloc(16 * (sizeof(sh_tok)));
   p = 0;
   if (!tokens)
     return NULL;
@@ -348,7 +323,6 @@ tokenize(char *line, int *cnt)
     } else if (line[p] == ';') {
       tokens[c].type = TSEMI;
       tokens[c].cmd = NULL;
-      fprintf(stderr, "tokenize: setting tokens[%zu].cmd=%p (wf)\n", c, (void*)f);
       c++;
       p++;
       continue;
@@ -402,7 +376,6 @@ build_tree(const sh_tok *tokens, size_t cnt)
   if (i >= cnt || tokens[i].type != TWORD) /* check for command */
     return NULL;
   args = get_argv(tokens, cnt, &i);
-  fprintf(stderr, "build_tree: calling newcmdnode with args[0]=%p\n", (void*)args[0]);
   if (!args || !args[0]) { /* handle empty input */
     fprintf(stderr, "TODO: double check this at some point \n");
     return NULL;

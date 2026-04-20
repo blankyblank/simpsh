@@ -21,14 +21,12 @@ bufcat(char **buf, size_t *bufsize, size_t *buflen, const char *src, size_t n)
 char **
 expand_argv(wf **args)
 {
-  fprintf(stderr, "expand_argv: entering, args=%p\n", (void*)args);
   size_t i, argc = 0;
   while (args[argc])
     argc++;
 
   char **argv = st_alloc((argc + 1) * sizeof(char *));
   for (i = 0; i < argc; i++) {
-    fprintf(stderr, "expand_argv: calling expand_word for args[%zu]=%p\n", i, (void*)args[i]);
     argv[i] = expand_word(args[i]);
     if (!argv[i])
       return NULL;
