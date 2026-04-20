@@ -46,21 +46,21 @@ void *
 st_alloc(size_t dsize)
 {
   size_t asize = align_mem(dsize);
-
-  fprintf(stderr, "1: st_alloc: before - stnext=%p, stleft=%zu, asize=%zu\n", stnext, stleft, asize);
+  size_t len;
 
   if (asize >= stleft) {
     stack_seg *nseg;
     size_t need = asize;
     if (need < MINSTACK_S)
       need = MINSTACK_S;
-    nseg = malloc(sizeof(stack_seg) - MINSTACK_S + need);
+    len = sizeof(stack_seg) - MINSTACK_S + need;
+    nseg = malloc(len);
     if (!nseg)
       return NULL;
     nseg->prev = current;
-    current = nseg;
     stnext = nseg->buf;
     stleft = need;
+    current = nseg;
     stend = stnext + stleft;
   }
 
@@ -80,18 +80,38 @@ st_alloc(size_t dsize)
   stnext += asize;
   stleft -= asize;
   stend = stnext + stleft;
-  fprintf(stderr, "2: st_alloc: before - stnext=%p, stleft=%zu, asize=%zu\n", stnext, stleft, asize);
-  memset(rp, 0, asize);
   return rp;
 }
 
 void *
 grow_stack(size_t msize)
 {
-  size_t nsize, used;
+  size_t nsize;
+  size_t commit;
   stack_seg *nb;
+  char *obuf;
 
-  nsize = stleft * 2;
+  commit = stnext - current->buf;
+  obuf = current->buf;
+
+  nsize = align_mem(msize + commit + 128);
+  if (nsize <MINSTACK_S)
+    nsize = MINSTACK_S;
+
+  nb = malloc(sizeof(stack_seg) - MINSTACK_S + nsize);
+  if (!nb)
+    return NULL;
+  nb->prev = current;
+  current = nb;
+
+  if (commit > 0)
+    memcpy(nb->buf, obuf, commit);
+  stnext = nb->buf + commit;
+  stleft = nsize - commit;
+  stend = nb->buf + nsize;
+  return stnext;
+
+  /* nsize = stleft * 2;
   if (nsize < msize)
     nsize = msize;
   nsize = align_mem(nsize + 128);  // NOTE: see why + 128
@@ -117,28 +137,40 @@ grow_stack(size_t msize)
     stleft = nsize - used;
     stend = stnext + stleft;
     fprintf(stderr, "3: grow_stack: called with msize=%zu, stnext=%p\n", msize, stnext);
-    return stnext;
-  }
+    return nb->buf;
+  } */
+    /* nb->prev = current; */
 }
 
 char *
-grab_str(char *start, char *end)
+grab_str(size_t len)
 {
-  size_t len = end - start;
+  
+  char *start = stnext - len;
+  if (stleft == 0)
+    grow_stack(1);
+  *stnext++ = '\0';
+  stleft--;
+
+  return start;
+
+  // size_t len = end - start;
   // char *start = end - len;
+  /* char *op = stack_ptr();
   char *res;
-  fprintf(stderr, "1: grab_str: end=%p, start=%p, len=%zu\n", end, start, len);
+  fprintf(stderr, "1: grab_str: end=%p, start=%p, len=%zu\n", end, start, len); */
 
   /* Use st_alloc for the arena pattern - strings are cleaned up by stack_clear
    */
-  res = st_alloc(len + 1);
+  /* res = st_alloc(len + 1);
+  char *new = stack_ptr();
   if (res) {
     memcpy(res, start, len);
     res[len] = '\0';
   }
-  st_unalloc(end);
+  st_unalloc(new);
   fprintf(stderr, "2: grab_str: end=%p, start=%p, len=%zu\n", end, start, len);
-  return res;
+  return res; */
 }
 
 void

@@ -40,40 +40,42 @@ expand_argv(wf **args)
 char *
 expand_word(wf *wordf)
 {
-  fprintf(stderr, "expand_word: wordf=%p\n", (void*)wordf);
   size_t end, idx;
-  size_t len;
+  size_t len, wlen;
   wf *f;
-  char *s, *b;
-  char *p = stack_ptr();
+  char *s;
   char *expanded;
 
+  len = 0;
   for (f = wordf; f; f = f->next) {
-    fprintf(stderr, "expand_word: f=%p, f->qs=%d, f->word=%p\n", (void*)f, f->qs, (void*)f->word);
     switch (f->qs) {
     case QSINGLE:
-      b = stack_ptr();
-      for (s = f->word; *s; s++)
-        p = st_putc(*s, p);
+      for (s = f->word; *s; s++) {
+        st_putc(*s);
+        len++;
+      }
       break;
     case QDOUBLE:
     case QNONE:
       idx = 0;
-      len = strlen(f->word);
+      wlen = strlen(f->word);
 
-      b = stack_ptr();
-      while (idx < len) {
+      while (idx < wlen) {
         if (f->word[idx] != '$') {
-          p = st_putc(f->word[idx], p);
+          st_putc(f->word[idx]);
+          len++;
           idx++;
         } else {
           expanded = exp_var(f->word, idx, &end);
           if (expanded) {
-            for (s = expanded; *s; s++)
-              p = st_putc(*s, p);
+            for (s = expanded; *s; s++) {
+              st_putc(*s);
+              len++;
+            }
             idx = end;
           } else {
-            p = st_putc('$', p);
+            st_putc('$');
+            len++;
             idx++;
           }
         }
@@ -82,5 +84,5 @@ expand_word(wf *wordf)
     }
   }
 
-  return grab_str(b,p);
+  return grab_str(len);
 }

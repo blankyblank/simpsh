@@ -41,7 +41,6 @@ get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
   t = *i;
   while (t < cnt && tokens[t].type == TWORD) {
     argv[j] = tokens[t].cmd;
-    fprintf(stderr, "get_argv: setting args[%zu]=%p from tokens[%zu].cmd=%p\n", j, (void*)argv[j], t, (void*)tokens[t].cmd);
     j++;
     t++;
   }
@@ -80,17 +79,17 @@ static char *
 cat_wf(wf *wordf)
 {
   wf *f = wordf;
-  char *s, *b, *p;
-  p = stack_ptr();
-  b = stack_ptr();
+  char *s;
+  size_t len = 0;
 
   for (; f; f = f->next) {
     for (s = f->word; *s; s++) {
-      p = st_putc(*s, p);
+      st_putc(*s);
+      len++;
     }
   }
 
-  return grab_str(b,p);
+  return grab_str(len);
 }
 
 wf **
@@ -169,8 +168,8 @@ get_wf(char *line, size_t *pos)
   size_t i = *pos;
   char c, n;
   char *w;
-  char *p = stack_ptr();
-  char *s = p;
+  size_t len = 0;
+  // char *s = p;
 
   state = QNONE;
 
@@ -185,23 +184,19 @@ get_wf(char *line, size_t *pos)
         goto done;
       } else if (c == '\'') {
         /* save unquoted frag if nonempty */
-        if (p > s) {
-          fprintf(stderr, "get_wf: before grab_str - p=%p, s=%p\n", p, s);
-          w = grab_str(s,p);
+        if (len > 0) {
+          w = grab_str(len);
           append_wf(&head, &tail, w, state);
-          fprintf(stderr, "get_wf: after grab_str - stack_ptr=%p\n", stack_ptr());
-          p = stack_ptr();
-          s = p;
+          len = 0;
         }
         state = QSINGLE;
         i++;
       } else if (c == '"') {
         /* save unquoted frag if nonempty */
-        if (p > s) {
-          w = grab_str(s,p);
+        if (len > 0) {
+          w = grab_str(len);
           append_wf(&head, &tail, w, state);
-          p = stack_ptr();
-          s = p;
+          len = 0;
         }
         state = QDOUBLE;
         i++;
@@ -211,38 +206,39 @@ get_wf(char *line, size_t *pos)
           goto done;
         } else {
           // i think I should use n where I already used n
-          p = st_putc(n, p);
+          st_putc(n);
+          len++;
           i += 2;
         }
       } else {
-        p = st_putc(c, p);
+        st_putc(c);
+        len++;
         i++;
       }
       break;
     case QSINGLE:
       if (c == '\'') {
         /* save single quoted frag if nonempty */
-        if (p > s) {
-          w = grab_str(s,p);
+        if (len > 0) {
+          w = grab_str(len);
           append_wf(&head, &tail, w, state);
-          p = stack_ptr();
-          s = p;
+          len = 0;
         }
         state = QNONE;
         i++;
       } else {
-        p = st_putc(c, p);
+        st_putc(c);
+        len++;
         i++;
       }
       break;
     case QDOUBLE:
       if (c == '"') {
         /* save double quoted frag if nonempty */
-        if (p > s) {
-          w = grab_str(s,p);
+        if (len > 0) {
+          w = grab_str(len);
           append_wf(&head, &tail, w, state);
-          p = stack_ptr();
-          s = p;
+          len = 0;
         }
         state = QNONE;
         i++;
@@ -251,14 +247,17 @@ get_wf(char *line, size_t *pos)
           i += 2;
           continue;
         } else if (n == '$' || n == '"' || n == '\\') {
-          p = st_putc(n, p);
+          st_putc(n);
+          len++;
           i += 2;
         } else {
-          p = st_putc(c, p);
+          st_putc(c);
+          len++;
           i++;
         }
       } else {
-        p = st_putc(c, p);
+        st_putc(c);
+        len++;
         i++;
       }
       break;
@@ -267,11 +266,9 @@ get_wf(char *line, size_t *pos)
 
 done:
   /*  one last save  */
-  if (p > s) {
-    w = grab_str(s,p);
+  if (len) {
+    w = grab_str(len);
     append_wf(&head, &tail, w, state);
-    p = stack_ptr();
-    s = p;
   }
   *pos = i;
   return head;
@@ -442,28 +439,6 @@ cleanup:
   fprintf(stderr, "Syntax error\n");
   return NULL;
 }
-
-// wf *
-// expand_alias_w(char *word)
-// {
-//   alias *a;
-//   char *val;
-//   size_t pos;
-//   wf *res;
-//
-//   a = find_alias(word);
-//   if (!a)
-//     return NULL;
-//   if (alias_depth >= MAX_ALIAS_DEPTH) {
-//     fprintf(stderr, "alias: too many levels of recursion\n");
-//     return NULL;
-//   }
-//   val = a->value;
-//   pos = 0;
-//
-//   res = get_wf(val, &pos);
-//   return res;
-// }
 
 static void
 expand_alias(char *val, sh_tok *tokens, size_t *c)

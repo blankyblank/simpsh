@@ -1,9 +1,8 @@
 CC := gcc
 
-# CFLAGS 		     :=  -I. -Og -Wall -Wextra -pedantic -pipe -g3
-CFLAGS 		     := --std=c99 -I. -Og -Wall -Wextra -pedantic -pipe -g3
-# CFLAGS 		   := -I. -Os -Wall -Wextra -pedantic -pipe
-# CFLAGS 		   := -I. -Og -Wall -Wextra -pedantic -pipe -g3
+CFLAGS 		     := --std=c99 -I. -Og -Wall -Wextra -pedantic -pipe -g3 -ggdb -fvar-tracking-assignments
+# CFLAGS 		     :=  --std=c99 -I. -Og -Wall -Wextra -pedantic -pipe -g3
+# CFLAGS 		   := --std=c99 -I. -Os -Wall -Wextra -pedantic -pipe
 SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds -fno-analyzer-state-merge
 # SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds -fno-omit-frame-pointer -fno-analyzer-state-merge
 # SANITIZE_FLAGS := -static-libasan

@@ -11,8 +11,14 @@ extern size_t stleft;
 extern void *st_alloc(size_t);
 extern void stack_clear(void);
 extern void *grow_stack(size_t);
-extern char *grab_str(char *, char *);
+extern char *grab_str(size_t);
 extern char *stack_ptr(void);
+
+static inline char *
+st_tmp_start(size_t len)
+{
+  return stnext - len;
+}
 
 static inline size_t
 stack_left(void)
@@ -52,6 +58,7 @@ st_aunalloc(void *p)
   st_unalloc(cp);
 }
 
+/*  need to find what glm meant by simplify pattern  */
 static inline void
 chk_space(size_t n, char **p)
 {
@@ -59,16 +66,18 @@ chk_space(size_t n, char **p)
     *p = grow_stack(n);
 }
 
-static inline char *
-st_putc(int c, char *p)
+static inline void
+st_putc(int c)
 {
-  if (p >= stend)
-    p = grow_stack(p - stnext + 1);
-  *p++ = c;
-  return p;
+  if (stleft == 0)
+    grow_stack(1);
+  *stnext++ = c;
+  stleft--;
 }
 
-#define align_mem(n) (((n) + sizeof(void *) - 1) & ~(sizeof(void *) - 1))
+/* clang-format off */
+#define SHELL_SIZE (sizeof(union {int i; char *cp; double d; }) - 1)
+#define align_mem(n) (((n) + SHELL_SIZE) & ~(sizeof(void *) - 1)) /* clang-format on */
 /* static inline size_t
 align_mem(size_t n)
 {
