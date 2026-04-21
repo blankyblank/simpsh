@@ -9,3 +9,5 @@ set -e
 [ $? -eq 0 ] || { msg_fail "exit 0 produced incorrect value"; exit 1;}
 ../simpsh -c "exit 5"
 [ $? -eq 0 ] || { msg_fail "exit 5 produced incorrect value"; exit 1;}
+
+exit 0

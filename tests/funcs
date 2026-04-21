@@ -12,5 +12,5 @@ msg_pass() {
 
 msg_fail() {
   # bold/red
-  printf "\033[1m\033[31m %s\033[m\n" "$@"
+  printf "\033[1m\033[31m %s\033[m\n" "$@" >&2
 }

@@ -6,7 +6,9 @@ set -e
 
 out=$(../simpsh -c "export test1=1 ; env" | grep "test1=1")
 
-if [ $out != test1=1 ]; then
+if [ "$out" != "test1=1" ]; then
   msg_fail "output differs"
   exit 1
 fi
+
+exit 0

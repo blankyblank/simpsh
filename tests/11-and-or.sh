@@ -7,11 +7,11 @@ set -e
 out1=$(../simpsh -c "false && echo true || echo false")
 out2=$(../simpsh -c "true && echo true || echo false")
 
-if [ $out1 != false ]; then
+if [ "$out1" != false ]; then
   msg_fail "result should have been false"
   exit 1
 fi
-if [ $out2 != true ]; then
+if [ "$out2" != true ]; then
   msg_fail "result should have been true"
   exit 1
 fi

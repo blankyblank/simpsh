@@ -6,7 +6,7 @@ set -e
 
 out1=$(../simpsh -c "alias ec='echo test123'; ec")
 
-if [ $out1 != test123 ];then
+if [ "$out1" != test123 ];then
   msg_fail "output differs"
   exit 1
 fi

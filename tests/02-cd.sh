@@ -6,7 +6,7 @@ set -e
 
 out=$(../simpsh -c "cd /tmp ; pwd")
 
-if [ ! $out = "/tmp" ]; then
+if [ "$out" != "/tmp" ]; then
   msg_fail "output differs"
   exit 1
 fi

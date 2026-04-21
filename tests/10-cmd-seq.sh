@@ -6,7 +6,7 @@ set -e
 
 out=$(../simpsh -c "printf '%s' a; printf '%s' b; printf '%s' c")
 
-if [ $out != abc ]; then
+if [ "$out" != abc ]; then
   msg_fail "one of the commands failed"
   exit 1
 fi
