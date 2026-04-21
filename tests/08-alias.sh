@@ -4,11 +4,12 @@ set -e
 
 [ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
 
-out1=$(../simpsh -c "alias ec='echo test123'; ec")
+
+printf '%s\n' "alias ec='echo test123'" "unalias ec" "ec" | ../simpsh && { msg_fail "command should have failed" && exit 1;}
+
+out1="$(printf '%s\n%s' "alias ec='echo test123'" "ec" | ../simpsh)"
 
 if [ "$out1" != test123 ];then
   msg_fail "output differs"
   exit 1
 fi
-
-../simpsh -c "alias ec='echo test123'; unalias ec; ec" && msg_fail "command should have failed" && exit 1
