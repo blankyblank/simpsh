@@ -8,6 +8,26 @@
 
 #define MAX_TMP_VARS 40
 
+static int getbuiltin(char *);
+static int builtin_launch(int,char **);
+
+/** initialize builtin hash table */
+void
+init_builtins(void) {
+  size_t i, n = builtinnum();
+  size_t idx;
+
+  for (i = 0; i < BUILTIN_BUCKETS; i++)
+    builtin_tab[i] = -1;
+
+  for (i = 0; i < n; i++) {
+    idx = hash(builtins[i], BUILTIN_BUCKETS);
+    while (builtin_tab[idx] > 0)
+      idx = (idx + 1) % BUILTIN_BUCKETS;
+    builtin_tab[idx] = i;
+  }
+}
+
 typedef struct {
   char *name;
   char *oval;
@@ -24,36 +44,28 @@ free_env(char **env)
   free(env - 1);
 }
 
+/** builtin find */
 int
-getbuiltin(char **args)
-{
-  /* check if string matches builtin command */
-  int n = builtinnum();
-  int i;
+getbuiltin(char *args) {
+  size_t idx;
 
-  for (i = 0; i < n; i++) {
-    if (!strcmp(args[0], builtins[i])) {
-      return 1;
-    }
-  }
-  return 0;
+  for (idx = hash(args, BUILTIN_BUCKETS); builtin_tab[idx] >= 0; idx = (idx + 1) % BUILTIN_BUCKETS)
+    if (strcmp(builtins[builtin_tab[idx]], args) == 0)
+      return builtin_tab[idx];
+  return -1;
 }
 
+/** launch builtin */
 int
-builtin_launch(char **args)
+builtin_launch(int idx,char **args)
 {
-  /* launch builtin */
-  int n = builtinnum();
-  int i;
-  for (i = 0; i < n; i++) {
-    if (!strcmp(*args, builtins[i])) {
-      return (*builtin_funcs[i])(args);
-    }
-  }
-  printf("something didn't work");
+  return (*builtin_funcs[idx])(args);
+
+  fprintf(stderr, "simpsh: builtins you failed me!");
   return 1;
 }
 
+/** execute command tree */
 int
 run_commands(const cmd_tree *n)
 {
@@ -62,7 +74,7 @@ run_commands(const cmd_tree *n)
   char **final = NULL;
   char **env = NULL;
   shvar *v;
-  int i, vc = 0;
+  int i, b, vc = 0;
 
   if (!n)
     return 0;
@@ -86,8 +98,8 @@ run_commands(const cmd_tree *n)
         return 1;
       }
     }
-
-    if (getbuiltin(final) == 1) {
+    b = getbuiltin(*final);
+    if (b > 0) {
       /*  handle name=value cmd  */
       if (n->sh_vars && n->sh_vars[0]) {
         tmp_var tmp_vars[MAX_TMP_VARS];
@@ -112,7 +124,7 @@ run_commands(const cmd_tree *n)
           };
           setvar(name, val, flags);
         }
-        status = builtin_launch(final);
+        status = builtin_launch(b,final);
         for (i = 0; i < vc; i++) {
           if (tmp_vars[i].set)
             setvar(tmp_vars[i].name, tmp_vars[i].oval, tmp_vars[i].oflags);
@@ -120,7 +132,7 @@ run_commands(const cmd_tree *n)
             unset_var(tmp_vars[i].name);
         }
       } else {
-        status = builtin_launch(final);
+        status = builtin_launch(b,final);
       }
     } else {
       env = build_env(n->sh_vars);
@@ -159,6 +171,7 @@ run_commands(const cmd_tree *n)
   return 0;
 } /* run the commands previously built into the tree  */
 
+/** fork and exec external command */
 int
 shexec(char **args, char **env)
 {

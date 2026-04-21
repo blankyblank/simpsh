@@ -10,6 +10,7 @@
 
 int lstatus;
 static int interactive = 1;
+int builtin_tab[BUILTIN_BUCKETS];
 
 /* shell variables */
 int sh_argc;
@@ -23,6 +24,7 @@ char *home;
 
 static int simpsh_run(char *line);
 
+/** shell entry point */
 int
 main(int argc, char **argv)
 {
@@ -45,7 +47,7 @@ main(int argc, char **argv)
     interactive = 0;
 
   /* set up shell variables */
-  sh_argv0 = strdup(argv[0]);
+  sh_argv0 = s_strdup(argv[0]);
   sh_argc = 0;
   sh_argv = NULL;
   sh_pid = getpid();
@@ -55,12 +57,13 @@ main(int argc, char **argv)
   snprintf(sh_pid_s, 16, "%d", sh_pid);
 
   init_env();
+  init_builtins();
 
   if (cflag) {
-    exit(simpsh_run(strdup(cmd)));
+    exit(simpsh_run(s_strdup(cmd)));
   } else if (tflag) {
     while (fgets(buf, MAX_LENGTH, stdin) != NULL)
-      estatus = simpsh_run(strdup(buf));
+      estatus = simpsh_run(s_strdup(buf));
     exit(estatus);
   } else {
     /* run the main loop */
@@ -80,6 +83,7 @@ main(int argc, char **argv)
   }
 }
 
+/** run a command line */
 int
 simpsh_run(char *line)
 {

@@ -60,7 +60,7 @@ aliascmd(char **args)
   char *delem, *n, *v;
 
   if (!args[1]) {
-    for (i = 0; i < ALIAS_BUCKETS; i++) {
+    for (i = 0; i < ENV_BUCKETS; i++) {
       if (alias_tab[i]) {
         e = alias_tab[i];
         while (e) {

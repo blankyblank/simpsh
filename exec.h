@@ -4,8 +4,9 @@
 
 #include "lex.h"
 
-extern int getbuiltin(char **);
-extern int builtin_launch(char **);
+#define BUILTIN_BUCKETS 16
+extern int builtin_tab[BUILTIN_BUCKETS];
+extern void init_builtins(void);
 extern int shexec(char **, char **);
 extern int run_commands(const cmd_tree *);
 
