@@ -22,7 +22,7 @@ init_builtins(void) {
 
   for (i = 0; i < n; i++) {
     idx = hash(builtins[i], BUILTIN_BUCKETS);
-    while (builtin_tab[idx] > 0)
+    while (builtin_tab[idx] >= 0)
       idx = (idx + 1) % BUILTIN_BUCKETS;
     builtin_tab[idx] = i;
   }
@@ -85,7 +85,7 @@ run_commands(const cmd_tree *n)
       /*  if no command only name=value  */
       if (n->sh_vars && n->sh_vars[0]) {
         for (i = 0; n->sh_vars[i]; i++) {
-          read_assn_stack(n->sh_vars[i], &name, &val);
+          st_read_assn(n->sh_vars[i], &name, &val);
           shvar_flag flags = {
             .exported = 0,
             .readonly = 0,
@@ -99,12 +99,12 @@ run_commands(const cmd_tree *n)
       }
     }
     b = getbuiltin(*final);
-    if (b > 0) {
+    if (b >= 0) {
       /*  handle name=value cmd  */
       if (n->sh_vars && n->sh_vars[0]) {
         tmp_var tmp_vars[MAX_TMP_VARS];
         for (i = 0; n->sh_vars[i]; i++) {
-          read_assn_stack(n->sh_vars[i], &name, &val);
+          st_read_assn(n->sh_vars[i], &name, &val);
           v = find_var(name);
           if (v) {
             tmp_vars[vc].set = 1;
