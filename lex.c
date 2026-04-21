@@ -116,8 +116,6 @@ get_assn(wf **args, char ***sh_vars)
   for (j = 0; j < a_c; j++) {
     /*  NOTE: remember cat_wf returns null check that if bugs pop up from this
      */
-    /*  WARN: this still needs refactoring I need to verify cat_wf is working
-     * correctly  */
     (*sh_vars)[j] = cat_wf(args[j]);
   }
   (*sh_vars)[a_c] = NULL;

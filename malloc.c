@@ -1,6 +1,5 @@
 /*  malloc.c - stack arena allocator and otther malloc functions */
 #include "simpsh.h"
-/* #include "utils.h" */
 #include "malloc.h"
 
 /*@NOTE:
@@ -35,6 +34,7 @@ char *stnext = stackbase.buf;
 size_t stleft = MINSTACK_S;
 char *stend;
 
+/** return current stack pointer */
 char *
 stack_ptr(void)
 {
@@ -64,9 +64,6 @@ st_alloc(size_t dsize)
     stend = stnext + stleft;
   }
 
-  /*
-   * Alignment disabled for testing
-   */
   size_t align_offset = ((size_t)stnext & (sizeof(void *) - 1));
   if (align_offset) {
     size_t pad = sizeof(void *) - align_offset;
@@ -83,69 +80,38 @@ st_alloc(size_t dsize)
   return rp;
 }
 
+/** grow the stack allocation */
 void *
 grow_stack(size_t msize)
 {
   size_t nsize;
-  size_t commit;
+  size_t used;
   stack_seg *nb;
   char *obuf;
 
-  commit = stnext - current->buf;
+  used = stnext - current->buf;
   obuf = current->buf;
 
-  nsize = align_mem(msize + commit + 128);
+  nsize = align_mem(msize + used + 128);
   if (nsize <MINSTACK_S)
     nsize = MINSTACK_S;
-
   nb = malloc(sizeof(stack_seg) - MINSTACK_S + nsize);
   if (!nb)
     return NULL;
   nb->prev = current;
   current = nb;
-
-  if (commit > 0)
-    memcpy(nb->buf, obuf, commit);
-  stnext = nb->buf + commit;
-  stleft = nsize - commit;
+  if (used > 0)
+    memcpy(nb->buf, obuf, used);
+  stnext = nb->buf + used;
+  stleft = nsize - used;
   stend = nb->buf + nsize;
   return stnext;
-
-  /* nsize = stleft * 2;
-  if (nsize < msize)
-    nsize = msize;
-  nsize = align_mem(nsize + 128);  // NOTE: see why + 128
-
-  used = stnext - current->buf;
-  fprintf(stderr, "1: grow_stack: called with msize=%zu, stnext=%p\n", msize, stnext);
-  if (!used && current != &stackbase) {
-    nb = malloc(sizeof(stack_seg) - MINSTACK_S + nsize);
-    if (!nb)
-      return NULL;
-    memcpy(nb->buf, stackbase.buf, used);
-    nb->prev = NULL;
-    current = nb;
-    stnext = nb->buf + used;
-    stleft = nsize - used;
-    stend = stnext + stleft;
-    fprintf(stderr, "2: grow_stack: called with msize=%zu, stnext=%p\n", msize, stnext);
-    return stnext;
-  } else {
-    nb = st_alloc(nsize);
-    memcpy(nb->buf, current->buf, used);
-    stnext = nb->buf + used;
-    stleft = nsize - used;
-    stend = stnext + stleft;
-    fprintf(stderr, "3: grow_stack: called with msize=%zu, stnext=%p\n", msize, stnext);
-    return nb->buf;
-  } */
-    /* nb->prev = current; */
 }
 
+/** grab string from arena */
 char *
 grab_str(size_t len)
 {
-  
   char *start = stnext - len;
   if (stleft == 0)
     grow_stack(1);
@@ -153,26 +119,9 @@ grab_str(size_t len)
   stleft--;
 
   return start;
-
-  // size_t len = end - start;
-  // char *start = end - len;
-  /* char *op = stack_ptr();
-  char *res;
-  fprintf(stderr, "1: grab_str: end=%p, start=%p, len=%zu\n", end, start, len); */
-
-  /* Use st_alloc for the arena pattern - strings are cleaned up by stack_clear
-   */
-  /* res = st_alloc(len + 1);
-  char *new = stack_ptr();
-  if (res) {
-    memcpy(res, start, len);
-    res[len] = '\0';
-  }
-  st_unalloc(new);
-  fprintf(stderr, "2: grab_str: end=%p, start=%p, len=%zu\n", end, start, len);
-  return res; */
 }
 
+/** clear the stack arena */
 void
 stack_clear(void)
 {
@@ -188,6 +137,7 @@ stack_clear(void)
   stend = stnext + stleft;
 }
 
+/** initialize the stack */
 void
 init_stack(void)
 {

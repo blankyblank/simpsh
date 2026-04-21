@@ -3,12 +3,57 @@
 #include "env.h"
 #include "utils.h"
 
-alias *alias_tab[ALIAS_BUCKETS];
-shvar *var_tab[VAR_BUCKETS] = { NULL };
+alias *alias_tab[ENV_BUCKETS];
+shvar *var_tab[ENV_BUCKETS] = { NULL };
 static char *var_n(char *, size_t, size_t *);
 static char *varbrace_n(const char *, size_t, size_t *);
 static char *lookupvar(char *);
 
+/** get the variable for the return status of last command */
+static inline char *
+statusvar(void)
+{
+  char *buf = st_alloc(12);
+  snprintf(buf, 12, "%d", lstatus);
+  return buf;
+}
+
+/** get the pid shell variable */
+static inline char *
+var_pid(void)
+{
+  return st_strdup(sh_pid_s);
+}
+
+/** get positional parameters */
+static inline char *
+get_posparam(int n)
+{
+  if (n == 0)
+    return sh_argv0 ? sh_argv0 : "";
+
+  if (n < 0 || n > sh_argc)
+    return "";
+  return sh_argv[n - 1] ? sh_argv[n - 1] : "";
+}
+
+/** find if variable is positional parameter */
+static inline int
+is_posparam(const char *var)
+{
+  size_t i;
+  size_t var_l = strlen(var);
+
+  if (!var || !*var)
+    return 0;
+  for (i = 0; i < var_l; i++) {
+    if (!isdigit(var[i]))
+      return 0;
+  }
+  return 1;
+}
+
+/** get variable value from name */
 static inline char *
 getvar(const char *vt)
 {
@@ -21,6 +66,7 @@ getvar(const char *vt)
   return var;
 }
 
+/** build environment array for exec */
 char **
 build_env(char **sh_env)
 {
@@ -34,7 +80,7 @@ build_env(char **sh_env)
   char *buf;
   shvar *var;
 
-  for (i = 0; i < VAR_BUCKETS; i++) {
+  for (i = 0; i < ENV_BUCKETS; i++) {
     var = var_tab[i];
     while (var) {
       if (var->flags.exported) {
@@ -59,7 +105,7 @@ build_env(char **sh_env)
   *(char **)cmd_env = buf;
   arr = cmd_env + 1;
 
-  for (i = 0; i < VAR_BUCKETS; i++) {
+  for (i = 0; i < ENV_BUCKETS; i++) {
     var = var_tab[i];
     while (var) {
       if (var->flags.exported) {
@@ -87,6 +133,7 @@ build_env(char **sh_env)
   return cmd_env + 1;
 }
 
+/** initialize environment from environ */
 void
 init_env(void)
 {
@@ -97,15 +144,18 @@ init_env(void)
 
   for (i = 0; i < env_c; i++) {
     read_assn(environ[i], &name, &val);
-    shvar_flag flags = { .exported = 1,
-                         .readonly = 0,
-                         .null = (val[0] == '\0') };
+    shvar_flag flags = {
+      .exported = 1,
+      .readonly = 0,
+      .null = (val[0] == '\0'),
+    };
     setvar(name, val, flags);
     free(name);
     free(val);
   }
 }
 
+/** expand $var style variables */
 char *
 var_n(char *args, size_t i, size_t *end)
 {
@@ -120,7 +170,7 @@ var_n(char *args, size_t i, size_t *end)
         env_var = &args[i];
         break;
       } else {
-        vt = strndup(&args[i + 1], vt_l);
+        vt = st_strndup(&args[i + 1], vt_l);
         env_var = lookupvar(vt);
         break;
       }
@@ -128,10 +178,11 @@ var_n(char *args, size_t i, size_t *end)
   }
 
   *end = j;
-  var = strdup(env_var);
+  var = st_strdup(env_var);
   return var;
 }
 
+/** expand ${var} style variables */
 char *
 varbrace_n(const char *args, size_t i, size_t *end)
 {
@@ -147,7 +198,7 @@ varbrace_n(const char *args, size_t i, size_t *end)
       if (vt_l == 0)
         return NULL;
       else {
-        vt = strndup(&args[i + 2], vt_l);
+        vt = st_strndup(&args[i + 2], vt_l);
         env_var = lookupvar(vt);
         break;
       }
@@ -155,10 +206,11 @@ varbrace_n(const char *args, size_t i, size_t *end)
   }
 
   *end = j;
-  var = strdup(env_var);
+  var = st_strdup(env_var);
   return var;
 }
 
+/** lookup variable by name */
 char *
 lookupvar(char *vt)
 {
@@ -171,11 +223,11 @@ lookupvar(char *vt)
   } else {
     var = getvar(vt);
   }
-  free(vt);
 
   return var;
 }
 
+/** expand variables in word */
 char *
 exp_var(char *word, size_t s, size_t *e)
 {
@@ -195,10 +247,11 @@ exp_var(char *word, size_t s, size_t *e)
   }
 }
 
+/** find variable by name */
 shvar *
 find_var(const char *name)
 {
-  unsigned int i = hash(name, VAR_BUCKETS);
+  unsigned int i = hash(name, ENV_BUCKETS);
   shvar *v = var_tab[i];
 
   while (v) {
@@ -209,6 +262,7 @@ find_var(const char *name)
   return NULL;
 }
 
+/** set variable value */
 void
 setvar(const char *name, const char *val, shvar_flag flags)
 {
@@ -218,24 +272,25 @@ setvar(const char *name, const char *val, shvar_flag flags)
   v = find_var(name);
   if (v) {
     tmp = v->value;
-    v->value = strdup(val);
+    v->value = s_strdup(val);
     v->flags = flags;
     free(tmp);
   } else {
     v = malloc(sizeof(shvar));
-    v->name = strdup(name);
-    v->value = strdup(val);
+    v->name = s_strdup(name);
+    v->value = s_strdup(val);
     v->flags = flags;
-    unsigned int i = hash(name, VAR_BUCKETS);
+    unsigned int i = hash(name, ENV_BUCKETS);
     v->next = var_tab[i];
     var_tab[i] = v;
   }
 }
 
+/** unset variable */
 void
 unset_var(const char *name)
 {
-  unsigned int i = hash(name, VAR_BUCKETS);
+  unsigned int i = hash(name, ENV_BUCKETS);
   shvar **prev = &var_tab[i];
   shvar *v = var_tab[i];
 
@@ -254,10 +309,11 @@ unset_var(const char *name)
   }
 }
 
+/** find alias by name */
 alias *
 find_alias(const char *name)
 {
-  unsigned int i = hash(name, ALIAS_BUCKETS);
+  unsigned int i = hash(name, ENV_BUCKETS);
   alias *a = alias_tab[i];
 
   while (a) {
@@ -268,6 +324,7 @@ find_alias(const char *name)
   return NULL;
 }
 
+/** set alias value */
 void
 set_alias(const char *name, const char *val)
 {
@@ -276,21 +333,22 @@ set_alias(const char *name, const char *val)
   a = find_alias(name);
   if (a) {
     free(a->value);
-    a->value = strdup(val);
+    a->value = s_strdup(val);
   } else {
     a = malloc(sizeof(alias));
-    a->name = strdup(name);
-    a->value = strdup(val);
-    unsigned int i = hash(name, ALIAS_BUCKETS);
+    a->name = s_strdup(name);
+    a->value = s_strdup(val);
+    unsigned int i = hash(name, ENV_BUCKETS);
     a->next = alias_tab[i];
     alias_tab[i] = a;
   }
 }
 
+/** remove alias */
 void
 rm_alias(const char *name)
 {
-  unsigned int i = hash(name, ALIAS_BUCKETS);
+  unsigned int i = hash(name, ENV_BUCKETS);
   alias **prev = &alias_tab[i];
   alias *a = alias_tab[i];
 

@@ -1,12 +1,16 @@
 CC := gcc
 
-CFLAGS 		     := --std=c99 -I. -Og -Wall -Wextra -pedantic -pipe -g3 -ggdb -fvar-tracking-assignments
-# CFLAGS 		     :=  --std=c99 -I. -Og -Wall -Wextra -pedantic -pipe -g3
-# CFLAGS 		   := --std=c99 -I. -Os -Wall -Wextra -pedantic -pipe
-SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds -fno-analyzer-state-merge
-# SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds -fno-omit-frame-pointer -fno-analyzer-state-merge
+# normal debug build
+CFLAGS 		     :=  --std=c99 -I. -Og -Wall -Wextra -pedantic -pipe -g3
+# gdb debugging flags.
+GDBFLAGS 		     := -ggdb -fvar-tracking-assignments
+# release build
+#CFLAGS 		   := --std=c99 -I. -Os -Wall -Wextra -pedantic -pipe
+# adress sanatizer flags
 # SANITIZE_FLAGS := -static-libasan
 # SANITIZE_FLAGS := -fno-omit-frame-pointer
+SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds -fno-analyzer-state-merge
+# SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds -fno-omit-frame-pointer -fno-analyzer-state-merge
 
 LDLIBS 	 	   := -lm /usr/lib64/libreadline.so
 
@@ -15,7 +19,7 @@ SRC 	 	   := $(wildcard *.c)
 OBJ 	 	   := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
 
 TARGET		   := simpsh
-CFLAGS		   := $(CFLAGS) $(SANITIZE_FLAGS)
+CFLAGS		   := $(CFLAGS) $(GDBFLAGS) $(SANITIZE_FLAGS)
 
 .PHONY: all clean test install uninstall
 

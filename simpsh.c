@@ -1,12 +1,15 @@
 /* simpsh.c - functions for running the shell */
 #include "simpsh.h"
+#include "utils.h"
 #include <readline/readline.h>
 
 static int create_histfile(char *, char *);
 static char *getfullpath(const char *, const char *);
 static int startsWithSlash(const char *);
+/** make directory path */
 static int pmkdir(char *path);
 
+/** read line from interactive shell */
 char *
 lineread(void)
 {
@@ -17,6 +20,7 @@ lineread(void)
   return line;
 } /* get input for interactive shell */
 
+/** create history file */
 int
 create_histfile(char *home, char *histfile)
 {
@@ -32,6 +36,7 @@ create_histfile(char *home, char *histfile)
   return 1;
 }
 
+/** initialize history */
 void
 init_history(void)
 {
@@ -48,6 +53,7 @@ init_history(void)
   }
 }
 
+/** check if path starts with / */
 int
 startsWithSlash(const char *str)
 {
@@ -57,6 +63,7 @@ startsWithSlash(const char *str)
   return (0);
 } /* check if command contains a / */
 
+/** get full path from command and path variable */
 static char *
 getfullpath(const char *path, const char *file)
 {
@@ -66,7 +73,7 @@ getfullpath(const char *path, const char *file)
   size_t bufsize;
 
   /* get path variable and seperate each directory to check for file later */
-  pathcpy = strdup(path);
+  pathcpy = s_strdup(path);
   token = strtok(pathcpy, ":");
 
   while (token) {
@@ -98,6 +105,7 @@ getfullpath(const char *path, const char *file)
 } /* takes the command and checks each directory on path until it finds the
      executable */
 
+/** get full path to executable */
 char *
 getpath(char **file)
 {
