@@ -93,9 +93,11 @@ freeptr(char **args)
 static inline unsigned int
 hash(const char *s, unsigned int buckets)
 {
-  unsigned int h = 0;
+  unsigned long int h = 525201411107845655ull;
   while (*s) {
-    h = h * 31 + (unsigned char)*s;
+    h ^= (unsigned char)*s;
+    h *= 0x5bd1e9955bd1e995;
+    h ^= h >> 47;
     s++;
   }
   return h % buckets;
@@ -120,7 +122,7 @@ read_assn(const char *assn, char **name, char **value)
 
 /**  stack-based version - for temporary parsing  */
 static inline void
-read_assn_stack(const char *assn, char **name, char **value)
+st_read_assn(const char *assn, char **name, char **value)
 {
   char *eq;
   int l;
