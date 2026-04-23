@@ -1,9 +1,9 @@
 CC := gcc
 
 # normal debug build
-CFLAGS 		     :=  --std=c99 -I. -Og -Wall -Wextra -pedantic -pipe -g3
+CFLAGS 		     :=  --std=c99 -I. -Og -Wall -Wextra -pedantic -pipe
 # gdb debugging flags.
-GDBFLAGS 		     := -ggdb -fvar-tracking-assignments
+GDBFLAGS 		     :=  -g3 -ggdb -fvar-tracking-assignments
 # release build
 #CFLAGS 		   := --std=c99 -I. -Os -Wall -Wextra -pedantic -pipe
 # adress sanatizer flags
