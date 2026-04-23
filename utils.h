@@ -9,7 +9,7 @@
 #include "malloc.h"
 /* malloc and free or other small inlined functions */
 
-/** get length of char* array */
+/**  get length of char* array  */
 static inline size_t
 array_len(char **arr)
 {
@@ -19,19 +19,51 @@ array_len(char **arr)
   return n;
 }
 
-/** check if char is whitespace */
+/**  check if char is whitespace  */
 static inline int
 is_ws(char c)
 {
   return c == ' ' || c == '\t' || c == '\n';
 }
 
-/** skip whitespace */
+/**  check if char is operator  */
+static inline int
+is_operator(char c) {
+  return c == '&' || c == '|' || c == ';';
+}
+
+/**  check if char is line end  */
+static inline int
+is_cmd_end(char c) {
+  return c == ' ' || c == '\t' || c == '\n' ;
+}
+
+/**  skip whitespace  */
 static inline const char *
 skip_ws(const char *s)
 {
   while (is_ws(*s))
     s++;
+  return s;
+}
+
+/**  skip line end  */
+static inline char *
+line_end(char *s) {
+  while (*s && is_cmd_end(*s))
+    s++;
+  return s;
+}
+
+/**  skip operator  */
+static inline char *
+skip_op(char *s) {
+  if (s[0] == '&' && s[1] == '&')
+    return s + 2;
+  if (s[0] == '|' && s[1] == '|')
+    return s + 2;
+  if (is_operator(*s))
+    return s + 1;
   return s;
 }
 
@@ -60,7 +92,7 @@ s_strdup(const char *s)
   return dup;
 }
 
-/** reallocate buffer to bufsize */
+/**  reallocate buffer to bufsize  */
 static inline char *
 s_realloc(char *buf, size_t *bufsize)
 {
@@ -75,7 +107,7 @@ s_realloc(char *buf, size_t *bufsize)
   return t;
 }
 
-/** free char* array */
+/**  free char* array  */
 static inline void
 freeptr(char **args)
 {
@@ -89,7 +121,7 @@ freeptr(char **args)
   }
 }
 
-/** hash string to put in hash table */
+/**  hash string to put in hash table  */
 static inline unsigned int
 hash(const char *s, unsigned int buckets)
 {
@@ -137,5 +169,4 @@ st_read_assn(const char *assn, char **name, char **value)
   }
 }
 
-/* vim: set filetype=c: */
 #endif /* !UTILS_H */
