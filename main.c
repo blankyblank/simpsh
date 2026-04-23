@@ -90,7 +90,7 @@ simpsh_run(char *line)
   int estatus, tok_c;
   sh_tok *toks;
   cmd_tree *c;
-  char *mark;
+  stmark mark;
 
   mark = stack_mark();
   if (!(toks = tokenize(line, &tok_c)))
@@ -108,5 +108,6 @@ simpsh_run(char *line)
   if (line)
     free(line);
   stack_restore(mark);
+  stack_clear();
   return estatus;
 }

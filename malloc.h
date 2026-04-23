@@ -4,67 +4,33 @@
 #include <stddef.h>
 #include <string.h>
 
+/* clang-format off */
+#define SHELL_SIZE (sizeof(union {int i; char *cp; double d; }) - 1)
+#define align_mem(n) (((n) + SHELL_SIZE) & ~(sizeof(void *) - 1)) /* clang-format on */
+#define MINSTACK_S align_mem(512)
+
+typedef struct stack_seg stack_seg;
+struct stack_seg {
+  stack_seg *prev;
+  char buf[MINSTACK_S];
+};
+
+typedef struct {
+  stack_seg *current;
+  char *next;
+  size_t stleft;
+} stmark;
+
 extern char *stnext;
 extern char *stend;
 extern size_t stleft;
 
+extern stmark stack_mark(void);
+extern void stack_restore(stmark);
 extern void *st_alloc(size_t);
 extern void stack_clear(void);
 extern void *grow_stack(size_t);
 extern char *grab_str(size_t);
-extern char *stack_ptr(void);
-
-static inline char *
-st_tmp_start(size_t len)
-{
-  return stnext - len;
-}
-
-static inline size_t
-stack_left(void)
-{
-  return stleft;
-}
-
-/** reclaim temp space in the stack block */
-static inline void
-st_unalloc(void *p)
-{
-  stleft += stnext - (char *)p;
-  stnext = p;
-}
-
-static inline char *
-stack_mark(void)
-{
-  return stack_ptr();
-}
-
-static inline void
-stack_restore(char *mark)
-{
-  st_unalloc(mark);
-}
-
-/** alligned st_unalloc */
-static inline void
-st_aunalloc(void *p)
-{
-  char *cp = p;
-  size_t offset = ((size_t)p & (sizeof(void *) - 1));
-  if (offset) {
-    cp += sizeof(void *) - offset;
-  }
-  st_unalloc(cp);
-}
-
-/*  need to find what glm meant by simplify pattern  */
-static inline void
-chk_space(size_t n, char **p)
-{
-  if (n > (size_t)(stend - *p))
-    *p = grow_stack(n);
-}
 
 static inline void
 st_putc(int c)
@@ -74,15 +40,6 @@ st_putc(int c)
   *stnext++ = c;
   stleft--;
 }
-
-/* clang-format off */
-#define SHELL_SIZE (sizeof(union {int i; char *cp; double d; }) - 1)
-#define align_mem(n) (((n) + SHELL_SIZE) & ~(sizeof(void *) - 1)) /* clang-format on */
-/* static inline size_t
-align_mem(size_t n)
-{
-  return (n + sizeof(void *) - 1) & ~(sizeof(void *) - 1);
-} */
 
 static inline char *
 st_strndup(const char *s, size_t len)

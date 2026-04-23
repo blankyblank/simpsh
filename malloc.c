@@ -14,43 +14,47 @@
  *      test different sizes, and see what impact
  *      they have on performance if any
  */
-#define MINSTACK_S align_mem(512)
-
-typedef struct stack_seg stack_seg;
-struct stack_seg {
-  stack_seg *prev;
-  char buf[MINSTACK_S];
-};
-
-typedef struct {
-  stack_seg *current;
-  char *next;
-  size_t stleft;
-} stack;
-
 stack_seg stackbase;
 stack_seg *current = &stackbase;
 char *stnext = stackbase.buf;
 size_t stleft = MINSTACK_S;
 char *stend;
 
-/** return current stack pointer */
-char *
-stack_ptr(void)
+/**  return stmark with the current state of the allocator  */
+stmark
+stack_mark(void)
 {
-  return stnext;
+  stmark m = { current, stnext, stleft };
+  return m;
 }
 
-/** allocate new stack block */
+/**  clear everything back to stmark  */
+void
+stack_restore(stmark m)
+{
+  while (current != &stackbase && current != m.current) {
+    stack_seg *tmp = current->prev;
+    free(current);
+    current = tmp;
+  }
+  current = m.current;
+  stnext = m.next;
+  stleft = current->buf + MINSTACK_S - stnext;
+  stend = stnext + stleft;
+}
+
+/**  allocate new stack block  */
 void *
 st_alloc(size_t dsize)
 {
   size_t asize = align_mem(dsize);
-  size_t len;
-
+  size_t align_offset, pad;
+  size_t len, need;
+ 
+  char *rp;
   if (asize >= stleft) {
     stack_seg *nseg;
-    size_t need = asize;
+    need = asize;
     if (need < MINSTACK_S)
       need = MINSTACK_S;
     len = sizeof(stack_seg) - MINSTACK_S + need;
@@ -64,33 +68,36 @@ st_alloc(size_t dsize)
     stend = stnext + stleft;
   }
 
-  size_t align_offset = ((size_t)stnext & (sizeof(void *) - 1));
+  align_offset = ((size_t)stnext & (sizeof(void *) - 1));
   if (align_offset) {
-    size_t pad = sizeof(void *) - align_offset;
-    if (pad > stleft)
-      return grow_stack(asize);
+     pad = sizeof(void *) - align_offset;
+    if (pad > stleft) {
+      stnext = grow_stack(asize);
+      if (!stnext)
+        return NULL;
+    }
     stnext += pad;
     stleft -= pad;
   }
 
-  char *rp = stnext;
+  rp = stnext;
   stnext += asize;
   stleft -= asize;
   stend = stnext + stleft;
   return rp;
 }
 
-/** grow the stack allocation */
+/**  grow the stack allocation  */
 void *
 grow_stack(size_t msize)
 {
   size_t nsize;
   size_t used;
   stack_seg *nb;
-  char *obuf;
+  char *oldbuf;
 
   used = stnext - current->buf;
-  obuf = current->buf;
+  oldbuf = current->buf;
 
   nsize = align_mem(msize + used + 128);
   if (nsize <MINSTACK_S)
@@ -101,27 +108,27 @@ grow_stack(size_t msize)
   nb->prev = current;
   current = nb;
   if (used > 0)
-    memcpy(nb->buf, obuf, used);
+    memcpy(nb->buf, oldbuf, used);
   stnext = nb->buf + used;
   stleft = nsize - used;
   stend = nb->buf + nsize;
   return stnext;
 }
 
-/** grab string from arena */
+/**  grab string from arena  */
 char *
 grab_str(size_t len)
 {
-  char *start = stnext - len;
-  if (stleft == 0)
+  if (len >= stleft)
     grow_stack(1);
+  char *start = stnext - len;
   *stnext++ = '\0';
   stleft--;
 
   return start;
 }
 
-/** clear the stack arena */
+/**  clear the stack arena  */
 void
 stack_clear(void)
 {
@@ -137,7 +144,7 @@ stack_clear(void)
   stend = stnext + stleft;
 }
 
-/** initialize the stack */
+/**  initialize the stack  */
 void
 init_stack(void)
 {
@@ -146,3 +153,40 @@ init_stack(void)
   stleft = MINSTACK_S;
   stend = stnext + stleft;
 }
+
+/**  original st_alloc stack allocator  */
+// void *st_alloc(size_t dsize) {
+//   size_t asize;
+//   size_t align_offset, pad;
+//   asize = align_mem(dsize);
+//   char *rp;
+//
+//   if (asize >= stleft) {
+//     stack_seg *nseg;
+//     if (asize < MINSTACK_S)
+//       asize = MINSTACK_S;
+//     nseg = malloc(sizeof(stack_seg) - MINSTACK_S + asize);
+//     nseg->prev = current;
+//     current = nseg;
+//     stnext = nseg->buf;
+//     stleft = asize;
+//   }
+//
+//   align_offset = ((size_t)stnext & (sizeof(void *) - 1));
+//   if (align_offset) {
+//     pad = sizeof(void *) - align_offset;
+//     if (pad > stleft) {
+//       stnext = grow_stack(asize);
+//       if (!stnext)
+//         return NULL;
+//     }
+//     stnext += pad;
+//     stleft -= pad;
+//   }
+//
+//   rp = stnext;
+//   stnext += asize;
+//   stleft -= asize;
+//   return rp;
+// }
+
