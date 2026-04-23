@@ -116,49 +116,4 @@ newoppnode(token opp_t, cmd_tree *left, cmd_tree *right)
   return ot;
 }
 
-static inline void
-freewf(void)
-{
-}
-
-static inline void
-free_argv(wf **args)
-{
-  if (!args)
-    return;
-  for (int i = 0; args[i]; i++) {
-    freewf();
-  }
-  free(args);
-}
-
-static inline void
-freetoks(sh_tok *toks, int c)
-{
-  int i;
-  for (i = 0; i < c; i++) {
-    toks[i].cmd = NULL;
-  }
-  free(toks);
-}
-
-static inline void
-freectree(cmd_tree *cmd_tree)
-{
-  if (!cmd_tree)
-    return;
-  if (cmd_tree->left)
-    freectree(cmd_tree->left);
-  if (cmd_tree->right)
-    freectree(cmd_tree->right);
-  if (cmd_tree->type == CMD) {
-    if (cmd_tree->args)
-      free_argv(cmd_tree->args);
-    if (cmd_tree->sh_vars)
-      freeptr(cmd_tree->sh_vars);
-  }
-  free(cmd_tree);
-}
-
-/* vim: set filetype=c: */
 #endif /* LEX_H */
