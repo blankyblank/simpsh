@@ -14,15 +14,6 @@ static void expand_alias(char *val, sh_tok *tokens, size_t *c);
 
 static int alias_depth = 0;
 
-static inline char *
-cmd_end(char *s)
-{
-  while (*s && !(*s == ' ' || *s == '\t' || *s == '\n' || *s == '&' ||
-                 *s == '|' || *s == ';' || *s == '"' || *s == '\''))
-    s++;
-  return s;
-}
-
 /* build consecutive TWORDS into command returned in word fragments */
 static wf **
 get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
@@ -92,6 +83,7 @@ cat_wf(wf *wordf)
   return grab_str(len);
 }
 
+/** get name and value from NAME=value pair */
 wf **
 get_assn(wf **args, char ***sh_vars)
 {
@@ -113,11 +105,8 @@ get_assn(wf **args, char ***sh_vars)
   if (!*sh_vars)
     return NULL;
 
-  for (j = 0; j < a_c; j++) {
-    /*  NOTE: remember cat_wf returns null check that if bugs pop up from this
-     */
+  for (j = 0; j < a_c; j++)
     (*sh_vars)[j] = cat_wf(args[j]);
-  }
   (*sh_vars)[a_c] = NULL;
 
   for (k = a_c; args[k]; k++)
@@ -127,9 +116,7 @@ get_assn(wf **args, char ***sh_vars)
   return args;
 }
 
-/**
- * add word fragment onto the end of the linked list
- */
+/**  add word fragment onto the end of the linked list  */
 static void
 append_wf(wf **head, wf **tail, char *w, int quoted)
 {
@@ -144,6 +131,7 @@ append_wf(wf **head, wf **tail, char *w, int quoted)
   *tail = f;
 }
 
+/**  parses a line extracts a word, handles quoting, escaping.  */
 wf *
 get_wf(char *line, size_t *pos)
 {
@@ -176,9 +164,9 @@ get_wf(char *line, size_t *pos)
     n = line[i + 1];
     switch (state) {
     case QNONE:
-      if (c == ' ' || c == '\t' || c == '\n') {
+      if (is_cmd_end(c)) {
         goto done;
-      } else if (c == '&' || c == '|' || c == ';') {
+      } else if (is_operator(c)) {
         goto done;
       } else if (c == '\'') {
         /* save unquoted frag if nonempty */
@@ -272,14 +260,16 @@ done:
   return head;
 }
 
+/**  split a line up into tokens store in sh_tok structs  */
 sh_tok *
 tokenize(char *line, int *cnt)
 {
   size_t p = 0, c = 0, n;
-  *cnt = 0;
-  wf *f = NULL;
+  unsigned int expand = 1;
   char *word;
-  alias *a;
+  wf *f = NULL;
+  alias *a = NULL;
+  *cnt = 0;
 
   if (!line) {
     *cnt = -1;
@@ -311,25 +301,29 @@ tokenize(char *line, int *cnt)
       tokens[c].cmd = NULL;
       c++;
       p += 2;
+      expand |= 1;
       continue;
     } else if (line[p] == '|' && line[n] == '|') {
       tokens[c].type = TOR;
       tokens[c].cmd = NULL;
       c++;
       p += 2;
+      expand |= 1;
       continue;
     } else if (line[p] == ';') {
       tokens[c].type = TSEMI;
       tokens[c].cmd = NULL;
       c++;
       p++;
+      expand |= 1;
       continue;
     } else {
       if (!(f = get_wf(line, &p)))
         return NULL;
       if (f && f->qs == QNONE && f->next == NULL) {
         word = cat_wf(f);
-        a = find_alias(word);
+        if (expand & 1)
+          a = find_alias(word);
         if (a) {
           if (alias_depth >= MAX_ALIAS_DEPTH) {
             fprintf(stderr, "alias: too many levels of recursion\n");
@@ -345,6 +339,7 @@ tokenize(char *line, int *cnt)
         tokens[c].type = TWORD;
         tokens[c].cmd = f;
         c++;
+        expand &= ~1;
       }
     }
   }
@@ -411,45 +406,54 @@ cleanup:
   return NULL;
 }
 
+/*  expand alias and handles recursive aliases  */
 static void
 expand_alias(char *val, sh_tok *tokens, size_t *c)
 {
-  wf *f;
-  alias *a;
-  char *word;
   size_t pos = 0;
+  unsigned int expand = 1;
+  char *word;
+  wf *f;
+  alias *a = NULL;
 
   while (val[pos]) {
     pos = skip_ws(val + pos) - val;
     if (!val[pos])
       break;
 
-    if (val[pos] == '&' || val[pos] == '|' || val[pos] == ';')
+    if (is_operator(val[pos])) {
+      expand |= 1;
       break;
+    }
 
     f = get_wf(val, &pos);
     if (!f)
       break;
 
     if (f && f->qs == QNONE && f->next == NULL) {
-      word = cat_wf(f);
-      a = find_alias(word);
-      if (a) {
-        if (alias_depth >= MAX_ALIAS_DEPTH) {
-          fprintf(stderr, "alias: too many levels of recursion\n");
-          return;
+      if (expand & 1) {
+        word = cat_wf(f);
+        a = find_alias(word);
+        if (a) {
+          if (alias_depth >= MAX_ALIAS_DEPTH) {
+            fprintf(stderr, "alias: too many levels of recursion\n");
+            return;
+          }
+          alias_depth++;
+          expand_alias(a->value, tokens, c);
+          alias_depth--;
+          expand &= ~1;
+          continue;
         }
-        alias_depth++;
-        expand_alias(a->value, tokens, c);
-        alias_depth--;
-        continue;
       }
+      expand &= ~1;
     }
 
     if (f->word && f->word[0] != '\0') {
       tokens[*c].type = TWORD;
       tokens[*c].cmd = f;
       (*c)++;
+      expand &= ~1;
     }
   }
 }
