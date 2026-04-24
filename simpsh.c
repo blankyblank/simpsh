@@ -1,7 +1,10 @@
 /* simpsh.c - functions for running the shell */
 #include "simpsh.h"
 #include "utils.h"
+#include <stdio.h>
+#include <readline/history.h>
 #include <readline/readline.h>
+#include <sys/stat.h>
 
 static int create_histfile(char *, char *);
 static char *getfullpath(const char *, const char *);
@@ -18,7 +21,7 @@ lineread(void)
     add_history(line);
 
   return line;
-} /* get input for interactive shell */
+}
 
 /** create history file */
 int
@@ -53,7 +56,7 @@ init_history(void)
   }
 }
 
-/** check if path starts with / */
+/**  check if path contains /  */
 int
 startsWithSlash(const char *str)
 {
@@ -61,9 +64,9 @@ startsWithSlash(const char *str)
     return (1);
 
   return (0);
-} /* check if command contains a / */
+}
 
-/** get full path from command and path variable */
+/**  get full path from command and path variable  */
 static char *
 getfullpath(const char *path, const char *file)
 {
@@ -126,6 +129,7 @@ getpath(char **file)
   return fullpath;
 }
 
+/**  created directories and their parents if they don't exist  */
 static int
 pmkdir(char *path)
 {

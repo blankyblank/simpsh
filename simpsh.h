@@ -3,7 +3,11 @@
 #define SIMP_H
 
 #define _GNU_SOURCE
-#include <errno.h>
+#ifdef ENABLE_VALGRIND
+#include <valgrind/cachegrind.h>
+#include <valgrind/memcheck.h>
+#endif /* ifdef ENABLE_VALGRIND */
+
 /* #include <signal.h> */
 #include <stddef.h>
 #include <stdio.h>
