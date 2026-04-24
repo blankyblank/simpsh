@@ -3,14 +3,15 @@ CC := gcc
 # normal debug build
 CFLAGS 		     :=  --std=c99 -I. -Og -Wall -Wextra -pedantic -pipe
 # gdb debugging flags.
-GDBFLAGS 		     :=  -g3 -ggdb -fvar-tracking-assignments
+GDBFLAGS 		     :=  -g3 -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
 # release build
 #CFLAGS 		   := --std=c99 -I. -Os -Wall -Wextra -pedantic -pipe
 # adress sanatizer flags
 # SANITIZE_FLAGS := -static-libasan
 # SANITIZE_FLAGS := -fno-omit-frame-pointer
-SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds -fno-analyzer-state-merge
-# SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds -fno-omit-frame-pointer -fno-analyzer-state-merge
+SANITIZE_FLAGS := -DDEBUG -DENABLE_VALGRIND
+# SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds
+# SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds -fno-omit-frame-pointer
 
 LDLIBS 	 	   := -lm /usr/lib64/libreadline.so
 
