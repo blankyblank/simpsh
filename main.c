@@ -91,6 +91,7 @@ simpsh_run(char *line)
   sh_tok *toks;
   cmd_tree *c;
   stmark mark;
+  // size_t i = 0;
 
   mark = stack_mark();
   if (!(toks = tokenize(line, &tok_c)))
@@ -100,7 +101,8 @@ simpsh_run(char *line)
     return 1;
   }
 
-  c = build_tree(toks, tok_c); /* build the actual command from parsed input */
+  // c = parse_cmd(toks, tok_c, TEOF, &i); /* build the actual command from parsed input */
+  c = build_tree(toks, tok_c, TEOF); /* build the actual command from parsed input */
   estatus = run_commands(c);   /* then run commands */
   if (interactive)             /* save command to history file */
     append_history(1, histfile);
@@ -108,6 +110,5 @@ simpsh_run(char *line)
   if (line)
     free(line);
   stack_restore(mark);
-  stack_clear();
   return estatus;
 }

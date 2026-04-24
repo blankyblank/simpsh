@@ -1,7 +1,7 @@
 /* lex.c - tokenizer and parser functions */
 #include "simpsh.h"
-#include "env.h"
 #include "lex.h"
+#include "env.h"
 #include "utils.h"
 #include "malloc.h"
 
@@ -12,7 +12,17 @@ static int is_assn(wf *);
 static char *cat_wf(wf *wordf);
 static void expand_alias(char *val, sh_tok *tokens, size_t *c);
 
+static cmd_tree *parse_list(const sh_tok *tokens, size_t cnt, token s, size_t *i);
+static cmd_tree *parse_andor(const sh_tok *tokens, size_t cnt, token s, size_t *i);
+static cmd_tree *parse_pipe(const sh_tok *tokens, size_t cnt, token s, size_t *i);
+
 static int alias_depth = 0;
+
+/* static inline int
+is_topp(token t)
+{
+  return t == TAND || t == TOR || t == TSEMI;
+} */
 
 /* build consecutive TWORDS into command returned in word fragments */
 static wf **
@@ -303,15 +313,37 @@ tokenize(char *line, int *cnt)
       p += 2;
       expand |= 1;
       continue;
-    } else if (line[p] == '|' && line[n] == '|') {
-      tokens[c].type = TOR;
-      tokens[c].cmd = NULL;
-      c++;
-      p += 2;
-      expand |= 1;
+    } else if (line[p] == '|') {
+      if (line[n] == '|') {
+        tokens[c].type = TOR;
+        tokens[c].cmd = NULL;
+        c++;
+        p += 2;
+        expand |= 1;
+      } else {
+        tokens[c].type = TPIPE;
+        tokens[c].cmd = NULL;
+        c++;
+        p++;
+        expand |= 1;
+      }
       continue;
     } else if (line[p] == ';') {
       tokens[c].type = TSEMI;
+      tokens[c].cmd = NULL;
+      c++;
+      p++;
+      expand |= 1;
+      continue;
+    } else if (line[p] == '(') {
+      tokens[c].type = TLPAREN;
+      tokens[c].cmd = NULL;
+      c++;
+      p++;
+      expand |= 1;
+      continue;
+    } else if (line[p] == ')') {
+      tokens[c].type = TRPAREN;
       tokens[c].cmd = NULL;
       c++;
       p++;
@@ -350,60 +382,109 @@ tokenize(char *line, int *cnt)
   return tokens;
 }
 
-/**  build command abstract syntax tree  */
-cmd_tree *
-build_tree(const sh_tok *tokens, size_t cnt)
-{
-  size_t i = 0;
-  wf **args = NULL;
-  cmd_tree *nxt, *r;
-  cmd_false negate = FALSE, neg = 0;
-  char **sh_vars = NULL;
-  token t;
 
-  for (; i < cnt && tokens[i].type == TNOT; i++)
+/** literally the same pointless wrapper I already had */
+cmd_tree *
+build_tree(const sh_tok *tokens, size_t cnt, token stp) {
+  size_t i = 0;
+  return parse_list(tokens, cnt, stp, &i);
+}
+
+/**  parse ; lists  */
+static cmd_tree *
+parse_list(const sh_tok *tokens, size_t cnt, token stp, size_t *i) {
+  cmd_tree *left = parse_andor(tokens, cnt, stp, i);
+  if (!left)
+    return NULL;
+
+  while (*i < cnt && tokens[*i].type == TSEMI) {
+    token op = tokens[*i].type;
+    (*i)++;
+    cmd_tree *right = parse_cmd(tokens, cnt, stp, i);
+    if (!right)
+      return NULL;
+    left = newoppnode(op, left, right);
+  }
+  return left;
+}
+
+/**  parse and or, or lists  */
+static cmd_tree *
+parse_andor(const sh_tok *tokens, size_t cnt, token stp, size_t *i) {
+  cmd_tree *left = parse_pipe(tokens, cnt, stp, i);
+  if (!left)
+    return NULL;
+
+  while (*i < cnt && (tokens[*i].type == TAND || tokens[*i].type == TOR)) {
+    token op = tokens[*i].type;
+    (*i)++;
+    cmd_tree *right = parse_cmd(tokens, cnt, stp, i);
+    if (!right)
+      return NULL;
+    left = newoppnode(op, left, right);
+  }
+  return left;
+}
+
+/**  parse pipelines  */
+static cmd_tree *
+parse_pipe(const sh_tok *tokens, size_t cnt, token stp, size_t *i) {
+  cmd_tree *left = parse_cmd(tokens, cnt, stp, i);
+  if (!left)
+    return NULL;
+  while (*i < cnt && (tokens[*i].type == TPIPE)) {
+    token op = tokens[*i].type;
+    (*i)++;
+    cmd_tree *right = parse_cmd(tokens, cnt, stp, i);
+    if (!right)
+      return NULL;
+    left = newoppnode(op, left, right);
+  }
+  return left;
+}
+
+/**  recursive decent parser  */
+cmd_tree *
+parse_cmd(const sh_tok *tokens, size_t cnt, token s, size_t *i)
+{
+  size_t neg = 0;
+  char **sh_vars = NULL;
+  wf **args = NULL;
+  cmd_false negate;
+  cmd_tree *sub, *left = NULL;
+
+  for (; *i < cnt && tokens[*i].type == TNOT; (*i)++)
     neg++;
   negate = (neg % 2) ? TRUE : FALSE;
   neg = 0;
 
-  if (i >= cnt || tokens[i].type != TWORD) /* check for command */
+  if (*i >= cnt || tokens[*i].type == s) /* check for command */
     return NULL;
-  args = get_argv(tokens, cnt, &i);
-  if (!args || !args[0]) { /* handle empty input */
-    fprintf(stderr, "TODO: double check this at some point \n");
-    return NULL;
+
+  /* if () are found run in SUBSHELL */
+  if (tokens[*i].type == TLPAREN) {
+    (*i)++;
+    cmd_tree *tmp = parse_list(tokens + *i, cnt, TRPAREN, i);
+    if (!tmp)
+      return NULL;
+    /* TODO:  look into this check and how things are handled */
+    if (*i >= cnt || tokens[*i].type != TRPAREN)
+      return NULL;
+    (*i)++;
+    /* FIX: i think passing in null to both of these is a mistake look into that later */
+    // see about changing function signature to better match use
+    sub = newsubsh(NULL, negate, NULL);
+    sub->left = tmp;
+    return sub;
   }
+
+  args = get_argv(tokens, cnt, i);
+  if (!args || !args[0])
+    return NULL;
   args = get_assn(args, &sh_vars);
+  left = newcmdnode(args, negate, sh_vars);
 
-  r = newcmdnode(args, negate, sh_vars);
-  negate = FALSE;
-
-  while (i < cnt && tokens[i].type != TEOF) {
-    t = tokens[i].type;
-    if (t != TAND && t != TOR && t != TSEMI)
-      goto cleanup;
-    /* move to next command */
-    i++;
-    if (i >= cnt || tokens[i].type != TWORD)
-      goto cleanup;
-    for (; i < cnt && tokens[i].type == TNOT; i++)
-      neg++;
-    negate = (neg % 2) ? TRUE : FALSE;
-    neg = 0;
-    /* Get next command's arguments */
-    args = get_argv(tokens, cnt, &i);
-    if (!args || !args[0])
-      goto cleanup;
-    args = get_assn(args, &sh_vars);
-    nxt = newcmdnode(args, negate, sh_vars);
-    negate = FALSE;
-    r = newoppnode(t, r, nxt);
-  }
-  return r;
-
-cleanup:
-  fprintf(stderr, "Syntax error\n");
-  return NULL;
+  return left;
 }
 
 /*  expand alias and handles recursive aliases  */

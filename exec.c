@@ -144,6 +144,25 @@ run_commands(const cmd_tree *n)
     return status;
   }
 
+  if (n->type == SUBSHELL) {
+    int wstatus;
+    pid_t pid;
+
+    pid = fork();
+    switch (pid) {
+    case -1:
+      perror("failed to create subshell");
+      return 1;
+    case 0:
+      l_status = run_commands(n->left);
+      exit(l_status);
+    default:
+      waitpid(pid, &wstatus, 0);
+      l_status = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+      return l_status;
+    }
+  }
+
   if (n->type == OP) {
     l_status = run_commands(n->left);
     switch (n->op_t) {
@@ -188,23 +207,23 @@ shexec(char **args, char **env)
   }
 
   pid = fork();
-  if (pid == -1) {
+  switch (pid) {
+  case -1:
     perror("failed to create");
     goto done;
-  }
-
-  if (pid == 0) { /* if fork was successful run the command */
+  case 0:
+    /* if fork was successful run the command */
     if (execve(fullpath, args, env) == -1) {
       perror(args[0]);
       goto done;
     }
-  } else {
+    /* fall through */
+  default:
     waitpid(-1, &wstatus, 0);
     estatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
     free(fullpath);
     return estatus;
   }
-
   goto done;
 
 done:

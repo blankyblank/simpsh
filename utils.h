@@ -28,14 +28,16 @@ is_ws(char c)
 
 /**  check if char is operator  */
 static inline int
-is_operator(char c) {
-  return c == '&' || c == '|' || c == ';';
+is_operator(char c)
+{
+  return c == '&' || c == '|' || c == ';' || c == '(' || c == ')';
 }
 
 /**  check if char is line end  */
 static inline int
-is_cmd_end(char c) {
-  return c == ' ' || c == '\t' || c == '\n' ;
+is_cmd_end(char c)
+{
+  return c == ' ' || c == '\t' || c == '\n';
 }
 
 /**  skip whitespace  */
@@ -44,26 +46,6 @@ skip_ws(const char *s)
 {
   while (is_ws(*s))
     s++;
-  return s;
-}
-
-/**  skip line end  */
-static inline char *
-line_end(char *s) {
-  while (*s && is_cmd_end(*s))
-    s++;
-  return s;
-}
-
-/**  skip operator  */
-static inline char *
-skip_op(char *s) {
-  if (s[0] == '&' && s[1] == '&')
-    return s + 2;
-  if (s[0] == '|' && s[1] == '|')
-    return s + 2;
-  if (is_operator(*s))
-    return s + 1;
   return s;
 }
 
