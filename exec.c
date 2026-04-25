@@ -9,11 +9,31 @@
 #define MAX_TMP_VARS 40
 
 static int getbuiltin(char *);
-static int builtin_launch(int,char **);
+static int builtin_launch(int, char **);
+static int run_subsh(const cmd_tree *);
+static int run_cmd(const cmd_tree *);
+static int shexec(char **, char **);
 
-/** initialize builtin hash table */
+typedef struct {
+  char *name;
+  char *oval;
+  shvar_flag oflags;
+  int set;
+} tmp_var;
+
+/**  sh_env aware free  */
+static inline void
+free_env(char **env)
+{
+  char *buf = *((char **)env - 1);
+  free(buf);
+  free(env - 1);
+}
+
+/**  initialize builtin hash table  */
 void
-init_builtins(void) {
+init_builtins(void)
+{
   size_t i, n = builtinnum();
   size_t idx;
 
@@ -28,28 +48,13 @@ init_builtins(void) {
   }
 }
 
-typedef struct {
-  char *name;
-  char *oval;
-  shvar_flag oflags;
-  int set;
-} tmp_var;
-
-/**sh_env aware free*/
-static inline void
-free_env(char **env)
-{
-  char *buf = *((char **)env - 1);
-  free(buf);
-  free(env - 1);
-}
-
-/** builtin find */
+/**  get builtin command  */
 int
-getbuiltin(char *args) {
+getbuiltin(char *args)
+{
   size_t idx;
-
-  for (idx = hash(args, BUILTIN_BUCKETS); builtin_tab[idx] >= 0; idx = (idx + 1) % BUILTIN_BUCKETS)
+  idx = hash(args, BUILTIN_BUCKETS);
+  for (; builtin_tab[idx] >= 0; idx = (idx + 1) % BUILTIN_BUCKETS)
     if (strcmp(builtins[builtin_tab[idx]], args) == 0)
       return builtin_tab[idx];
   return -1;
@@ -57,7 +62,7 @@ getbuiltin(char *args) {
 
 /** launch builtin */
 int
-builtin_launch(int idx,char **args)
+builtin_launch(int idx, char **args)
 {
   return (*builtin_funcs[idx])(args);
 
@@ -65,130 +70,107 @@ builtin_launch(int idx,char **args)
   return 1;
 }
 
-/** execute command tree */
 int
-run_commands(const cmd_tree *n)
+run_cmd(const cmd_tree *n)
 {
-  int l_status, r_status, status;
+  int status;
   char *name, *val;
   char **final = NULL;
   char **env = NULL;
   shvar *v;
   int i, b, vc = 0;
 
-  if (!n)
-    return 0;
-
-  if (n->type == CMD) {
-    final = expand_argv(n->args);
-    if (!final || !final[0]) {
-      /*  if no command only name=value  */
-      if (n->sh_vars && n->sh_vars[0]) {
-        for (i = 0; n->sh_vars[i]; i++) {
-          st_read_assn(n->sh_vars[i], &name, &val);
-          shvar_flag flags = {
-            .exported = 0,
-            .readonly = 0,
-            .null = (val[0] == '\0'),
-          };
-          setvar(name, val, flags);
-        }
-        return 0;
-      } else {
-        return 1;
+  final = expand_argv(n->args);
+  if (!final || !final[0]) {
+    /*  if no command only name=value  */
+    if (n->sh_vars && n->sh_vars[0]) {
+      for (i = 0; n->sh_vars[i]; i++) {
+        st_read_assn(n->sh_vars[i], &name, &val);
+        shvar_flag flags = {
+          .exported = 0,
+          .readonly = 0,
+          .null = (val[0] == '\0'),
+        };
+        setvar(name, val, flags);
       }
+      return 0;
+    } else {
+      return 1;
     }
-    b = getbuiltin(*final);
-    if (b >= 0) {
-      /*  handle name=value cmd  */
-      if (n->sh_vars && n->sh_vars[0]) {
-        tmp_var tmp_vars[MAX_TMP_VARS];
-        for (i = 0; n->sh_vars[i]; i++) {
-          st_read_assn(n->sh_vars[i], &name, &val);
-          v = find_var(name);
-          if (v) {
-            tmp_vars[vc].set = 1;
-            tmp_vars[vc].name = v->name;
-            tmp_vars[vc].oval = st_strdup(v->value);
-            tmp_vars[vc].oflags = v->flags;
-            vc++;
-          } else {
-            tmp_vars[vc].set = 0;
-            tmp_vars[vc].name = st_strdup(name);
-            vc++;
-          }
-          shvar_flag flags = {
-            .exported = 0,
-            .readonly = 0,
-            .null = (val[0] == '\0'),
-          };
-          setvar(name, val, flags);
+  }
+  b = getbuiltin(*final);
+  if (b >= 0) {
+    /*  handle name=value cmd  */
+    if (n->sh_vars && n->sh_vars[0]) {
+      tmp_var tmp_vars[MAX_TMP_VARS];
+      for (i = 0; n->sh_vars[i]; i++) {
+        st_read_assn(n->sh_vars[i], &name, &val);
+        v = find_var(name);
+        if (v) {
+          tmp_vars[vc].set = 1;
+          tmp_vars[vc].name = v->name;
+          tmp_vars[vc].oval = st_strdup(v->value);
+          tmp_vars[vc].oflags = v->flags;
+          vc++;
+        } else {
+          tmp_vars[vc].set = 0;
+          tmp_vars[vc].name = st_strdup(name);
+          vc++;
         }
-        status = builtin_launch(b,final);
-        for (i = 0; i < vc; i++) {
-          if (tmp_vars[i].set)
-            setvar(tmp_vars[i].name, tmp_vars[i].oval, tmp_vars[i].oflags);
-          else
-            unset_var(tmp_vars[i].name);
-        }
-      } else {
-        status = builtin_launch(b,final);
+        shvar_flag flags = {
+          .exported = 0,
+          .readonly = 0,
+          .null = (val[0] == '\0'),
+        };
+        setvar(name, val, flags);
+      }
+      status = builtin_launch(b, final);
+      for (i = 0; i < vc; i++) {
+        if (tmp_vars[i].set)
+          setvar(tmp_vars[i].name, tmp_vars[i].oval, tmp_vars[i].oflags);
+        else
+          unset_var(tmp_vars[i].name);
       }
     } else {
-      env = build_env(n->sh_vars);
-      status = shexec(final, env);
-      free_env(env);
+      status = builtin_launch(b, final);
     }
+  } else {
+    env = build_env(n->sh_vars);
+    status = shexec(final, env);
+    free_env(env);
+  }
+  if (n->negate == TRUE)
+    status = !status;
+  return status;
+}
+
+int
+run_subsh(const cmd_tree *n)
+{
+  int status;
+  if (!n->left) {
+    fprintf(stderr, "empty subshell\n");
+    exit(1);
+  }
+  int wstatus;
+  pid_t pid;
+
+  pid = fork();
+  switch (pid) {
+  case -1:
+    perror("failed to create subshell");
+    return 1;
+  case 0:
+    status = run_commands(n->left);
+    exit(status);
+  default:
+    waitpid(pid, &wstatus, 0);
+    status = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
     if (n->negate == TRUE)
       status = !status;
     return status;
   }
-
-  if (n->type == SUBSHELL) {
-    int wstatus;
-    pid_t pid;
-
-    pid = fork();
-    switch (pid) {
-    case -1:
-      perror("failed to create subshell");
-      return 1;
-    case 0:
-      l_status = run_commands(n->left);
-      exit(l_status);
-    default:
-      waitpid(pid, &wstatus, 0);
-      l_status = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
-      return l_status;
-    }
-  }
-
-  if (n->type == OP) {
-    l_status = run_commands(n->left);
-    switch (n->op_t) {
-    case TSEMI:
-      r_status = run_commands(n->right);
-      return r_status;
-    case TAND:
-      if (l_status != 0)
-        return l_status;
-      r_status = run_commands(n->right);
-      return r_status;
-    case TOR:
-      if (l_status == 0)
-        return l_status;
-      r_status = run_commands(n->right);
-      return r_status;
-    case TEOF:
-      return l_status;
-    default:
-      fprintf(stderr, "Unknown Operator\n");
-      return 1;
-    }
-  }
-
-  return 0;
-} /* run the commands previously built into the tree  */
+}
 
 /** fork and exec external command */
 int
@@ -231,4 +213,45 @@ done:
     free(fullpath);
   estatus = 1;
   return estatus;
-} /* fork and exec the command passed to the shell */
+}
+
+/**  run command tree  */
+int
+run_commands(const cmd_tree *n)
+{
+  if (!n)
+    return 0;
+  int l_status, r_status, status;
+
+  switch (n->type) {
+  case CMD:
+    status = run_cmd(n);
+    return status;
+  case SUBSHELL:
+    status = run_subsh(n);
+    return status;
+  case OP:
+    l_status = run_commands(n->left);
+    switch (n->op_t) {
+    case TSEMI:
+      r_status = run_commands(n->right);
+      return r_status;
+    case TAND:
+      if (l_status != 0)
+        return l_status;
+      r_status = run_commands(n->right);
+      return r_status;
+    case TOR:
+      if (l_status == 0)
+        return l_status;
+      r_status = run_commands(n->right);
+      return r_status;
+    case TEOF:
+      return l_status;
+    default:
+      fprintf(stderr, "Unknown Operator\n");
+      return 1;
+    }
+  }
+  return 0;
+}
