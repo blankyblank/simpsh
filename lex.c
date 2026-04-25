@@ -18,11 +18,65 @@ static cmd_tree *parse_pipe(const sh_tok *tokens, size_t cnt, token s, size_t *i
 
 static int alias_depth = 0;
 
-/* static inline int
-is_topp(token t)
+static inline cmd_tree *
+newcmdnode(wf **args, cmd_false negate, char **sh_vars)
 {
-  return t == TAND || t == TOR || t == TSEMI;
-} */
+  cmd_tree *ct = st_alloc(sizeof(cmd_tree));
+  if (!ct) {
+    perror("st_alloc failed");
+    return NULL;
+  }
+  ct->type = CMD;
+  ct->args = args;
+  ct->negate = negate;
+  ct->sh_vars = sh_vars;
+  /* cmd tree has no children, and doesn't have an operator in it */
+  ct->left = NULL;
+  ct->right = NULL;
+  ct->op_t = 0;
+
+  return ct;
+}
+
+static inline cmd_tree *
+newsubsh(cmd_tree *left, cmd_false negate)
+{
+  cmd_tree *ct = st_alloc(sizeof(cmd_tree));
+  if (!ct) {
+    perror("st_alloc failed");
+    return NULL;
+  }
+  ct->type = SUBSHELL;
+  ct->left = left;
+  ct->negate = negate;
+  /* creating a subshell node we shouldn't need these */
+  ct->args = NULL;
+  ct->sh_vars = NULL;
+  ct->right = NULL;
+  ct->op_t = 0;
+
+  return ct;
+}
+
+static inline cmd_tree *
+newoppnode(token opp_t, cmd_tree *left, cmd_tree *right)
+{
+  cmd_tree *ot = st_alloc(sizeof(cmd_tree));
+  if (!ot) {
+    fprintf(stderr, "st_alloc failed");
+    return NULL;
+  }
+  ot->type = OP;
+  ot->op_t = opp_t;
+  ot->left = left;
+  ot->right = right;
+  /* opp tree doesn't have a command stored and doesn't use the ! opperator */
+  ot->sh_vars = NULL;
+  ot->args = NULL;
+  ot->negate = 0;
+
+  return ot;
+}
 
 /* build consecutive TWORDS into command returned in word fragments */
 static wf **
@@ -452,6 +506,7 @@ parse_cmd(const sh_tok *tokens, size_t cnt, token s, size_t *i)
   wf **args = NULL;
   cmd_false negate;
   cmd_tree *sub, *left = NULL;
+  size_t rcnt = cnt;
 
   for (; *i < cnt && tokens[*i].type == TNOT; (*i)++)
     neg++;
@@ -464,17 +519,14 @@ parse_cmd(const sh_tok *tokens, size_t cnt, token s, size_t *i)
   /* if () are found run in SUBSHELL */
   if (tokens[*i].type == TLPAREN) {
     (*i)++;
-    cmd_tree *tmp = parse_list(tokens + *i, cnt, TRPAREN, i);
+    rcnt -= *i;
+    cmd_tree *tmp = parse_list(tokens, rcnt, TRPAREN, i);
     if (!tmp)
       return NULL;
-    /* TODO:  look into this check and how things are handled */
     if (*i >= cnt || tokens[*i].type != TRPAREN)
       return NULL;
     (*i)++;
-    /* FIX: i think passing in null to both of these is a mistake look into that later */
-    // see about changing function signature to better match use
-    sub = newsubsh(NULL, negate, NULL);
-    sub->left = tmp;
+    sub = newsubsh(tmp, negate);
     return sub;
   }
 
