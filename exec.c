@@ -1,10 +1,11 @@
 /* exec.c - functions surrounding running external programs or builtins */
 #include "simpsh.h"
-#include "lex.h"
 #include "expand.h"
 #include "exec.h"
 #include "builtins.h"
 #include "env.h"
+#include "utils.h"
+#include <sys/wait.h>
 
 #define MAX_TMP_VARS 40
 

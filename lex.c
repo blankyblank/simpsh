@@ -4,6 +4,7 @@
 #include "env.h"
 #include "utils.h"
 #include "malloc.h"
+#include <ctype.h>
 
 static wf **get_argv(const sh_tok *, size_t, size_t *);
 static wf **get_assn(wf **, char ***);

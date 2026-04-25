@@ -9,16 +9,21 @@
 #endif /* ifdef ENABLE_VALGRIND */
 
 /* #include <signal.h> */
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+// #include <stddef.h>
+// #include <stdio.h>
+// #include <stdlib.h>
+// #include <string.h>
+// #include <unistd.h>
+//
+// #include <readline/history.h>
+// #include <sys/stat.h>
+// #include <sys/wait.h>
+// #include <sys/types.h>
 #include <unistd.h>
 
-#include <readline/history.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/wait.h>
+#ifdef HAVE_PATHS_H
+#include <paths.h>
+#endif
 
 /*
  * maybe move these an some other variables to config.h

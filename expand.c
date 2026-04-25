@@ -1,6 +1,5 @@
 /* expand.c - string expandsion logic */
 #include "simpsh.h"
-#include "lex.h"
 #include "env.h"
 #include "expand.h"
 #include "utils.h"

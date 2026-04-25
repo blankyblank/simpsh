@@ -2,6 +2,7 @@
 #include "simpsh.h"
 #include "env.h"
 #include "utils.h"
+#include <ctype.h>
 
 alias *alias_tab[ENV_BUCKETS];
 shvar *var_tab[ENV_BUCKETS] = { NULL };

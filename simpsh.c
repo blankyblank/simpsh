@@ -5,6 +5,7 @@
 #include <readline/history.h>
 #include <readline/readline.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 static int create_histfile(char *, char *);
 static char *getfullpath(const char *, const char *);

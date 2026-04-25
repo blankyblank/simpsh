@@ -2,8 +2,6 @@
 #ifndef VAR_H
 #define VAR_H
 
-#include "ctype.h"
-#include "utils.h"
 #include "simpsh.h"
 #include <stdio.h>
 #include <stdlib.h>

@@ -6,7 +6,9 @@
 #include "lex.h"
 #include "exec.h"
 #include "env.h"
+#include "utils.h"
 #include <locale.h>
+#include <readline/history.h>
 
 int lstatus;
 static int interactive = 1;

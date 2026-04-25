@@ -2,8 +2,7 @@
 #ifndef LEX_H
 #define LEX_H
 
-#include "utils.h"
-#include "malloc.h"
+#include <stddef.h>
 
 #define BUF_S 32
 
