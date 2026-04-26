@@ -8,17 +8,6 @@
 #include <valgrind/memcheck.h>
 #endif /* ifdef ENABLE_VALGRIND */
 
-/* #include <signal.h> */
-// #include <stddef.h>
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include <unistd.h>
-//
-// #include <readline/history.h>
-// #include <sys/stat.h>
-// #include <sys/wait.h>
-// #include <sys/types.h>
 #include <unistd.h>
 
 #ifdef HAVE_PATHS_H
