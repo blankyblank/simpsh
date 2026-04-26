@@ -227,32 +227,42 @@ int
 exportcmd(char **args)
 {
   int argc, i;
-  char *n, *val;
-  shvar *var;
   argc = array_len(args);
 
+  // nvar = s_strndup(args[i], nvarlen + 1);
   if (argc > 1) {
     for (i = 1; i < argc; i++) {
-      read_assn(args[i], &n, &val);
-      if (!val) {
-        var = find_var(n);
-        if (var) {
-          var->flags.exported = 1;
-          setvar(var->name, var->value, var->flags);
-          setenv(var->name, var->value, 1);
+      char *eq;
+      char nvar[64];
+      size_t nvarlen;
+      shvar *v;
+
+      eq = s_strchrnul(args[i], '=');
+      if (*eq == '\0') {
+        v = find_var(args[i]);
+        if (v) {
+          v->flags.exported = 1;
+          putenv(v->var);
         } else {
-          shvar_flag flags = { .exported = 1, .readonly = 0, .null = 1 };
-          setvar(n, "", flags);
+          nvarlen = strlen(args[i]);
+          memcpy(nvar, args[i], nvarlen);
+          nvar[nvarlen] = '=';
+          nvar[nvarlen + 1] = '\0';
+          shvar_flag flags = {
+            .exported = 1,
+            .readonly = 0,
+            .null = 1,
+          };
+          setvar(nvar, flags);
+          putenv(nvar);
         }
-        free(n);
       } else {
-        shvar_flag flags = { .exported = 1,
-                             .readonly = 0,
-                             .null = (val[0] == '\0') };
-        setvar(n, val, flags);
-        setenv(n, val, 1);
-        free(val);
-        free(n);
+        shvar_flag flags = {
+          .exported = 1,
+          .readonly = 0,
+        };
+        setvar(args[i], flags);
+        putenv(args[i]);
       }
     }
   }

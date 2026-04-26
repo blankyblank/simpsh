@@ -61,7 +61,7 @@ getvar(const char *vt)
   char *var;
   shvar *v;
   if ((v = find_var(vt))) {
-    var = v->value;
+    var = shvar_val(v);
   } else if ((var = getenv(vt)) == NULL)
     var = "";
   return var;
@@ -75,7 +75,7 @@ build_env(char **sh_env)
    * an array of strings. for performance reasons... I guess.*/
 
   size_t c = 0, sh_c = 0, len = 0;
-  size_t name_len, val_len;
+  size_t var_len;
   unsigned int i;
   char **arr, **cmd_env = NULL;
   char *buf;
@@ -85,7 +85,7 @@ build_env(char **sh_env)
     var = var_tab[i];
     while (var) {
       if (var->flags.exported) {
-        len += strlen(var->name) + strlen(var->value) + 2;
+        len += strlen(var->var) + 1;
         c++;
       }
       var = var->next;
@@ -111,13 +111,9 @@ build_env(char **sh_env)
     while (var) {
       if (var->flags.exported) {
         *arr++ = buf;
-        name_len = strlen(var->name);
-        val_len = strlen(var->value);
-        memcpy(buf, var->name, name_len);
-        buf += name_len;
-        *buf++ = '=';
-        memcpy(buf, var->value, val_len + 1);
-        buf += val_len + 1;
+        var_len = strlen(var->var);
+        memcpy(buf, var->var, var_len + 1);
+        buf += var_len + 1;
       }
       var = var->next;
     }
@@ -139,20 +135,18 @@ void
 init_env(void)
 {
   size_t i, env_c;
-  char *name, *val;
+  char *var;
 
   env_c = array_len(environ);
 
   for (i = 0; i < env_c; i++) {
-    read_assn(environ[i], &name, &val);
+    // read_assn(environ[i], &name, &val);
+    var = environ[i];
     shvar_flag flags = {
       .exported = 1,
       .readonly = 0,
-      .null = (val[0] == '\0'),
     };
-    setvar(name, val, flags);
-    free(name);
-    free(val);
+    setvar(var, flags);
   }
 }
 
@@ -256,7 +250,7 @@ find_var(const char *name)
   shvar *v = var_tab[i];
 
   while (v) {
-    if (strcmp(v->name, name) == 0)
+    if (strncmp(v->var, name, strlen(name)) == 0)
       return v;
     v = v->next;
   }
@@ -265,26 +259,46 @@ find_var(const char *name)
 
 /** set variable value */
 void
-setvar(const char *name, const char *val, shvar_flag flags)
+setvar(char *var, shvar_flag flags)
 {
   shvar *v;
-  char *tmp;
+  char name[64], *eq, *nvar;
+  size_t len;
+  unsigned int i, alloc = 0;
 
+  eq = s_strchrnul(var, '=');
+  len = shvar_namelen(var);
+
+  if (!*eq) {
+    nvar = s_strndup(var, len + 2);
+    nvar[len] = '=';
+    nvar[len + 1] = '\0';
+    alloc = 1;
+    flags.null = 1;
+  } else {
+    nvar = (char *)var;
+    flags.null = (eq[1] == '\0');
+  }
+
+  memcpy(name, var, len);
+  name[len] = '\0';
   v = find_var(name);
   if (v) {
-    tmp = v->value;
-    v->value = s_strdup(val);
+    if (v->flags.readonly)
+      return;
+    free(v->var);
+    v->var = s_strdup(nvar);
     v->flags = flags;
-    free(tmp);
   } else {
     v = malloc(sizeof(shvar));
-    v->name = s_strdup(name);
-    v->value = s_strdup(val);
+    v->var = s_strdup(nvar);
     v->flags = flags;
-    unsigned int i = hash(name, ENV_BUCKETS);
+    i = hash(name, ENV_BUCKETS);
     v->next = var_tab[i];
     var_tab[i] = v;
   }
+  if (alloc)
+    free(nvar);
 }
 
 /** unset variable */
@@ -294,14 +308,15 @@ unset_var(const char *name)
   unsigned int i = hash(name, ENV_BUCKETS);
   shvar **prev = &var_tab[i];
   shvar *v = var_tab[i];
+  size_t len;
 
+  len = strlen(name);
   while (v) {
-    if (strcmp(v->name, name) == 0) {
+    if (strncmp(v->var, name, len) == 0) {
       if (v->flags.exported)
-        unsetenv(v->name);
+        unsetenv(name);
       *prev = v->next;
-      free(v->name);
-      free(v->value);
+      free(v->var);
       free(v);
       return;
     }

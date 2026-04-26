@@ -17,7 +17,7 @@ static int shexec(char **, char **);
 
 typedef struct {
   char *name;
-  char *oval;
+  char *var;
   shvar_flag oflags;
   int set;
 } tmp_var;
@@ -75,7 +75,6 @@ int
 run_cmd(const cmd_tree *n)
 {
   int status;
-  char *name, *val;
   char **final = NULL;
   char **env = NULL;
   shvar *v;
@@ -86,13 +85,17 @@ run_cmd(const cmd_tree *n)
     /*  if no command only name=value  */
     if (n->sh_vars && n->sh_vars[0]) {
       for (i = 0; n->sh_vars[i]; i++) {
-        st_read_assn(n->sh_vars[i], &name, &val);
-        shvar_flag flags = {
-          .exported = 0,
-          .readonly = 0,
-          .null = (val[0] == '\0'),
-        };
-        setvar(name, val, flags);
+        char *name;
+        shvar_flag flags;
+        name = st_getname(n->sh_vars[i]);
+        v = find_var(name);
+        if (v) {
+          flags = v->flags;
+        } else {
+          flags.exported = 0;
+          flags.readonly = 0;
+        }
+        setvar(n->sh_vars[i], flags);
       }
       return 0;
     } else {
@@ -101,34 +104,35 @@ run_cmd(const cmd_tree *n)
   }
   b = getbuiltin(*final);
   if (b >= 0) {
-    /*  handle name=value cmd  */
+    /*  NOTE: handle name=value cmd  */
     if (n->sh_vars && n->sh_vars[0]) {
       tmp_var tmp_vars[MAX_TMP_VARS];
       for (i = 0; n->sh_vars[i]; i++) {
-        st_read_assn(n->sh_vars[i], &name, &val);
+        char *name;
+        name = st_getname(n->sh_vars[i]);
         v = find_var(name);
         if (v) {
           tmp_vars[vc].set = 1;
-          tmp_vars[vc].name = v->name;
-          tmp_vars[vc].oval = st_strdup(v->value);
+          tmp_vars[vc].name = st_strdup(name);
+          tmp_vars[vc].var = st_strdup(v->var);
           tmp_vars[vc].oflags = v->flags;
           vc++;
         } else {
           tmp_vars[vc].set = 0;
           tmp_vars[vc].name = st_strdup(name);
+          tmp_vars[vc].var = st_strdup(n->sh_vars[i]);
           vc++;
         }
         shvar_flag flags = {
           .exported = 0,
           .readonly = 0,
-          .null = (val[0] == '\0'),
         };
-        setvar(name, val, flags);
+        setvar(n->sh_vars[i], flags);
       }
       status = builtin_launch(b, final);
       for (i = 0; i < vc; i++) {
         if (tmp_vars[i].set)
-          setvar(tmp_vars[i].name, tmp_vars[i].oval, tmp_vars[i].oflags);
+          setvar(tmp_vars[i].var, tmp_vars[i].oflags);
         else
           unset_var(tmp_vars[i].name);
       }
