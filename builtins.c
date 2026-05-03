@@ -1,11 +1,16 @@
 /* builtins.c - builtin shell commands */
-#include "simpsh.h"
+#define _POSIX_C_SOURCE 200809L
+#define _XOPEN_SOURCE 700
+#include <err.h>
+#include <limits.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include "main.h"
 #include "utils.h"
 #include "env.h"
 #include "builtins.h"
-#include <linux/limits.h>
+#include "arg.h"
 
-static int cdsetpwd(const char *);
 static int echo_print(int, int, char **);
 
 /* builtins */
@@ -78,7 +83,7 @@ aliascmd(char **args)
     else
       printf("alias %s=%s\n", e->name, e->value);
   } else {
-    n = strndup(args[1], strlen(args[1]) - strlen(delem));
+    n = s_strndup(args[1], strlen(args[1]) - strlen(delem));
     v = s_strdup(delem + 1);
     set_alias(n, v);
     free(n);
@@ -88,45 +93,77 @@ aliascmd(char **args)
   return 0;
 }
 
-int
-cdsetpwd(const char *arg)
-{
-  char respath[PATH_MAX], oldpwd[PATH_MAX];
-  char *newpwd = NULL;
+#define FLAG_L ( 1 << 0)
+#define FLAG_P ( 1 << 1)
 
-  /* char *oldpwd = getenv("PWD"); */
-  getcwd(oldpwd, sizeof(oldpwd));
-  if (!strcmp(arg, "-")) {
-    newpwd = getenv("OLDPWD");
-    if (!newpwd)
-      return -1;
+  /* TODO: add in cdpath functionality or convert my other path search functions
+   * to be generic to use with this, or for running commands */
+
+int
+cdcmd(char **argv)
+{
+  int argc = array_len(argv);
+  char *dest;
+  char lflag = '\0', respath[PATH_MAX];
+  shvar *pwd, *oldpwd;
+  shvar_flags flags = EXPRT;
+
+  ARGBEGIN
+  {
+    case 'L':
+      lflag = 'L';
+      break;
+    case 'P':
+      lflag = 'P';
+      break;
+    default:
+      fprintf(stderr, "%s: bad option -%c\n", argv0, ARGC());
+      return 1;
+  }
+  ARGEND;
+  if (argc > 1) {
+    fprintf(stderr, "cd: Too many arguements");
+    return 1;
+  }
+ const char *dir = *argv;
+
+  oldpwd = find_var("OLDPWD");
+  pwd = find_var("PWD");
+
+  if (!dir) {
+    dest = home;
+  } else if (*dir == '-' && dir[1] == '\0') {
+    if (!oldpwd) {
+      fprintf(stderr, "OLDPWD not set");
+      return 1;
+    } else {
+      dest = shvar_val(oldpwd);
+    }
   } else {
-    if (realpath(arg, respath))
-      newpwd = realpath(arg, respath);
-    else {
-      perror(arg);
-      return -1;
+    dest = (char *)dir;
+  }
+
+  if (lflag == 'P') {
+    if (!realpath(dest, respath)) {
+      warn("cd: %s", dest);
+      return 1;
+    }
+    if (chdir(respath) < 0) {
+      warn("cd: %s", dest);
+      return 1;
+    }
+    getcwd(respath, PATH_MAX);
+    setvar("PWD", respath, flags);
+  } else {
+    if (chdir(dest) < 0) {
+      warn("cd: %s", dest);
+      return 1;
     }
   }
 
-  setenv("OLDPWD", oldpwd, 1);
-  setenv("PWD", newpwd, 1);
-  if (chdir(newpwd) == -1) {
-    return -1;
-  }
-  return 0;
-}
-
-int
-cdcmd(char **args)
-{
-  char **dir = args;
-
-  if (dir[1] == 0) {
-    cdsetpwd(home);
-  } else if (cdsetpwd(dir[1]) == -1) {
-    return 1;
-  }
+  setvar("OLDPWD", shvar_val(pwd), flags);
+  putenv(oldpwd->var);
+  putenv(pwd->var);
   return 0;
 }
 
@@ -196,7 +233,7 @@ execcmd(char **args)
 {
   char *fullpath;
 
-  fullpath = getpath(&args[1]);
+  fullpath = getpath(args[1]);
 
   if (!args[1])
     goto fail;
@@ -233,9 +270,9 @@ exportcmd(char **args)
   if (argc > 1) {
     for (i = 1; i < argc; i++) {
       char *eq;
-      char nvar[64];
-      size_t nvarlen;
+      char *name, *val;
       shvar *v;
+      shvar_flags flags = EXPRT;
 
       eq = s_strchrnul(args[i], '=');
       if (*eq == '\0') {
@@ -244,24 +281,12 @@ exportcmd(char **args)
           v->flags.exported = 1;
           putenv(v->var);
         } else {
-          nvarlen = strlen(args[i]);
-          memcpy(nvar, args[i], nvarlen);
-          nvar[nvarlen] = '=';
-          nvar[nvarlen + 1] = '\0';
-          shvar_flag flags = {
-            .exported = 1,
-            .readonly = 0,
-            .null = 1,
-          };
-          setvar(nvar, flags);
-          putenv(nvar);
+          setvar(args[i], NULL, flags);
+          setenv(args[i], "", 1);
         }
       } else {
-        shvar_flag flags = {
-          .exported = 1,
-          .readonly = 0,
-        };
-        setvar(args[i], flags);
+        read_assn(args[i], &name, &val);
+        setvar(name, val, flags);
         putenv(args[i]);
       }
     }
