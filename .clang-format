@@ -13,7 +13,7 @@ AlignConsecutiveMacros:
   Enabled: false
   AcrossEmptyLines: false
   AcrossComments: false
-# AlignEscapedNewlines: Right
+AlignEscapedNewlines: DontAlign
 # AlignOperands: Align
 AlignTrailingComments: true
 #  Kind: Always
@@ -62,8 +62,8 @@ IncludeBlocks: Preserve
 IncludeIsMainRegex: ""
 IncludeIsMainSourceRegex: ""
 IndentAccessModifiers: false
-IndentCaseBlocks: false
-IndentCaseLabels: false
+IndentCaseBlocks: true
+IndentCaseLabels: true
 IndentExternBlock: NoIndent
 IndentGotoLabels: false
 IndentPPDirectives: BeforeHash
