@@ -1,5 +1,5 @@
 /*  env.c - functions surrounding various parts of the shell environment  */
-#include "simpsh.h"
+#include "main.h"
 #include "env.h"
 #include "utils.h"
 #include <ctype.h>
@@ -135,18 +135,14 @@ void
 init_env(void)
 {
   size_t i, env_c;
-  char *var;
+  shvar_flags flags = EXPRT;
 
   env_c = array_len(environ);
 
   for (i = 0; i < env_c; i++) {
-    // read_assn(environ[i], &name, &val);
-    var = environ[i];
-    shvar_flag flags = {
-      .exported = 1,
-      .readonly = 0,
-    };
-    setvar(var, flags);
+    char *name, *val;
+    read_assn(environ[i], &name, &val);
+    setvar(name, val, flags);
   }
 }
 
@@ -259,46 +255,46 @@ find_var(const char *name)
 
 /** set variable value */
 void
-setvar(char *var, shvar_flag flags)
+setvar(char *name, char *val, shvar_flags flags)
 {
   shvar *v;
-  char name[64], *eq, *nvar;
-  size_t len;
-  unsigned int i, alloc = 0;
+  char *nvar;
+  size_t vlen, nlen, i;
 
-  eq = s_strchrnul(var, '=');
-  len = shvar_namelen(var);
-
-  if (!*eq) {
-    nvar = s_strndup(var, len + 2);
-    nvar[len] = '=';
-    nvar[len + 1] = '\0';
-    alloc = 1;
-    flags.null = 1;
+  nlen = strlen(name);
+  if (!val) {
+    nvar = s_strndup(name, nlen + 2);
+    nvar[nlen] = '=';
+    nvar[nlen + 1] = '\0';
   } else {
-    nvar = (char *)var;
-    flags.null = (eq[1] == '\0');
+    vlen = strlen(val);
+    nvar = malloc(nlen + 1 + vlen + 1);
+    memcpy(nvar, name, nlen);
+    nvar[nlen] = '=';
+    memcpy(nvar + nlen + 1, val, vlen + 1);
   }
 
-  memcpy(name, var, len);
-  name[len] = '\0';
-  v = find_var(name);
-  if (v) {
-    if (v->flags.readonly)
+  i = hash(name, ENV_BUCKETS);
+  v = var_tab[i];
+  while (v) {
+    if (memcmp(v->var, name, nlen) == 0 && v->var[nlen] == '=') {
+      if (v->flags.readonly) {
+        free(nvar);
+        return;
+      }
+      free(v->var);
+      v->var = nvar;
+      v->flags = flags;
       return;
-    free(v->var);
-    v->var = s_strdup(nvar);
-    v->flags = flags;
-  } else {
-    v = malloc(sizeof(shvar));
-    v->var = s_strdup(nvar);
-    v->flags = flags;
-    i = hash(name, ENV_BUCKETS);
-    v->next = var_tab[i];
-    var_tab[i] = v;
+    }
+    v = v->next;
   }
-  if (alloc)
-    free(nvar);
+  v = malloc(sizeof(shvar));
+  v->var = nvar;
+  v->flags = flags;
+  v->func = NULL;
+  v->next = var_tab[i];
+  var_tab[i] = v;
 }
 
 /** unset variable */

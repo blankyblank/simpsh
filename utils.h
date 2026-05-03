@@ -51,11 +51,11 @@ skip_ws(const char *s)
 
 /**  replicate strchrnul  */
 static inline char *
-s_strchrnul(char *s, char c)
+s_strchrnul(const char *s, int c)
 {
   while (*s && *s != c)
     s++;
-  return s;
+  return (char *)s;
 }
 
 /**  strndup using memcpy  */
@@ -132,7 +132,7 @@ read_assn(const char *assn, char **name, char **value)
 {
   char *eq;
   int l;
-  eq = (char *)strchr(assn, '=');
+  eq = s_strchrnul(assn, '=');
   if (!eq) {
     *name = s_strdup(assn);
     *value = NULL;
@@ -144,11 +144,7 @@ read_assn(const char *assn, char **name, char **value)
 }
 
 /**  stack-based version - for temporary parsing  */
-/* TODO:
- * nothing is using this anymore possibly remove if nothing ends up
- * needing it later */
-
-/* static inline void
+static inline void
 st_read_assn(const char *assn, char **name, char **value)
 {
   char *eq;
@@ -162,7 +158,10 @@ st_read_assn(const char *assn, char **name, char **value)
     *name = st_strndup(assn, l);
     *value = st_strdup(eq + 1);
   }
-} */
+}
+/* TODO:
+ * nothing is using this anymore possibly remove if nothing ends up
+ * needing it later */
 
 static inline char *
 st_getname(const char *assn)

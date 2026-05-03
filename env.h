@@ -2,6 +2,7 @@
 #ifndef VAR_H
 #define VAR_H
 
+#define _POSIX_C_SOURCE 200809L
 #include "simpsh.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,9 +18,9 @@ struct alias {
 typedef struct {
   int exported;
   int readonly;
-  int null;
-} shvar_flag;
+} shvar_flags;
 
+#define EXPRT { .exported = 1, .readonly = 0 }
 /* typedef struct shvar shvar;
 struct shvar {
   shvar *next;
@@ -31,7 +32,7 @@ struct shvar {
 typedef struct shvar shvar;
 struct shvar {
   shvar *next;
-  shvar_flag flags;
+  shvar_flags flags;
   char *var;
   void (*func)(const char *);
 };
@@ -47,7 +48,7 @@ extern char *exp_var(char *, size_t, size_t *);
 extern alias *find_alias(const char *);
 extern void set_alias(const char *, const char *);
 extern void rm_alias(const char *);
-extern void setvar(char *, shvar_flag);
+extern void setvar(char *, char *, shvar_flags);
 extern void unset_var(const char *);
 extern shvar *find_var(const char *);
 
