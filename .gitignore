@@ -8,6 +8,7 @@ bak
 notes.txt
 simsh.geany
 .gdb_history
+.vimspector.json
 .dir-locals.el
 *vterm*
 *.ede
