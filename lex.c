@@ -1,10 +1,9 @@
 /* lex.c - tokenizer and parser functions */
-#include "simpsh.h"
+#include <ctype.h>
 #include "lex.h"
 #include "env.h"
 #include "utils.h"
 #include "malloc.h"
-#include <ctype.h>
 
 static wf **get_argv(const sh_tok *, size_t, size_t *);
 static wf **get_assn(wf **, char ***);
@@ -229,19 +228,22 @@ get_wf(char *line, size_t *pos)
     n = line[i + 1];
     switch (state) {
     case QNONE:
-      if (is_cmd_end(c)) {
-        goto done;
-      } else if (is_operator(c)) {
-        goto done;
-      } else if (c == '\'') {
-        /* save unquoted frag if nonempty */
-        if (len > 0) {
+      if (c == '\'') {
+        if (n == '\n') {
+          i += 2;
+          continue;
+        } else if (len > 0) {
+          /* save unquoted frag if nonempty */
           w = grab_str(len);
           append_wf(&head, &tail, w, state);
           len = 0;
         }
         state = QSINGLE;
         i++;
+      } else if (is_operator(c)) {
+        goto done;
+      } else if (is_cmd_end(c)) {
+        goto done;
       } else if (c == '"') {
         /* save unquoted frag if nonempty */
         if (len > 0) {
@@ -266,53 +268,53 @@ get_wf(char *line, size_t *pos)
         len++;
         i++;
       }
-      break;
-    case QSINGLE:
-      if (c == '\'') {
-        /* save single quoted frag if nonempty */
-        if (len > 0) {
-          w = grab_str(len);
-          append_wf(&head, &tail, w, state);
-          len = 0;
-        }
-        state = QNONE;
-        i++;
-      } else {
-        st_putc(c);
-        len++;
-        i++;
-      }
-      break;
-    case QDOUBLE:
-      if (c == '"') {
-        /* save double quoted frag if nonempty */
-        if (len > 0) {
-          w = grab_str(len);
-          append_wf(&head, &tail, w, state);
-          len = 0;
-        }
-        state = QNONE;
-        i++;
-      } else if (c == '\\') {
-        if (n == '\n') {
-          i += 2;
-          continue;
-        } else if (n == '$' || n == '"' || n == '\\') {
-          st_putc(n);
-          len++;
-          i += 2;
+        break;
+      case QSINGLE:
+        if (c == '\'') {
+          /* save single quoted frag if nonempty */
+          if (len > 0) {
+            w = grab_str(len);
+            append_wf(&head, &tail, w, state);
+            len = 0;
+          }
+          state = QNONE;
+          i++;
         } else {
           st_putc(c);
           len++;
           i++;
         }
-      } else {
-        st_putc(c);
-        len++;
-        i++;
+        break;
+      case QDOUBLE:
+        if (c == '"') {
+          /* save double quoted frag if nonempty */
+          if (len > 0) {
+            w = grab_str(len);
+            append_wf(&head, &tail, w, state);
+            len = 0;
+          }
+          state = QNONE;
+          i++;
+        } else if (c == '\\') {
+          if (n == '\n') {
+            i += 2;
+            continue;
+          } else if (n == '$' || n == '"' || n == '\\') {
+            st_putc(n);
+            len++;
+            i += 2;
+          } else {
+            st_putc(c);
+            len++;
+            i++;
+          }
+        } else {
+          st_putc(c);
+          len++;
+          i++;
+        }
+        break;
       }
-      break;
-    }
   }
 
 done:
