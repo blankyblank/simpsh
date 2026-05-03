@@ -1,15 +1,26 @@
 /* simpsh.c - functions for running the shell */
-#include "simpsh.h"
-#include "utils.h"
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <readline/history.h>
 #include <readline/readline.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <linux/limits.h>
+#include "main.h"
+#include "simpsh.h"
+#include "utils.h"
+
+void
+getbuildinfo(void) {
+  printf("%s build info:\n"
+         "build date: %s %s\n"
+         "ansi C standard conformance: %ld\n",
+         sh_argv0, __DATE__, __TIME__, __STDC_ISO_10646__);
+}
 
 static int create_histfile(char *, char *);
 static char *getfullpath(const char *, const char *);
-static int startsWithSlash(const char *);
+// static int startsWithSlash(const char *);
 /** make directory path */
 static int pmkdir(char *path);
 
@@ -57,74 +68,48 @@ init_history(void)
   }
 }
 
-/**  check if path contains /  */
-int
-startsWithSlash(const char *str)
-{
-  if (str != NULL && str[0] == '/')
-    return (1);
-
-  return (0);
-}
-
-/**  get full path from command and path variable  */
+/** check in path for file until stop at the first one with an executable */
 static char *
 getfullpath(const char *path, const char *file)
 {
-  char *pathcpy, *token;
   struct stat filepath;
-  char *pathbuf = NULL;
-  size_t bufsize;
+  char *pathcpy, *s, *c;
 
-  /* get path variable and seperate each directory to check for file later */
   pathcpy = s_strdup(path);
-  token = strtok(pathcpy, ":");
+  s = pathcpy;
 
-  while (token) {
-    if (pathbuf) {
-      free(pathbuf);
-      pathbuf = NULL;
-    }
-    bufsize = strlen(token) + strlen(file) + 2;
-    pathbuf = malloc(bufsize);
-    if (!pathbuf) {
-      perror("Error: malloc failed");
-      free(pathcpy);
-      exit(EXIT_FAILURE);
-    }
+  for (c = strchr(s, ':'); c; c = strchr(s, ':')) {
+    char buf[PATH_MAX];
+    *c = '\0';
     /* add file to the end of the path the loop is currently checking */
-    snprintf(pathbuf, bufsize, "%s/%s", token, file);
-
+    snprintf(buf, PATH_MAX, "%s/%s", s, file);
     /* see if file exists at current path, and if it's executable */
-    if (stat(pathbuf, &filepath) == 0 && access(pathbuf, X_OK) == 0) {
+    if (stat(buf, &filepath) == 0 && access(buf, X_OK) == 0) {
       free(pathcpy);
-      return (pathbuf);
+      return st_strdup(buf);
     }
-    token = strtok(NULL, ":");
+    s = c + 1;
   }
-  free(pathcpy);
-  free(pathbuf);
 
+  free(pathcpy);
   return NULL;
-} /* takes the command and checks each directory on path until it finds the
-     executable */
+}
 
 /** get full path to executable */
 char *
-getpath(char **file)
+getpath(char *file)
 {
   char *fullpath;
-  char *path = getenv("PATH");
 
-  if (startsWithSlash(*file) && access(*file, X_OK) == 0)
-    return (strdup(*file));
+  if ((strchr(file, '/')) && access(file, X_OK) == 0)
+    return (st_strdup(file));
 
-  if (!path) {
-    perror("PATH not set");
-    return NULL;
-  }
+  const char *path = getenv("PATH");
+  if (path)
+    fullpath = getfullpath(path, file);
+  else
+    fullpath = getfullpath(defpath, file);
 
-  fullpath = getfullpath(path, *file);
   if (!fullpath)
     return NULL;
   return fullpath;
