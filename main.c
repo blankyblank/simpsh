@@ -1,14 +1,18 @@
 /* simpsh - a simple posix shell */
 #define _POSIX_C_SOURCE 200809L
+#define _XOPEN_SOURCE 700
 
+#include <unistd.h>
+#include <locale.h>
+#include <stdio.h>
+#include <readline/history.h>
+#include "main.h"
 #include "simpsh.h"
 #include "malloc.h"
 #include "lex.h"
 #include "exec.h"
 #include "env.h"
 #include "utils.h"
-#include <locale.h>
-#include <readline/history.h>
 
 int lstatus;
 static int interactive = 1;
@@ -36,9 +40,14 @@ main(int argc, char **argv)
   setlocale(LC_ALL, "");
 
   /* check if using -c flag or connected to stdin */
+  sh_argv0 = s_strdup(argv[0]);
   if (!isatty(STDIN_FILENO))
     tflag = 1;
   if (argc > 1) {
+    if (strcmp(argv[1], "-V") == 0) {
+      getbuildinfo();
+      exit(0);
+    }
     if (strcmp(argv[1], "-c") == 0 && argc > 2) {
       cflag = 1;
       argc -= 2;
@@ -49,7 +58,7 @@ main(int argc, char **argv)
     interactive = 0;
 
   /* set up shell variables */
-  sh_argv0 = s_strdup(argv[0]);
+  init_stack();
   sh_argc = 0;
   sh_argv = NULL;
   sh_pid = getpid();
@@ -103,7 +112,6 @@ simpsh_run(char *line)
     return 1;
   }
 
-  // c = parse_cmd(toks, tok_c, TEOF, &i); /* build the actual command from parsed input */
   c = build_tree(toks, tok_c, TEOF); /* build the actual command from parsed input */
   estatus = run_commands(c);   /* then run commands */
   if (interactive)             /* save command to history file */

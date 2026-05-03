@@ -2,6 +2,8 @@
 #ifndef LEX_H
 #define LEX_H
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <stddef.h>
 
 #define BUF_S 32

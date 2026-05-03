@@ -1,6 +1,8 @@
 #ifndef MALLOC_H
 #define MALLOC_H
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <stddef.h>
 #include <string.h>
 
@@ -31,6 +33,7 @@ extern void *st_alloc(size_t);
 extern void stack_clear(void);
 extern void *grow_stack(size_t);
 extern char *grab_str(size_t);
+extern void init_stack(void);
 
 static inline void
 st_putc(int c)

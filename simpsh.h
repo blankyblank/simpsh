@@ -2,40 +2,15 @@
 #ifndef SIMP_H
 #define SIMP_H
 
-#define _GNU_SOURCE
-#ifdef ENABLE_VALGRIND
-#include <valgrind/cachegrind.h>
-#include <valgrind/memcheck.h>
-#endif /* ifdef ENABLE_VALGRIND */
+#define _POSIX_C_SOURCE 200809L
 
-#include <unistd.h>
-
-#ifdef HAVE_PATHS_H
-#include <paths.h>
-#endif
-
-/*
- * maybe move these an some other variables to config.h
- * in the future if it makes sense
- */
-#define MAX_CMDS 256
-#define MAX_LENGTH 256
-
-/* shell variables */
-extern char **environ;
-extern char *progname;
-extern char *sh_argv0;
-extern char **sh_argv;
-extern int sh_argc;
-extern int lstatus;
-extern pid_t sh_pid;
-extern char *sh_pid_s;
-extern char *home;
+#define defpath "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 /* functions for shell */
-extern char *getpath(char **);
+extern char *getpath(char *);
 extern char *lineread(void);
 extern void init_history(void);
+extern void getbuildinfo(void);
 
 /* vim: set filetype=c: */
 #endif /* SIMP_H */

@@ -1,5 +1,5 @@
 /* expand.c - string expandsion logic */
-#include "simpsh.h"
+#define _POSIX_C_SOURCE 200809L
 #include "env.h"
 #include "expand.h"
 #include "utils.h"
