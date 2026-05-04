@@ -16,4 +16,5 @@ simsh.geany
 *.bk
 AGENTS.md
 PROJECT*.md
+tags
 tmp*.md
