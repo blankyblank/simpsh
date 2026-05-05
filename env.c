@@ -54,18 +54,7 @@ is_posparam(const char *var)
   return 1;
 }
 
-/** get variable value from name */
-static inline char *
-getvar(const char *vt)
-{
-  char *var;
-  shvar *v;
-  if ((v = find_var(vt))) {
-    var = shvar_val(v);
-  } else if ((var = getenv(vt)) == NULL)
-    var = "";
-  return var;
-}
+
 
 /** build environment array for exec */
 char **
@@ -84,7 +73,7 @@ build_env(char **sh_env)
   for (i = 0; i < ENV_BUCKETS; i++) {
     var = var_tab[i];
     while (var) {
-      if (var->flags.exported) {
+      if (var->flags & VEXPRT) {
         len += strlen(var->var) + 1;
         c++;
       }
@@ -109,7 +98,7 @@ build_env(char **sh_env)
   for (i = 0; i < ENV_BUCKETS; i++) {
     var = var_tab[i];
     while (var) {
-      if (var->flags.exported) {
+      if (var->flags & VEXPRT) {
         *arr++ = buf;
         var_len = strlen(var->var);
         memcpy(buf, var->var, var_len + 1);
@@ -135,14 +124,11 @@ void
 init_env(void)
 {
   size_t i, env_c;
-  shvar_flags flags = EXPRT;
-
   env_c = array_len(environ);
-
   for (i = 0; i < env_c; i++) {
     char *name, *val;
     read_assn(environ[i], &name, &val);
-    setvar(name, val, flags);
+    setvar(name, val, VEXPRT);
   }
 }
 
@@ -245,8 +231,9 @@ find_var(const char *name)
   unsigned int i = hash(name, ENV_BUCKETS);
   shvar *v = var_tab[i];
 
+  size_t namelen = strlen(name);
   while (v) {
-    if (strncmp(v->var, name, strlen(name)) == 0)
+    if (strncmp(v->var, name, namelen) == 0)
       return v;
     v = v->next;
   }
@@ -278,7 +265,7 @@ setvar(char *name, char *val, shvar_flags flags)
   v = var_tab[i];
   while (v) {
     if (memcmp(v->var, name, nlen) == 0 && v->var[nlen] == '=') {
-      if (v->flags.readonly) {
+      if (v->flags & VREADONLY) {
         free(nvar);
         return;
       }
@@ -309,8 +296,6 @@ unset_var(const char *name)
   len = strlen(name);
   while (v) {
     if (strncmp(v->var, name, len) == 0) {
-      if (v->flags.exported)
-        unsetenv(name);
       *prev = v->next;
       free(v->var);
       free(v);

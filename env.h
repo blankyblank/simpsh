@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "utils.h"
-// #include <string.h>
 
 typedef struct alias alias;
 struct alias {
@@ -15,19 +14,11 @@ struct alias {
   char *value;
   alias *next;
 };
-typedef struct {
-  int exported;
-  int readonly;
-} shvar_flags;
 
-#define EXPRT { .exported = 1, .readonly = 0 }
-/* typedef struct shvar shvar;
-struct shvar {
-  shvar *next;
-  char *name;
-  char *value;
-  shvar_flag flags;
-}; */
+typedef int shvar_flags;
+#define VEXPRT    (1 << 0)
+#define VREADONLY (1 << 1)
+#define VUNSET    (1 << V)
 
 typedef struct shvar shvar;
 struct shvar {
@@ -52,12 +43,20 @@ extern void setvar(char *, char *, shvar_flags);
 extern void unset_var(const char *);
 extern shvar *find_var(const char *);
 
-// TODO: write helper functions to return name, and  one for value value
-
 static inline char *
 shvar_val(const shvar *v)
 {
   return s_strchrnul(v->var, '=') + 1;
+}
+
+static inline char *
+getvar(const char *vt)
+{
+  char *var = NULL;
+  shvar *v;
+  if ((v = find_var(vt)))
+    var = shvar_val(v);
+  return var;
 }
 
 static inline size_t
