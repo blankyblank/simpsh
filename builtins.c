@@ -5,12 +5,16 @@
 #include <limits.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
 #include "main.h"
 #include "utils.h"
 #include "env.h"
 #include "builtins.h"
 #include "arg.h"
 
+#define FLAG_L ( 1 << 0)
+#define FLAG_P ( 1 << 1)
 static int echo_print(int, int, char **);
 
 /* builtins */
@@ -93,28 +97,68 @@ aliascmd(char **args)
   return 0;
 }
 
-#define FLAG_L ( 1 << 0)
-#define FLAG_P ( 1 << 1)
-
   /* TODO: add in cdpath functionality or convert my other path search functions
    * to be generic to use with this, or for running commands */
+
+char *
+pwdpath(char *path) {
+  char *res = path, *src = path;
+
+  while (*src) {
+    switch (*src) {
+      case '/':
+        if (res != path && *(res - 1) == '/')
+          src++;
+        else if (*(src + 1) == '\0')
+          src++;
+        else
+          *res++ = *src++;
+        break;
+      case '.':
+        if (*(src + 1) && (*(src + 2) == '/' || *(src + 2) == '\0'))
+          if (res > path + 1) {
+            if (res > path + 1 && *(res - 1) == '/')
+              res--;
+            while (res > path && *(res - 1) != '/')
+              res--;
+            if (res > path + 1)
+              res--;
+            src += 2;
+          } else {
+            src += 2;
+          }
+        else if (*(src + 1) == '/')
+          src += 2;
+        else if (*(src + 1) == '\0')
+          src++;
+        else
+          *res++ = *src++;
+        break;
+      default:
+        *res++ = *src++;
+        break;
+    }
+  }
+
+  *res = '\0';
+  return path;
+}
 
 int
 cdcmd(char **argv)
 {
   int argc = array_len(argv);
-  char *dest;
-  char lflag = '\0', respath[PATH_MAX];
+  char *dest, *end, *pwdval;
+  char fflag = '\0', respath[PATH_MAX];
   shvar *pwd, *oldpwd;
-  shvar_flags flags = EXPRT;
 
   ARGBEGIN
   {
     case 'L':
-      lflag = 'L';
+      fflag = 'L';
       break;
     case 'P':
-      lflag = 'P';
+      fflag = 'P';
       break;
     default:
       fprintf(stderr, "%s: bad option -%c\n", argv0, ARGC());
@@ -129,21 +173,25 @@ cdcmd(char **argv)
 
   oldpwd = find_var("OLDPWD");
   pwd = find_var("PWD");
+  if (pwd)
+    pwdval = shvar_val(pwd);
+  else
+    pwdval = getcwd(respath, PATH_MAX);
 
-  if (!dir) {
-    dest = home;
-  } else if (*dir == '-' && dir[1] == '\0') {
-    if (!oldpwd) {
-      fprintf(stderr, "OLDPWD not set");
-      return 1;
+  if (fflag == 'P') {
+    if (!dir) {
+      dest = home;
+    } else if (*dir == '-' && dir[1] == '\0') {
+      if (!oldpwd) {
+        fprintf(stderr, "OLDPWD not set");
+        return 1;
+      } else {
+        dest = shvar_val(oldpwd);
+        printf("%s\n", dest);
+      }
     } else {
-      dest = shvar_val(oldpwd);
+      dest = (char *)dir;
     }
-  } else {
-    dest = (char *)dir;
-  }
-
-  if (lflag == 'P') {
     if (!realpath(dest, respath)) {
       warn("cd: %s", dest);
       return 1;
@@ -153,17 +201,44 @@ cdcmd(char **argv)
       return 1;
     }
     getcwd(respath, PATH_MAX);
-    setvar("PWD", respath, flags);
   } else {
+    size_t plen, dlen;
+    if (!dir) {
+      dest = home;
+    } else if (*dir == '-' && dir[1] == '\0') {
+      if (!oldpwd) {
+        fprintf(stderr, "OLDPWD not set");
+        return 1;
+      } else {
+        dest = shvar_val(oldpwd);
+        printf("%s\n", dest);
+      }
+    } else {
+      dest = (char *)dir;
+    }
+
     if (chdir(dest) < 0) {
       warn("cd: %s", dest);
       return 1;
     }
+    dlen = strlen(dest);
+    if (dest != NULL && dest[0] == '/') {
+      memcpy(respath, dest, dlen);
+      respath[dlen] = '\0';
+    } else {
+      plen = strlen(pwdval);
+      end = s_mempcpy(respath, pwdval, plen);
+      *end++ = '/';
+      end = s_mempcpy(end, dest, dlen);
+      *end = '\0';
+    }
+    if (!pwdpath(respath)) {
+      fprintf(stderr, "cd: path normalization failure\n");
+      return 1;
+    }
   }
-
-  setvar("OLDPWD", shvar_val(pwd), flags);
-  putenv(oldpwd->var);
-  putenv(pwd->var);
+  setvar("OLDPWD", pwdval, VEXPRT);
+  setvar("PWD", respath, VEXPRT);
   return 0;
 }
 
@@ -232,19 +307,25 @@ int
 execcmd(char **args)
 {
   char *fullpath;
-
   fullpath = getpath(args[1]);
+  char **env = build_env(NULL);
+  if (!env) {
+    warn("exec: failed to get environ");
+  }
 
   if (!args[1])
     goto fail;
   if (!fullpath)
     goto fail;
-  if (execve(fullpath, &args[1], environ) < 0)
+  if (execve(fullpath, &args[1], env) < 0)
     goto fail;
   return 0;
 
 fail:
   perror(args[0]);
+  if (env) {
+    free_env(env);
+  }
   free(fullpath);
   return 1;
 }
@@ -266,28 +347,23 @@ exportcmd(char **args)
   int argc, i;
   argc = array_len(args);
 
-  // nvar = s_strndup(args[i], nvarlen + 1);
+  /* nvar = s_strndup(args[i], nvarlen + 1); */ 
   if (argc > 1) {
     for (i = 1; i < argc; i++) {
       char *eq;
       char *name, *val;
       shvar *v;
-      shvar_flags flags = EXPRT;
 
       eq = s_strchrnul(args[i], '=');
       if (*eq == '\0') {
         v = find_var(args[i]);
-        if (v) {
-          v->flags.exported = 1;
-          putenv(v->var);
-        } else {
-          setvar(args[i], NULL, flags);
-          setenv(args[i], "", 1);
-        }
+        if (v)
+          v->flags |= VEXPRT;
+        else
+          setvar(args[i], NULL, VEXPRT);
       } else {
         read_assn(args[i], &name, &val);
-        setvar(name, val, flags);
-        putenv(args[i]);
+        setvar(name, val, VEXPRT);
       }
     }
   }
@@ -320,18 +396,55 @@ helpcmd(char **args)
 }
 
 int
-pwdcmd(char **args)
+pwdcmd(char **argv)
 {
-  (void)args;
-  char *pwdbuf = NULL;
-  char *pwd;
-  pwd = getcwd(pwdbuf, 0);
-  if (pwd) {
+  int argc = array_len(argv);
+  char fflag = '\0';
+  char pwdbuf[PATH_MAX + 1];
+
+  ARGBEGIN
+  {
+    case 'L':
+      fflag = 'L';
+      break;
+    case 'P':
+      fflag = 'P';
+      break;
+    default:
+      fprintf(stderr, "%s: bad option -%c\n", argv0, ARGC());
+      return 1;
+  }
+  ARGEND;
+
+  if (fflag != 'P') {
+    char *pwd = getvar("PWD");
+    struct stat sbuf, cwdsbuf;
+
+    if (!pwd) {
+      goto physical;
+    }
+    if (stat(pwd, &sbuf) < 0) {
+      goto physical;
+    }
+    if (stat(".", &cwdsbuf) < 0) {
+      warn("pwd");
+      return 1;
+    }
+    if ((sbuf.st_ino != cwdsbuf.st_ino || sbuf.st_dev != cwdsbuf.st_dev))
+      goto physical;
+
     printf("%s\n", pwd);
-    free(pwd);
     return 0;
   }
-  return 1;
+
+physical:
+  if (getcwd(pwdbuf, PATH_MAX + 1)) {
+    printf("%s\n", pwdbuf);
+    return 0;
+  } else {
+    warn("pwd");
+    return 1;
+  }
 }
 
 int
