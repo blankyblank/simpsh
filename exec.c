@@ -25,17 +25,6 @@ typedef struct {
   int set;
 } tmp_var;
 
-/**  sh_env aware free  */
-static inline void
-free_env(char **env)
-{
-  if (!env)
-    return;
-  char *buf = *((char **)env - 1);
-  free(buf);
-  free(env - 1);
-}
-
 /**  initialize builtin hash table  */
 void
 init_builtins(void)
@@ -140,12 +129,10 @@ run_cmd(const cmd_tree *n)
         shvar_flags flags;
         st_read_assn(n->sh_vars[i], &name, &val);
         v = find_var(name);
-        if (v) {
+        if (v) 
           flags = v->flags;
-        } else {
-          flags.exported = 0;
-          flags.readonly = 0;
-        }
+        else
+          flags = 0;
         setvar(name, val, flags);
       }
       return 0;
@@ -175,11 +162,7 @@ run_cmd(const cmd_tree *n)
           tmp_vars[vc].val = NULL;
           vc++;
         }
-        shvar_flags flags = {
-          .exported = 0,
-          .readonly = 0,
-        };
-        setvar(n->sh_vars[i], val, flags);
+        setvar(n->sh_vars[i], val, 0);
       }
       status = builtin_launch(b, final);
       for (i = 0; i < vc; i++) {

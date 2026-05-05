@@ -9,6 +9,7 @@
 #include "main.h"
 #include "simpsh.h"
 #include "utils.h"
+#include "env.h"
 
 void
 getbuildinfo(void) {
@@ -104,7 +105,7 @@ getpath(char *file)
   if ((strchr(file, '/')) && access(file, X_OK) == 0)
     return (st_strdup(file));
 
-  const char *path = getenv("PATH");
+  const char *path = getvar("PATH");
   if (path)
     fullpath = getfullpath(path, file);
   else

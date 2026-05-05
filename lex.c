@@ -513,7 +513,7 @@ parse_cmd(const sh_tok *tokens, size_t cnt, token s, size_t *i)
 
   for (; *i < cnt && tokens[*i].type == TNOT; (*i)++)
     neg++;
-  negate = (neg % 2) ? TRUE : FALSE;
+  negate = (neg & 2) ? TRUE : FALSE;
   neg = 0;
 
   if (*i >= cnt || tokens[*i].type == s) /* check for command */
