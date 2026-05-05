@@ -37,7 +37,7 @@ is_operator(char c)
 static inline int
 is_cmd_end(char c)
 {
-  return c == ' ' || c == '\t' || c == '\n';
+  return (c == ' ') | (c == '\t') | (c == '\n');
 }
 
 /**  skip whitespace  */
@@ -70,6 +70,24 @@ s_strndup(const char *s, size_t n)
   return dup;
 }
 
+
+/** efficient strcat */
+static inline char *
+s_strcat(char *dest, const char *src)
+{
+  size_t destlen = strlen(dest), srclen = strlen(src) + 1;
+  memcpy(dest + destlen, src, srclen);
+  return dest;
+}
+
+/** mempcpy implementation */
+__attribute__((always_inline)) static inline char *
+s_mempcpy(char *dest, const char *src, size_t n)
+{
+  memcpy(dest, src, n);
+  return dest + n;
+}
+
 /**  strdup using memcpy  */
 static inline char *
 s_strdup(const char *s)
@@ -98,12 +116,23 @@ s_realloc(char *buf, size_t *bufsize)
   return t;
 }
 
+/**  sh_env aware free  */
+static inline void
+free_env(char **env)
+{
+  if (!env)
+    return;
+  char *buf = *((char **)env - 1);
+  free(buf);
+  free(env - 1);
+}
+
 /**  free char* array  */
 static inline void
 freeptr(char **args)
 {
   if (args != NULL) {
-    int i = 0;
+    size_t i = 0;
     while (args[i] != NULL) {
       free(args[i]);
       i++;
@@ -177,5 +206,14 @@ st_getname(const char *assn)
   }
   return name;
 }
+
+/**  check if path contains /  */
+// int
+// startsWithSlash(const char *str)
+// {
+//   if (str != NULL && str[0] == '/')
+//     return (1);
+//   return (0);
+// }
 
 #endif /* !UTILS_H */
