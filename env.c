@@ -1,21 +1,38 @@
 /*  env.c - functions surrounding various parts of the shell environment  */
+#define _POSIX_C_SOURCE 200809L
+#include <ctype.h>
+
 #include "main.h"
 #include "env.h"
 #include "utils.h"
-#include <ctype.h>
 
 alias *alias_tab[ENV_BUCKETS];
 shvar *var_tab[ENV_BUCKETS] = { NULL };
-static char *var_n(char *, size_t, size_t *);
+static char *var_n(const char *, size_t, size_t *);
 static char *varbrace_n(const char *, size_t, size_t *);
-static char *lookupvar(char *);
+static char *lookupvar(const char *, size_t);
 
 /** get the variable for the return status of last command */
 static inline char *
 statusvar(void)
 {
-  char *buf = st_alloc(12);
-  snprintf(buf, 12, "%d", lstatus);
+  size_t n = lstatus;
+  char *buf = st_alloc(4);
+  char t;
+  size_t i = 0;
+  do {
+    buf[i++] = (n % 10) + '0';
+    n /= 10;
+  } while (n);
+  size_t e = i - 1;
+  for (size_t s = 0; s < e; s++) {
+    t = buf[s];
+    buf[s] = buf[e];
+    buf[e] = t;
+    e--;
+  }
+  buf[i] = '\0';
+  // snprintf(buf, 12, "%d", lstatus);
   return buf;
 }
 
@@ -40,11 +57,9 @@ get_posparam(int n)
 
 /** find if variable is positional parameter */
 static inline int
-is_posparam(const char *var)
+is_posparam(const char *var, size_t var_l)
 {
   size_t i;
-  size_t var_l = strlen(var);
-
   if (!var || !*var)
     return 0;
   for (i = 0; i < var_l; i++) {
@@ -63,60 +78,58 @@ build_env(char **sh_env)
   /* way too complicated way of trying to copy strings into
    * an array of strings. for performance reasons... I guess.*/
 
-  size_t c = 0, sh_c = 0, len = 0;
-  size_t var_len;
-  unsigned int i;
+  size_t c = 0, sh_c = 0, j = 0, len = 0;
+  size_t lenarr[MAX_ENV], var_len;
   char **arr, **cmd_env = NULL;
   char *buf;
   shvar *var;
 
-  for (i = 0; i < ENV_BUCKETS; i++) {
+  for (size_t i = 0; i < ENV_BUCKETS; i++) {
     var = var_tab[i];
     while (var) {
       if (var->flags & VEXPRT) {
-        len += strlen(var->var) + 1;
-        c++;
+        lenarr[c] = strlen(var->var) + 1;
+        len += lenarr[c++];
       }
       var = var->next;
     }
   }
   if (sh_env) {
     sh_c = array_len(sh_env);
-    for (i = 0; i < sh_c; i++) {
-      if (sh_env[i]) {
-        len += strlen(sh_env[i]) + 1;
-      }
+    for (size_t i = 0; i < sh_c; i++) {
+      lenarr[c] = strlen(sh_env[i]) + 1;
+      len += lenarr[c++];
     }
   }
 
-  c += sh_c;
-  cmd_env = malloc((c + 1) * sizeof(char *) + sizeof(char *));
-  buf = malloc(len + 1);
-  *(char **)cmd_env = buf;
-  arr = cmd_env + 1;
+  char **mem;
+  size_t arrsize = (c + 1) * sizeof(char *);
+  mem = malloc(arrsize + (len + 1));
+  cmd_env = (char **)mem;
+  buf = (char *)mem + arrsize;
+  arr = cmd_env;
 
-  for (i = 0; i < ENV_BUCKETS; i++) {
+  for (size_t i = 0; i < ENV_BUCKETS; i++) {
     var = var_tab[i];
     while (var) {
       if (var->flags & VEXPRT) {
         *arr++ = buf;
-        var_len = strlen(var->var);
-        memcpy(buf, var->var, var_len + 1);
-        buf += var_len + 1;
+        var_len = lenarr[j++];
+        memcpy(buf, var->var, var_len);
+        buf += var_len;
       }
       var = var->next;
     }
   }
-
   if (sh_env) {
-    for (i = 0; i < sh_c; i++) {
+    for (size_t i = 0; i < sh_c; i++) {
       *arr++ = buf;
-      memcpy(buf, sh_env[i], strlen(sh_env[i]) + 1);
-      buf += strlen(sh_env[i]) + 1;
+      memcpy(buf, sh_env[i], lenarr[j]);
+      buf += lenarr[j++];
     }
   }
   *arr = NULL;
-  return cmd_env + 1;
+  return cmd_env;
 }
 
 /** initialize environment from environ */
@@ -134,9 +147,10 @@ init_env(void)
 
 /** expand $var style variables */
 char *
-var_n(char *args, size_t i, size_t *end)
+var_n(const char *args, size_t i, size_t *end)
 {
-  char *env_var, *vt, *var;
+  const char *env_var;
+  char *var;
   size_t j, vt_l;
 
   for (j = i + 1;; j++) {
@@ -147,8 +161,7 @@ var_n(char *args, size_t i, size_t *end)
         env_var = &args[i];
         break;
       } else {
-        vt = st_strndup(&args[i + 1], vt_l);
-        env_var = lookupvar(vt);
+        env_var = lookupvar(&args[i + 1], vt_l);
         break;
       }
     }
@@ -163,7 +176,7 @@ var_n(char *args, size_t i, size_t *end)
 char *
 varbrace_n(const char *args, size_t i, size_t *end)
 {
-  char *vt, *var, *env_var;
+  char *var, *env_var;
   size_t j, vt_l;
 
   if (strchr(args, '}') == NULL)
@@ -175,8 +188,7 @@ varbrace_n(const char *args, size_t i, size_t *end)
       if (vt_l == 0)
         return NULL;
       else {
-        vt = st_strndup(&args[i + 2], vt_l);
-        env_var = lookupvar(vt);
+        env_var = lookupvar(&args[i + 2], vt_l);
         break;
       }
     }
@@ -189,16 +201,29 @@ varbrace_n(const char *args, size_t i, size_t *end)
 
 /** lookup variable by name */
 char *
-lookupvar(char *vt)
+lookupvar(const char *vt, size_t vlen)
 {
   char *var;
-  int n;
+  shvar *v;
+  int n = 0;
+  size_t i;
 
-  if (is_posparam(vt)) {
-    n = atoi(vt);
+  if (is_posparam(vt, vlen)) {
+    for (size_t j = 0;j < vlen; j++)
+      n = n * 10 + (vt[j] - '0');
     var = get_posparam(n);
   } else {
-    var = getvar(vt);
+    i = hash(vt, ENV_BUCKETS);
+    v = var_tab[i];
+    while (v) {
+      if (memcmp(v->var, vt, vlen) == 0)
+        break;
+      v = v->next;
+    }
+    if (v)
+      var = shvar_val(v);
+    else
+      var = NULL;
   }
 
   return var;

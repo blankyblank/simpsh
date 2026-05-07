@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
+
 #include "malloc.h"
 /* malloc and free or other small inlined functions */
 
@@ -116,17 +117,6 @@ s_realloc(char *buf, size_t *bufsize)
   return t;
 }
 
-/**  sh_env aware free  */
-static inline void
-free_env(char **env)
-{
-  if (!env)
-    return;
-  char *buf = *((char **)env - 1);
-  free(buf);
-  free(env - 1);
-}
-
 /**  free char* array  */
 static inline void
 freeptr(char **args)
@@ -188,10 +178,12 @@ st_read_assn(const char *assn, char **name, char **value)
     *value = st_strdup(eq + 1);
   }
 }
+
 /* TODO:
  * nothing is using this anymore possibly remove if nothing ends up
  * needing it later */
 
+/**  get name out of NAME=value  */
 static inline char *
 st_getname(const char *assn)
 {

@@ -3,9 +3,10 @@
 #define VAR_H
 
 #define _POSIX_C_SOURCE 200809L
-#include "simpsh.h"
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "simpsh.h"
 #include "utils.h"
 
 typedef struct alias alias;
