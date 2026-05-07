@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <linux/limits.h>
+
 #include "main.h"
 #include "simpsh.h"
 #include "utils.h"
@@ -20,8 +21,6 @@ getbuildinfo(void) {
 }
 
 static int create_histfile(char *, char *);
-static char *getfullpath(const char *, const char *);
-// static int startsWithSlash(const char *);
 /** make directory path */
 static int pmkdir(char *path);
 
@@ -69,30 +68,50 @@ init_history(void)
   }
 }
 
-/** check in path for file until stop at the first one with an executable */
-static char *
-getfullpath(const char *path, const char *file)
+/** check in path for name stop at the first one with proper permissions if cdmode 1 check for dir */
+char *
+chkpath(const char *path, const char *name, unsigned int cdmode)
 {
-  struct stat filepath;
-  char *pathcpy, *s, *c;
+  char *end, *e;
+  const char *s;
+  size_t flen;
+  struct stat statbuf;
 
-  pathcpy = s_strdup(path);
-  s = pathcpy;
-
-  for (c = strchr(s, ':'); c; c = strchr(s, ':')) {
-    char buf[PATH_MAX];
-    *c = '\0';
-    /* add file to the end of the path the loop is currently checking */
-    snprintf(buf, PATH_MAX, "%s/%s", s, file);
-    /* see if file exists at current path, and if it's executable */
-    if (stat(buf, &filepath) == 0 && access(buf, X_OK) == 0) {
-      free(pathcpy);
-      return st_strdup(buf);
+  flen = strlen(name);
+  s = path;
+  char buf[PATH_MAX];
+  for (e = s_strchrnul(s, ':'); e; e = s_strchrnul(s, ':')) {
+    size_t dlen;
+    if (!*e) {                                   /* if we made it all the way to the last entry */
+      dlen = strlen(s);
+      end = s_mempcpy(buf, s, dlen);
+      *end++ = '/';
+      memcpy(end, name, flen + 1);
+      if (access(buf, X_OK) == 0) {
+        if (cdmode) {
+          if (!stat(buf, &statbuf) && S_ISDIR(statbuf.st_mode))
+            return st_strdup(buf);
+        } else {
+          return st_strdup(buf);
+        }
+      }
+      break;
     }
-    s = c + 1;
+    dlen = e - s;
+    // *e = '\0';
+    end = s_mempcpy(buf, s, dlen); /* copy current path segment from s to e */
+    *end++ = '/';                                /* add / and then file to the end of it */
+    memcpy(end, name, flen + 1);
+    if (access(buf, X_OK) == 0) {
+      if (cdmode) {
+        if (!stat(buf, &statbuf) && S_ISDIR(statbuf.st_mode))
+          return st_strdup(buf);
+      } else {
+        return st_strdup(buf);
+      }
+    }
+    s = e + 1;
   }
-
-  free(pathcpy);
   return NULL;
 }
 
@@ -107,9 +126,9 @@ getpath(char *file)
 
   const char *path = getvar("PATH");
   if (path)
-    fullpath = getfullpath(path, file);
+    fullpath = chkpath(path, file, 0);
   else
-    fullpath = getfullpath(defpath, file);
+    fullpath = chkpath(defpath, file, 0);
 
   if (!fullpath)
     return NULL;

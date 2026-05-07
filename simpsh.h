@@ -11,6 +11,7 @@ extern char *getpath(char *);
 extern char *lineread(void);
 extern void init_history(void);
 extern void getbuildinfo(void);
+extern char *chkpath(const char *, const char *, unsigned int);
 
 /* vim: set filetype=c: */
 #endif /* SIMP_H */

@@ -7,15 +7,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <ctype.h>
+
 #include "main.h"
+#include "simpsh.h"
 #include "utils.h"
 #include "env.h"
 #include "builtins.h"
 #include "arg.h"
-
-#define FLAG_L ( 1 << 0)
-#define FLAG_P ( 1 << 1)
-static int echo_print(int, int, char **);
 
 /* builtins */
 static int aliascmd(char **);
@@ -97,13 +96,24 @@ aliascmd(char **args)
   return 0;
 }
 
-  /* TODO: add in cdpath functionality or convert my other path search functions
-   * to be generic to use with this, or for running commands */
-
+/**  normalize path to set PWD variable with logical path  */
 char *
 pwdpath(char *path) {
   char *res = path, *src = path;
 
+  /*
+   * INFO:
+   *     we collaps any // to a single /, for .. when encountered
+   *     we move back a path segment (between slashes /here/)
+   *     for . we collapse it like the // case. we get rid of any 
+   *     trailing / also we get rid of any . in the beginning
+   *     like ./dir 
+   *     we are modifying the string in place using res as the result
+   *     buffer chars are getting copied to (and overwriting things we
+   *     want to get rid of) and src is the pointer we copy from. it moves
+   *     up when we need to skip something while res stays in place, or res
+   *     moves back when we get rid of a segment.
+   */
   while (*src) {
     switch (*src) {
       case '/':
@@ -143,6 +153,12 @@ pwdpath(char *path) {
   *res = '\0';
   return path;
 }
+
+/* TODO: add in cdpath functionality or convert my other path search functions
+ * to be generic to use with this, or for running commands */
+
+#define FLAG_L ( 1 << 0)
+#define FLAG_P ( 1 << 1)
 
 int
 cdcmd(char **argv)
@@ -242,65 +258,41 @@ cdcmd(char **argv)
   return 0;
 }
 
+#define FLAG_N ( 1 << 2)
+
 int
-echocmd(char *args[])
+echocmd(char *argv[])
 {
-  int n;
-  int stat, argc;
+  int nf = 0;
+  size_t argc;
 
-  argc = array_len(args);
+  argc = array_len(argv);
+  ARGBEGIN
+  {
+    case 'n':
+      nf = FLAG_N;
+      break;
+    default:
+      fprintf(stderr, "%s: bad option -%c\n", argv0, ARGC());
+      return 1;
+  }
+  ARGEND;
 
-  if (argc >= 2) {
-    if (strcmp(args[1], "-n") == 0 && argc > 2) {
-      n = 1;
-      stat = echo_print(argc, n, args);
-      if (stat == -1) {
-        printf("something went wrong\n");
+  for (size_t i = 0; i < argc; i++) {
+    if (fputs(argv[i], stdout) == EOF) {
+      fprintf(stderr, "could not write to stdout\n");
+      return 1;
+    }
+    if (i < argc - 1) {
+      if (fputc(' ', stdout) == EOF) {
+        fprintf(stderr, "could not write to stdout\n");
         return 1;
       }
-
-    } else if (strcmp(args[1], "-n") == 0) {
-      return 0;
-    } else {
-      n = 0;
-      stat = echo_print(argc, n, args);
-      if (stat == -1)
-        return 1;
-      return 0;
     }
-  } else {
-    printf("\n");
-    return 0;
   }
+  if (!(nf & FLAG_N))
+    fputc('\n', stdout);
   return 0;
-}
-
-int
-echo_print(int argc, int n, char *args[])
-{
-  int i;
-  char s = ' ';
-  if (n == 1) {
-    for (i = 2; i < argc; i++) {
-      if (i < argc - 1) {
-        printf("%s%c", args[i], s);
-      } else {
-        printf("%s", args[i]);
-      }
-    }
-    return 0;
-  } else {
-    for (i = 1; i < argc; i++) {
-      if (i < argc - 1) {
-        printf("%s%c", args[i], s);
-      } else {
-        printf("%s", args[i]);
-      }
-    }
-    printf("\n");
-    return 0;
-  }
-  return 1;
 }
 
 int
@@ -324,7 +316,7 @@ execcmd(char **args)
 fail:
   perror(args[0]);
   if (env) {
-    free_env(env);
+    free(env);
   }
   free(fullpath);
   return 1;
@@ -333,12 +325,22 @@ fail:
 int
 exitcmd(char **argv)
 {
-  char **args = (char **)NULL;
-  (void)argv;
-  if (args) {
-    freeptr(args);
+  size_t argc;
+  int exnum = 0;
+  argc = array_len(argv);
+  if (argc > 2) {
+    fprintf(stderr, "%s: %s: too many arguements\n", sh_argv0 ,argv[0]);
+    return 1;
+  } else if (argc == 2) {
+    for (size_t i = 0;argv[1][i];i++) {
+      if (!isdigit(argv[1][i])) {
+        fprintf(stderr, "%s: %s: a number is required\n", sh_argv0, argv[1]);
+        return 1;
+      }
+    }
+    exnum = atoi(argv[1]);
   }
-  exit(0);
+  exit(exnum);
 }
 
 int
@@ -398,7 +400,8 @@ helpcmd(char **args)
 int
 pwdcmd(char **argv)
 {
-  int argc = array_len(argv);
+  int argc = 0;
+  (void)argc;
   char fflag = '\0';
   char pwdbuf[PATH_MAX + 1];
 
