@@ -1,9 +1,11 @@
 /*  malloc.c - stack arena allocator and otther malloc functions */
+#define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+
 #include "malloc.h"
 
 /*@NOTE:

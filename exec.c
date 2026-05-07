@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <err.h>
 #include <sys/wait.h>
+
 #include "main.h"
 #include "expand.h"
 #include "exec.h"
@@ -50,7 +51,8 @@ getbuiltin(char *args)
   size_t idx;
   idx = hash(args, BUILTIN_BUCKETS);
   for (; builtin_tab[idx] >= 0; idx = (idx + 1) % BUILTIN_BUCKETS)
-    if (strcmp(builtins[builtin_tab[idx]], args) == 0)
+    if (builtins[builtin_tab[idx]][0] == args[0] &&
+        strcmp(builtins[builtin_tab[idx]], args) == 0)
       return builtin_tab[idx];
   return -1;
 }
@@ -104,7 +106,6 @@ shexec(char **args, char **env)
         estatus = tstatus;
       return estatus;
   }
-  goto done;
 
 done:
   estatus = 1;
@@ -182,7 +183,7 @@ run_cmd(const cmd_tree *n)
       return 1;
     }
     status = shexec(final, env);
-    free_env(env);
+    free(env);
   }
   if (n->negate == TRUE)
     status = !status;

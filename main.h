@@ -13,6 +13,7 @@
 
 #include <unistd.h>
 
+#define MAX_ENV 256
 #define MAX_CMDS 256
 #define MAX_LENGTH 256
 

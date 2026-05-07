@@ -1,11 +1,11 @@
 /* simpsh - a simple posix shell */
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
-
 #include <unistd.h>
 #include <locale.h>
 #include <stdio.h>
 #include <readline/history.h>
+
 #include "main.h"
 #include "simpsh.h"
 #include "malloc.h"
@@ -13,10 +13,6 @@
 #include "exec.h"
 #include "env.h"
 #include "utils.h"
-
-int lstatus;
-static int interactive = 1;
-int builtin_tab[BUILTIN_BUCKETS];
 
 /* shell variables */
 int sh_argc;
@@ -27,6 +23,10 @@ char histfile[265];
 char *progname = "simpsh";
 char **sh_argv;
 char *home;
+
+int lstatus;
+static int interactive = 1;
+int builtin_tab[BUILTIN_BUCKETS];
 
 static int simpsh_run(char *line);
 
@@ -40,7 +40,7 @@ main(int argc, char **argv)
   setlocale(LC_ALL, "");
 
   /* check if using -c flag or connected to stdin */
-  sh_argv0 = s_strdup(argv[0]);
+  sh_argv0 = "simpsh";
   if (!isatty(STDIN_FILENO))
     tflag = 1;
   if (argc > 1) {
@@ -82,6 +82,8 @@ main(int argc, char **argv)
     init_history(); /* set up history */
     for (;;) {
       line = lineread();
+      if (!line)
+        break;
       estatus = simpsh_run(line);
       lstatus = estatus;
     }
