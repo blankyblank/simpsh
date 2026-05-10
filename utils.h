@@ -8,7 +8,21 @@
 #include <stddef.h>
 
 #include "malloc.h"
-/* malloc and free or other small inlined functions */
+
+/** null terminated memcpy */
+#define nmemcpy(d,s,l) do { \
+  memcpy(d, s, l); \
+  d[l] = '\0'; \
+} while (0)
+
+/**  check if char is whitespace  */
+#define is_ws(c) (c == ' ' || c == '\t' || c == '\n')
+
+/**  check if char is operator  */
+#define is_operator(c) (c == '&' || c == '|' || c == ';' || c == '(' || c == ')')
+
+/**  check if char is line end  */
+#define is_cmd_end(c) ((c == ' ') | (c == '\t') | (c == '\n'))
 
 /**  get length of char* array  */
 static inline size_t
@@ -18,27 +32,6 @@ array_len(char **arr)
   while (arr[n])
     n++;
   return n;
-}
-
-/**  check if char is whitespace  */
-static inline int
-is_ws(char c)
-{
-  return c == ' ' || c == '\t' || c == '\n';
-}
-
-/**  check if char is operator  */
-static inline int
-is_operator(char c)
-{
-  return c == '&' || c == '|' || c == ';' || c == '(' || c == ')';
-}
-
-/**  check if char is line end  */
-static inline int
-is_cmd_end(char c)
-{
-  return (c == ' ') | (c == '\t') | (c == '\n');
 }
 
 /**  skip whitespace  */
@@ -63,16 +56,16 @@ s_strchrnul(const char *s, int c)
 static inline char *
 s_strndup(const char *s, size_t n)
 {
-  char *dup = malloc(n + 1);
-  if (dup) {
+  char *dup;
+  
+  if ((dup = malloc(n + 1))) {
     memcpy(dup, s, n);
     dup[n] = '\0';
   }
   return dup;
 }
 
-
-/** efficient strcat */
+/** strcat using memcpy */
 static inline char *
 s_strcat(char *dest, const char *src)
 {
@@ -93,9 +86,10 @@ s_mempcpy(char *dest, const char *src, size_t n)
 static inline char *
 s_strdup(const char *s)
 {
-  size_t len = strlen(s);
-  char *dup = malloc(len + 1);
-  if (dup) {
+  size_t len;
+  char *dup;
+  len = strlen(s);
+  if ((dup = malloc(len + 1))) {
     memcpy(dup, s, len);
     dup[len] = '\0';
   }
@@ -109,8 +103,7 @@ s_realloc(char *buf, size_t *bufsize)
   char *t;
 
   *bufsize *= 2;
-  t = realloc(buf, *bufsize);
-  if (!t) {
+  if (!(t = realloc(buf, *bufsize))) {
     free(buf);
     return NULL;
   }
