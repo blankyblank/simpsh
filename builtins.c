@@ -16,6 +16,8 @@
 #include "builtins.h"
 #include "arg.h"
 
+#define bad_opt(a,b,c) (fprintf(stderr, "%s: %s: bad option %c\n", a,b,c))
+
 /* builtins */
 static int aliascmd(char **);
 static int cdcmd(char **);
@@ -28,6 +30,7 @@ static int helpcmd(char **);
 static int pwdcmd(char **);
 static int truecmd(char **);
 static int unaliascmd(char **);
+static int unsetcmd(char **);
 
 /* the array of builtin commands */ /* clang-format off */
 const char *builtins[] = {
@@ -42,6 +45,7 @@ const char *builtins[] = {
   "pwd",
   "true",
   "unalias",
+  "unset",
 };
 int (* const builtin_funcs[])(char **) = {
   &aliascmd,
@@ -55,6 +59,7 @@ int (* const builtin_funcs[])(char **) = {
   &pwdcmd,
   &truecmd,
   &unaliascmd,
+  &unsetcmd,
 };
 int builtinnum(void) {
   return sizeof(builtins) / sizeof(char *);
@@ -157,27 +162,27 @@ pwdpath(char *path) {
 /* TODO: add in cdpath functionality or convert my other path search functions
  * to be generic to use with this, or for running commands */
 
-#define FLAG_L ( 1 << 0)
-#define FLAG_P ( 1 << 1)
-
 int
 cdcmd(char **argv)
 {
-  int argc = array_len(argv);
+  unsigned int argc, prnt;
   char *dest, *end, *pwdval;
   char fflag = '\0', respath[PATH_MAX];
-  shvar *pwd, *oldpwd;
+  const char *dir;
+  shvar *pwd, *oldpwd, *cdpth;
 
+  prnt = 0;
+  argc = array_len(argv);
   ARGBEGIN
   {
     case 'L':
-      fflag = 'L';
+      fflag = FLAG_L;
       break;
     case 'P':
-      fflag = 'P';
+      fflag = FLAG_P;
       break;
     default:
-      fprintf(stderr, "%s: bad option -%c\n", argv0, ARGC());
+      bad_opt(sh_argv0, argv0, ARGC());
       return 1;
   }
   ARGEND;
@@ -185,7 +190,6 @@ cdcmd(char **argv)
     fprintf(stderr, "cd: Too many arguements");
     return 1;
   }
- const char *dir = *argv;
 
   oldpwd = find_var("OLDPWD");
   pwd = find_var("PWD");
@@ -193,21 +197,41 @@ cdcmd(char **argv)
     pwdval = shvar_val(pwd);
   else
     pwdval = getcwd(respath, PATH_MAX);
-
-  if (fflag == 'P') {
-    if (!dir) {
-      dest = home;
-    } else if (*dir == '-' && dir[1] == '\0') {
-      if (!oldpwd) {
-        fprintf(stderr, "OLDPWD not set");
-        return 1;
+  cdpth = find_var("CDPATH");
+  if (cdpth) {
+    if (*argv && argv[0][0] != '/' &&
+        !(argv[0][0] == '-' && argv[0][1] == '\0') &&
+        !(argv[0][0] == '.' && argv[0][1] == '\0') &&
+        !(argv[0][0] == '.' && argv[0][1] == '/') &&
+        !(argv[0][0] == '.' && argv[0][1] == '.')) {
+      if ((dir = chkpath(shvar_val(cdpth), *argv, 1))) {
+        if (!(dir[0] == '.' && dir[1] == '/'))
+          prnt = 1;
       } else {
-        dest = shvar_val(oldpwd);
-        printf("%s\n", dest);
+        dir = *argv;
       }
     } else {
-      dest = (char *)dir;
+      dir = *argv;
     }
+  } else {
+    dir = *argv;
+  }
+
+  if (!dir) {
+    dest = home;
+  } else if (*dir == '-' && dir[1] == '\0') {
+    if (!oldpwd) {
+      fprintf(stderr, "OLDPWD not set");
+      return 1;
+    } else {
+      dest = shvar_val(oldpwd);
+      prnt = 1;
+    }
+  } else {
+    dest = (char *)dir;
+  }
+
+  if (fflag == FLAG_P) {
     if (!realpath(dest, respath)) {
       warn("cd: %s", dest);
       return 1;
@@ -215,27 +239,21 @@ cdcmd(char **argv)
     if (chdir(respath) < 0) {
       warn("cd: %s", dest);
       return 1;
+    } else {
+      if (prnt) {
+        printf("%s\n", respath);
+      }
     }
     getcwd(respath, PATH_MAX);
   } else {
     size_t plen, dlen;
-    if (!dir) {
-      dest = home;
-    } else if (*dir == '-' && dir[1] == '\0') {
-      if (!oldpwd) {
-        fprintf(stderr, "OLDPWD not set");
-        return 1;
-      } else {
-        dest = shvar_val(oldpwd);
-        printf("%s\n", dest);
-      }
-    } else {
-      dest = (char *)dir;
-    }
-
     if (chdir(dest) < 0) {
       warn("cd: %s", dest);
       return 1;
+    } else {
+      if (prnt == 1) {
+        printf("%s\n", dest);
+      }
     }
     dlen = strlen(dest);
     if (dest != NULL && dest[0] == '/') {
@@ -253,12 +271,12 @@ cdcmd(char **argv)
       return 1;
     }
   }
+  // NOTE: old fflag check else end
   setvar("OLDPWD", pwdval, VEXPRT);
   setvar("PWD", respath, VEXPRT);
   return 0;
 }
 
-#define FLAG_N ( 1 << 2)
 
 int
 echocmd(char *argv[])
@@ -273,7 +291,7 @@ echocmd(char *argv[])
       nf = FLAG_N;
       break;
     default:
-      fprintf(stderr, "%s: bad option -%c\n", argv0, ARGC());
+      bad_opt(sh_argv0, argv0, ARGC());
       return 1;
   }
   ARGEND;
@@ -366,6 +384,8 @@ exportcmd(char **args)
       } else {
         read_assn(args[i], &name, &val);
         setvar(name, val, VEXPRT);
+        free(name);
+        free(val);
       }
     }
   }
@@ -408,18 +428,18 @@ pwdcmd(char **argv)
   ARGBEGIN
   {
     case 'L':
-      fflag = 'L';
+      fflag = FLAG_L;
       break;
     case 'P':
-      fflag = 'P';
+      fflag = FLAG_P;
       break;
     default:
-      fprintf(stderr, "%s: bad option -%c\n", argv0, ARGC());
+      bad_opt(sh_argv0, argv0, ARGC());
       return 1;
   }
   ARGEND;
 
-  if (fflag != 'P') {
+  if (fflag != FLAG_P) {
     char *pwd = getvar("PWD");
     struct stat sbuf, cwdsbuf;
 
@@ -470,6 +490,49 @@ unaliascmd(char **args)
   } else {
     fprintf(stderr, "unalias: %s: alias not found\n", args[1]);
     return 1;
+  }
+
+  return 0;
+}
+
+static int
+unsetcmd(char **argv)
+{
+  shvar *v;
+  size_t argc, c;
+  unsigned int err;
+  argc = array_len(argv);
+
+  ARGBEGIN
+  {
+    case 'v':
+    break;
+
+    default:
+      bad_opt(sh_argv0, argv0, ARGC());
+    return 1;
+  } ARGEND
+
+  err = 0;
+  c = 0;
+  if (argc < 1) {
+    return 0;
+  } else {
+    for (; c < argc; c++) {
+      v = find_var(argv[c]);
+      if (v) {
+        if (v->flags & VREADONLY) {
+          fprintf(stderr, "%s: unset: %s: cannot unset: readonly variable\n",
+                  sh_argv0, argv[c]);
+          err = 1;
+        } else {
+          unset_var(argv[c]);
+        }
+      }
+    }
+    if (err)
+      return 1;
+
   }
 
   return 0;
