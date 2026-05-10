@@ -37,11 +37,13 @@ typedef struct wf wf;
  * @field wf pointer to next node
  * @field string word
  * @field enum quoted qs
+ * @field word length
  */
 struct wf {
   wf *next;
   char *word;
   quoted qs;
+  size_t len;
 };
 
 /** store tokens before building argv */

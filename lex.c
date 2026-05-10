@@ -9,7 +9,7 @@
 
 static wf **get_argv(const sh_tok *, size_t, size_t *);
 static wf **get_assn(wf **, char ***);
-static void append_wf(wf **, wf **, char *, int);
+static void append_wf(wf **, wf **, char *, size_t len, int);
 static int is_assn(wf *);
 static char *cat_wf(wf *wordf);
 static void expand_alias(char *val, sh_tok *tokens, size_t *c);
@@ -111,7 +111,7 @@ get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
 static int
 is_assn(wf *cmd)
 {
-  char *eq = strchr(cmd->word, '=');
+  char *eq = memchr(cmd->word, '=', cmd->len);
   const char *p = cmd->word;
 
   if (cmd->qs != QNONE)
@@ -135,18 +135,20 @@ is_assn(wf *cmd)
 static char *
 cat_wf(wf *wordf)
 {
-  wf *f = wordf;
-  char *s;
+  wf *f;
+  char *s, *buf;
   size_t len = 0;
 
-  for (; f; f = f->next) {
-    for (s = f->word; *s; s++) {
-      st_putc(*s);
-      len++;
-    }
+  for (f = wordf; f; f = f->next)
+    len += f->len;
+  buf = st_alloc(len + 1);
+  s = buf;
+  for (f = wordf; f; f = f->next) {
+    s = s_mempcpy(s, f->word, f->len);
+    *s = '\0';
   }
 
-  return grab_str(len);
+  return buf;
 }
 
 /** get name and value from NAME=value pair */
@@ -184,10 +186,11 @@ get_assn(wf **args, char ***sh_vars)
 
 /**  add word fragment onto the end of the linked list  */
 static void
-append_wf(wf **head, wf **tail, char *w, int quoted)
+append_wf(wf **head, wf **tail, char *w, size_t len, int quoted)
 {
   wf *f = st_alloc(sizeof(wf));
   f->word = w;
+  f->len = len;
   f->qs = quoted;
   f->next = NULL;
   if (!*head)
@@ -237,7 +240,7 @@ get_wf(char *line, size_t *pos)
         } else if (len > 0) {
           /* save unquoted frag if nonempty */
           w = grab_str(len);
-          append_wf(&head, &tail, w, state);
+          append_wf(&head, &tail, w, len, state);
           len = 0;
         }
         state = QSINGLE;
@@ -250,7 +253,7 @@ get_wf(char *line, size_t *pos)
         /* save unquoted frag if nonempty */
         if (len > 0) {
           w = grab_str(len);
-          append_wf(&head, &tail, w, state);
+          append_wf(&head, &tail, w, len, state);
           len = 0;
         }
         state = QDOUBLE;
@@ -276,7 +279,7 @@ get_wf(char *line, size_t *pos)
           /* save single quoted frag if nonempty */
           if (len > 0) {
             w = grab_str(len);
-            append_wf(&head, &tail, w, state);
+            append_wf(&head, &tail, w, len, state);
             len = 0;
           }
           state = QNONE;
@@ -292,7 +295,7 @@ get_wf(char *line, size_t *pos)
           /* save double quoted frag if nonempty */
           if (len > 0) {
             w = grab_str(len);
-            append_wf(&head, &tail, w, state);
+            append_wf(&head, &tail, w, len, state);
             len = 0;
           }
           state = QNONE;
@@ -323,7 +326,7 @@ done:
   /*  one last save  */
   if (len) {
     w = grab_str(len);
-    append_wf(&head, &tail, w, state);
+    append_wf(&head, &tail, w, len, state);
   }
   *pos = i;
   return head;
@@ -426,7 +429,7 @@ tokenize(char *line, int *cnt)
           continue;
         }
       }
-      if (f->word && f->word[0] != '\0') {
+      if (f->word && f->len > 0) {
         tokens[c].type = TWORD;
         tokens[c].cmd = f;
         c++;
@@ -587,7 +590,7 @@ expand_alias(char *val, sh_tok *tokens, size_t *c)
       expand &= ~1;
     }
 
-    if (f->word && f->word[0] != '\0') {
+    if (f->word && f->len > 0) {
       tokens[*c].type = TWORD;
       tokens[*c].cmd = f;
       (*c)++;
