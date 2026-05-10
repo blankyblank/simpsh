@@ -9,7 +9,7 @@
 /* clang-format off */
 #define SHELL_SIZE (sizeof(union {int i; char *cp; double d; }) - 1)
 #define align_mem(n) (((n) + SHELL_SIZE) & ~(sizeof(void *) - 1)) /* clang-format on */
-#define MINSTACK_S align_mem(512)
+#define MINSTACK_S align_mem(2048)
 
 typedef struct stack_seg stack_seg;
 struct stack_seg {
@@ -35,14 +35,23 @@ extern void *grow_stack(size_t);
 extern char *grab_str(size_t);
 extern void init_stack(void);
 
-static inline void
+/* static inline void
 st_putc(int c)
 {
   if (stleft == 0)
     grow_stack(1);
   *stnext++ = c;
   stleft--;
-}
+} */
+
+/* #define st_putc(c) do { \
+  if (stleft == 0)      \
+    (void)grow_stack(1); \
+  *stnext++ = (c);       \
+  stleft--;              \
+} while (0) */
+
+#define st_putc(c) (void)(stleft == 0 ? grow_stack(1) : (void *)0), *stnext++ = (c), stleft--
 
 static inline char *
 st_strndup(const char *s, size_t len)

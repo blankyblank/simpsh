@@ -17,9 +17,15 @@
 #define MAX_CMDS 256
 #define MAX_LENGTH 256
 
+#define FLAG_N (1 << 0)
+#define FLAG_L (1 << 1)
+#define FLAG_P (1 << 2)
+#define FLAG_c (1 << 3)
+#define FLAG_t (1 << 4)
+#define FLAG_V (1 << 5)
+
 /* shell variables */
 extern char **environ;
-extern char *progname;
 extern char *sh_argv0;
 extern char **sh_argv;
 extern int sh_argc;

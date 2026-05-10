@@ -64,8 +64,7 @@ st_alloc(size_t dsize)
     if (need < MINSTACK_S)
       need = MINSTACK_S;
     len = sizeof(stack_seg) - MINSTACK_S + need;
-    nseg = malloc(len);
-    if (!nseg)
+    if (!(nseg = malloc(len)))
       return NULL;
     nseg->prev = current;
     stnext = nseg->buf;
@@ -106,10 +105,9 @@ grow_stack(size_t msize)
   oldbuf = current->buf;
 
   nsize = align_mem(msize + used + 128);
-  if (nsize <MINSTACK_S)
+  if (nsize < MINSTACK_S)
     nsize = MINSTACK_S;
-  nb = malloc(sizeof(stack_seg) - MINSTACK_S + nsize);
-  if (!nb)
+  if (!(nb = malloc(sizeof(stack_seg) - MINSTACK_S + nsize)))
     return NULL;
   nb->prev = current;
   current = nb;
@@ -159,40 +157,3 @@ init_stack(void)
   stleft = MINSTACK_S;
   stend = stnext + stleft;
 }
-
-/**  original st_alloc stack allocator  */
-// void *st_alloc(size_t dsize) {
-//   size_t asize;
-//   size_t align_offset, pad;
-//   asize = align_mem(dsize);
-//   char *rp;
-//
-//   if (asize >= stleft) {
-//     stack_seg *nseg;
-//     if (asize < MINSTACK_S)
-//       asize = MINSTACK_S;
-//     nseg = malloc(sizeof(stack_seg) - MINSTACK_S + asize);
-//     nseg->prev = current;
-//     current = nseg;
-//     stnext = nseg->buf;
-//     stleft = asize;
-//   }
-//
-//   align_offset = ((size_t)stnext & (sizeof(void *) - 1));
-//   if (align_offset) {
-//     pad = sizeof(void *) - align_offset;
-//     if (pad > stleft) {
-//       stnext = grow_stack(asize);
-//       if (!stnext)
-//         return NULL;
-//     }
-//     stnext += pad;
-//     stleft -= pad;
-//   }
-//
-//   rp = stnext;
-//   stnext += asize;
-//   stleft -= asize;
-//   return rp;
-// }
-
