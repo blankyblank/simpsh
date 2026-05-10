@@ -41,7 +41,7 @@ char *
 expand_word(wf *wordf)
 {
   size_t end, idx;
-  size_t len, wlen;
+  size_t len;
   wf *f;
   char *s;
   char *expanded;
@@ -50,18 +50,30 @@ expand_word(wf *wordf)
   for (f = wordf; f; f = f->next) {
     switch (f->qs) {
     case QSINGLE:
-      for (s = f->word; *s; s++) {
-        st_putc(*s);
+      for (size_t i = 0; i < f->len; i++) {
+        st_putc(f->word[i]);
         len++;
       }
       break;
     case QDOUBLE:
     case QNONE:
       idx = 0;
-      wlen = strlen(f->word);
 
-      while (idx < wlen) {
-        if (f->word[idx] != '$') {
+      while (idx < f->len) {
+        if (f->word[idx] == '~' && f->qs == QNONE) {
+          expanded = exp_tilde(f->word, idx, &end);
+          if (expanded) {
+            for (s = expanded; *s; s++) {
+              st_putc(*s);
+              len++;
+            }
+            idx = end;
+          } else {
+              st_putc('~');
+              len++;
+              idx++;
+          }
+        } else if (f->word[idx] != '$') {
           st_putc(f->word[idx]);
           len++;
           idx++;

@@ -19,7 +19,7 @@ struct alias {
 typedef int shvar_flags;
 #define VEXPRT    (1 << 0)
 #define VREADONLY (1 << 1)
-#define VUNSET    (1 << V)
+#define VUNSET    (1 << 2)
 
 typedef struct shvar shvar;
 struct shvar {
@@ -37,6 +37,7 @@ extern alias *alias_tab[ENV_BUCKETS];
 extern void init_env(void);
 extern char **build_env(char **);
 extern char *exp_var(char *, size_t, size_t *);
+extern char * exp_tilde(char *, size_t , size_t *);
 extern alias *find_alias(const char *);
 extern void set_alias(const char *, const char *);
 extern void rm_alias(const char *);

@@ -16,15 +16,17 @@ static char *lookupvar(const char *, size_t);
 static inline char *
 statusvar(void)
 {
-  size_t n = lstatus;
-  char *buf = st_alloc(4);
-  char t;
-  size_t i = 0;
+  size_t n, i, e;
+  char *buf, t;
+
+  i = 0;
+  n = lstatus;
+  buf = st_alloc(4);
   do {
     buf[i++] = (n % 10) + '0';
     n /= 10;
   } while (n);
-  size_t e = i - 1;
+  e = i - 1;
   for (size_t s = 0; s < e; s++) {
     t = buf[s];
     buf[s] = buf[e];
@@ -32,7 +34,6 @@ statusvar(void)
     e--;
   }
   buf[i] = '\0';
-  // snprintf(buf, 12, "%d", lstatus);
   return buf;
 }
 
@@ -78,12 +79,16 @@ build_env(char **sh_env)
   /* way too complicated way of trying to copy strings into
    * an array of strings. for performance reasons... I guess.*/
 
-  size_t c = 0, sh_c = 0, j = 0, len = 0;
-  size_t lenarr[MAX_ENV], var_len;
-  char **arr, **cmd_env = NULL;
+  size_t c, sh_c, j, len, var_len, arrsize;
+  size_t lenarr[MAX_ENV];
   char *buf;
+  char **arr, **cmd_env = NULL, **mem;
   shvar *var;
 
+  c = 0;
+  j = 0;
+  len = 0;
+  sh_c = 0;
   for (size_t i = 0; i < ENV_BUCKETS; i++) {
     var = var_tab[i];
     while (var) {
@@ -102,9 +107,9 @@ build_env(char **sh_env)
     }
   }
 
-  char **mem;
-  size_t arrsize = (c + 1) * sizeof(char *);
-  mem = malloc(arrsize + (len + 1));
+  arrsize = (c + 1) * sizeof(char *);
+  if (!(mem = malloc(arrsize + (len + 1))))
+    return NULL;
   cmd_env = (char **)mem;
   buf = (char *)mem + arrsize;
   arr = cmd_env;
@@ -142,6 +147,8 @@ init_env(void)
     char *name, *val;
     read_assn(environ[i], &name, &val);
     setvar(name, val, VEXPRT);
+    free(name);
+    free(val);
   }
 }
 
@@ -168,6 +175,8 @@ var_n(const char *args, size_t i, size_t *end)
   }
 
   *end = j;
+  if (!env_var)
+    return NULL;
   var = st_strdup(env_var);
   return var;
 }
@@ -205,9 +214,10 @@ lookupvar(const char *vt, size_t vlen)
 {
   char *var;
   shvar *v;
-  int n = 0;
+  int n;
   size_t i;
 
+  n = 0;
   if (is_posparam(vt, vlen)) {
     for (size_t j = 0;j < vlen; j++)
       n = n * 10 + (vt[j] - '0');
@@ -227,6 +237,20 @@ lookupvar(const char *vt, size_t vlen)
   }
 
   return var;
+}
+
+char * exp_tilde(char *word, size_t s, size_t *e) {
+  char *hm;
+
+  if (word[s] != '~')
+    return NULL;
+  if (s == 0 && (word[s + 1] == '\0' || word[s + 1] == '/')) {
+    if (!(hm = getvar("HOME")))
+      return NULL;
+    *e = s + 1;
+    return st_strdup(hm);
+  }
+  return NULL;
 }
 
 /** expand variables in word */
@@ -253,10 +277,13 @@ exp_var(char *word, size_t s, size_t *e)
 shvar *
 find_var(const char *name)
 {
-  unsigned int i = hash(name, ENV_BUCKETS);
-  shvar *v = var_tab[i];
+  unsigned int i;
+  shvar *v;
+  size_t namelen;
 
-  size_t namelen = strlen(name);
+  i = hash(name, ENV_BUCKETS);
+  v = var_tab[i];
+  namelen = strlen(name);
   while (v) {
     if (strncmp(v->var, name, namelen) == 0)
       return v;
@@ -280,7 +307,8 @@ setvar(char *name, char *val, shvar_flags flags)
     nvar[nlen + 1] = '\0';
   } else {
     vlen = strlen(val);
-    nvar = malloc(nlen + 1 + vlen + 1);
+    if (!(nvar = malloc(nlen + 1 + vlen + 1)))
+      return;
     memcpy(nvar, name, nlen);
     nvar[nlen] = '=';
     memcpy(nvar + nlen + 1, val, vlen + 1);
@@ -289,7 +317,7 @@ setvar(char *name, char *val, shvar_flags flags)
   i = hash(name, ENV_BUCKETS);
   v = var_tab[i];
   while (v) {
-    if (memcmp(v->var, name, nlen) == 0 && v->var[nlen] == '=') {
+    if (strncmp(v->var, name, nlen) == 0 && v->var[nlen] == '=') {
       if (v->flags & VREADONLY) {
         free(nvar);
         return;
@@ -301,7 +329,8 @@ setvar(char *name, char *val, shvar_flags flags)
     }
     v = v->next;
   }
-  v = malloc(sizeof(shvar));
+  if (!(v = malloc(sizeof(shvar))))
+    return;
   v->var = nvar;
   v->flags = flags;
   v->func = NULL;
@@ -313,10 +342,14 @@ setvar(char *name, char *val, shvar_flags flags)
 void
 unset_var(const char *name)
 {
-  unsigned int i = hash(name, ENV_BUCKETS);
-  shvar **prev = &var_tab[i];
-  shvar *v = var_tab[i];
+  unsigned int i;
+  shvar **prev;
+  shvar *v;
   size_t len;
+
+  i = hash(name, ENV_BUCKETS);
+  prev = &var_tab[i];
+  v = var_tab[i];
 
   len = strlen(name);
   while (v) {
@@ -335,8 +368,10 @@ unset_var(const char *name)
 alias *
 find_alias(const char *name)
 {
-  unsigned int i = hash(name, ENV_BUCKETS);
-  alias *a = alias_tab[i];
+  unsigned int i;
+  alias *a;
+  i = hash(name, ENV_BUCKETS);
+  a = alias_tab[i];
 
   while (a) {
     if (strcmp(a->name, name) == 0)
@@ -352,12 +387,12 @@ set_alias(const char *name, const char *val)
 {
   alias *a;
 
-  a = find_alias(name);
-  if (a) {
+  if ((a = find_alias(name))) {
     free(a->value);
     a->value = s_strdup(val);
   } else {
-    a = malloc(sizeof(alias));
+    if (!(a = malloc(sizeof(alias))))
+      return;
     a->name = s_strdup(name);
     a->value = s_strdup(val);
     unsigned int i = hash(name, ENV_BUCKETS);
@@ -370,10 +405,13 @@ set_alias(const char *name, const char *val)
 void
 rm_alias(const char *name)
 {
-  unsigned int i = hash(name, ENV_BUCKETS);
-  alias **prev = &alias_tab[i];
-  alias *a = alias_tab[i];
+  unsigned int i;
+  alias **prev;
+  alias *a;
 
+  i = hash(name, ENV_BUCKETS);
+  prev = &alias_tab[i];
+  a = alias_tab[i];
   while (a) {
     if (strcmp(a->name, name) == 0) {
       *prev = a->next;

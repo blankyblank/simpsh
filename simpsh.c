@@ -1,11 +1,14 @@
 /* simpsh.c - functions for running the shell */
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
-#include <readline/history.h>
-#include <readline/readline.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <linux/limits.h>
+#include <pwd.h>
+#ifdef READLINE
+#include <readline/history.h>
+#include <readline/readline.h>
+#endif /* ifdef READLINE */
 
 #include "main.h"
 #include "simpsh.h"
@@ -20,10 +23,14 @@ getbuildinfo(void) {
          sh_argv0, __DATE__, __TIME__, __STDC_ISO_10646__);
 }
 
+#ifdef READLINE
 static int create_histfile(char *, char *);
+#endif /* ifdef READLINE */
+
 /** make directory path */
 static int pmkdir(char *path);
 
+#ifdef READLINE
 /** read line from interactive shell */
 char *
 lineread(void)
@@ -34,7 +41,23 @@ lineread(void)
 
   return line;
 }
+#else
+/** lineread with no readline, for testing */
+char *
+lineread(void)
+{
+  char buf[4096];
+  fputs(" $ ", stdout);
+  if (!fgets(buf, sizeof(buf), stdin))
+    return NULL;
+  size_t len = strlen(buf);
+  if (len > 0 && buf[len - 1] == '\n')
+    buf[len - 1] = '\0';
+  return s_strdup(buf);
+}
+#endif /* ifdef READLINE */
 
+#ifdef READLINE
 /** create history file */
 int
 create_histfile(char *home, char *histfile)
@@ -50,7 +73,9 @@ create_histfile(char *home, char *histfile)
       return 0;
   return 1;
 }
+#endif /* ifdef READLINE */
 
+#ifdef READLINE
 /** initialize history */
 void
 init_history(void)
@@ -67,39 +92,66 @@ init_history(void)
       perror("Failed to read .simpsh_history");
   }
 }
+#endif /* ifdef READLINE */
 
 /** check in path for name stop at the first one with proper permissions if cdmode 1 check for dir */
 char *
 chkpath(const char *path, const char *name, unsigned int cdmode)
 {
-  char *end, *e;
+  size_t flen, seg, tlen, blen;
+  char *end, *e, *exp, *bdir;
+  char buf[PATH_MAX], expbuf[PATH_MAX], tildbuf[PATH_MAX];
+  unsigned int noex;
   const char *s;
-  size_t flen;
   struct stat statbuf;
+  struct passwd *pw;
 
   flen = strlen(name);
   s = path;
-  char buf[PATH_MAX];
+
   for (e = s_strchrnul(s, ':'); e; e = s_strchrnul(s, ':')) {
-    size_t dlen;
-    if (!*e) {                                   /* if we made it all the way to the last entry */
-      dlen = strlen(s);
-      end = s_mempcpy(buf, s, dlen);
-      *end++ = '/';
-      memcpy(end, name, flen + 1);
-      if (access(buf, X_OK) == 0) {
-        if (cdmode) {
-          if (!stat(buf, &statbuf) && S_ISDIR(statbuf.st_mode))
-            return st_strdup(buf);
+    size_t dirlen, complen;
+    char *comp;
+
+    dirlen = e - s;
+    comp = (char *)s;
+    complen = dirlen;
+
+    noex = 0;
+    if (s[0] == '~') {
+      seg = 0;
+      while (s[seg] != '/' && seg < dirlen)
+        seg++;
+
+      if (seg == 1 || (seg == dirlen && dirlen == 1)) {
+        exp = getvar("HOME");
+        if (exp) {
+          blen = strlen(exp);
+          bdir = exp;
         } else {
-          return st_strdup(buf);
+          noex = 1;
+        }
+      } else {
+        nmemcpy(tildbuf, s + 1, seg - 1);
+        pw = getpwnam(tildbuf);
+        if (pw) {
+          blen = strlen(pw->pw_dir);
+          bdir = pw->pw_dir;
+        } else {
+          noex = 1;
         }
       }
-      break;
+      if (!noex) {
+        memcpy(expbuf, bdir, blen);
+        if (seg < dirlen)
+          memcpy(expbuf + blen, s + seg, dirlen - seg);
+        tlen = blen + (seg < dirlen ? dirlen - seg : 0);
+        comp = expbuf;
+        complen = tlen;
+      }
     }
-    dlen = e - s;
-    // *e = '\0';
-    end = s_mempcpy(buf, s, dlen); /* copy current path segment from s to e */
+
+    end = s_mempcpy(buf, comp, complen); /* copy current path segment from s to e */
     *end++ = '/';                                /* add / and then file to the end of it */
     memcpy(end, name, flen + 1);
     if (access(buf, X_OK) == 0) {
@@ -110,6 +162,8 @@ chkpath(const char *path, const char *name, unsigned int cdmode)
         return st_strdup(buf);
       }
     }
+    if (!*e)
+      break;
     s = e + 1;
   }
   return NULL;
