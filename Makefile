@@ -1,26 +1,49 @@
 CC := gcc
 # CC := clang
 
-# normal debug build
-CFLAGS 		     :=  --std=c99 -I. -Og -Wall -Wextra -pedantic -pipe -g3
-# smaller debug build
-# CFLAGS 		     :=  --std=c99 -I. -Og -Wall -Wextra -pedantic -pipe
-# gdb debugging flags.
-# GDBFLAGS 		     :=  -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
-# release build
-# CFLAGS 		   := --std=c99 -I. -Os -Wall -Wextra -pedantic -pipe
-# adress sanatizer flags
-# SANITIZE_FLAGS := -static-libasan
-# SANITIZE_FLAGS := -fno-omit-frame-pointer
-# SANITIZE_FLAGS := -DDEBUG -DENABLE_VALGRIND
-SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds
-# SANITIZE_FLAGS := -fsanitize=address,leak,undefined,bounds -fno-omit-frame-pointer
+BUILD       ?= sanitize
+# debug | release | sanitize | valgrind
+BUILD_LINK  ?= dynamic
+# dynamic | static
+READLINE    := y
+# set to anything to enable, unset to disable
 
-READLINE := y
+# Compiler flags
+CFLAGS  := --std=c99 -I. -Wall -Wextra -pedantic -pipe
+LDFLAGS :=
+LDLIBS  :=
 
+# Build mode presets
+ifeq ($(BUILD),release)
+  CFLAGS += -Os
+endif
+ifeq ($(BUILD),debug)
+  CFLAGS += -Og -g3 -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
+endif
+ifeq ($(BUILD),sanitize)
+  CFLAGS += -Og -g3
+  ifeq ($(BUILD_LINK),static)
+    CFLAGS += -fsanitize=undefined,bounds -fno-omit-frame-pointer
+    LDFLAGS += -static-libasan -fsanitize=undefined,bounds
+  else
+    CFLAGS += -fsanitize=address,leak,undefined,bounds -fno-omit-frame-pointer
+    LDFLAGS += -fsanitize=address,leak,undefined,bounds
+  endif
+endif
+ifeq ($(BUILD),valgrind)
+  CFLAGS += -Og -g3 -DDEBUG -DENABLE_VALGRIND
+endif
+# Link type
+ifeq ($(BUILD_LINK),static)
+  LDFLAGS += -static
+endif
+# Readline
 ifdef READLINE
-	CFLAGS += -DREADLINE
-	LDLIBS += -lreadline
+  CFLAGS += -DREADLINE
+  LDLIBS += -lreadline
+  ifeq ($(BUILD_LINK),static)
+      LDLIBS += -lncurses
+  endif
 endif
 
 OBJDIR 	 	 := obj
@@ -28,7 +51,7 @@ SRC 	 	   := $(wildcard *.c)
 OBJ 	 	   := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
 
 TARGET		   := simpsh
-CFLAGS		   := $(CFLAGS) $(SANITIZE_FLAGS) $(GDBFLAGS)
+CFLAGS		   := $(CFLAGS)
 
 .PHONY: all clean test install uninstall
 
@@ -39,7 +62,7 @@ $(OBJDIR)/%.o: %.c | $(OBJDIR)
 $(OBJDIR):
 	mkdir -p $@
 $(TARGET): $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS) $(LDLIBS)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LDLIBS)
 
 all.c:
 	echo "int main() { return 0;}" > all.c
