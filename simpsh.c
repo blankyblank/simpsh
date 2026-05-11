@@ -4,7 +4,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <linux/limits.h>
-#include <pwd.h>
 #ifdef READLINE
 #include <readline/history.h>
 #include <readline/readline.h>
@@ -104,7 +103,6 @@ chkpath(const char *path, const char *name, unsigned int cdmode)
   unsigned int noex;
   const char *s;
   struct stat statbuf;
-  struct passwd *pw;
 
   flen = strlen(name);
   s = path;
@@ -133,10 +131,10 @@ chkpath(const char *path, const char *name, unsigned int cdmode)
         }
       } else {
         nmemcpy(tildbuf, s + 1, seg - 1);
-        pw = getpwnam(tildbuf);
-        if (pw) {
-          blen = strlen(pw->pw_dir);
-          bdir = pw->pw_dir;
+        exp = homedir(tildbuf);
+        if (exp) {
+          blen = strlen(exp);
+          bdir = exp;
         } else {
           noex = 1;
         }

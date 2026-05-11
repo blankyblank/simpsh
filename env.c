@@ -1,6 +1,7 @@
 /*  env.c - functions surrounding various parts of the shell environment  */
 #define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
+#include <limits.h>
 
 #include "main.h"
 #include "env.h"
@@ -38,11 +39,7 @@ statusvar(void)
 }
 
 /** get the pid shell variable */
-static inline char *
-var_pid(void)
-{
-  return st_strdup(sh_pid_s);
-}
+#define var_pid() (st_strdup(sh_pid_s))
 
 /** get positional parameters */
 static inline char *
@@ -239,8 +236,55 @@ lookupvar(const char *vt, size_t vlen)
   return var;
 }
 
-char * exp_tilde(char *word, size_t s, size_t *e) {
-  char *hm;
+char *
+homedir(char *user)
+{
+  char e[PATH_MAX];
+  FILE *pw;
+  size_t i;
+
+  if (!user)
+    return NULL;
+  if (!(pw = fopen("/etc/passwd", "r")))
+    return NULL;
+  while (fgets(e, PATH_MAX, pw)) {
+    char *s, *end;
+    size_t ulen;
+
+    if (e[0] == '#' || e[0] == '\n')
+      continue;
+    s = e;
+    end = strchr(s, ':');
+    if (!end) 
+      continue;
+    ulen = end - s;
+    if (strncmp(s, user, ulen) == 0 && s[ulen] == ':') {
+      s += ulen + 1;
+      for (i = 0; i < 4; i++) {
+        s = strchr(s, ':');
+        if (!end)
+          break;
+        s++;
+      }
+      if (i != 4)
+        continue;
+      end = strchr(s, ':');
+      if (end)
+        *end = '\0';
+      if (!*s)
+        continue;
+      fclose(pw);
+      return st_strdup(s);
+    } 
+  }
+  return NULL;
+}
+
+char *
+exp_tilde(char *word, size_t s, size_t *e)
+{
+  char *hm, strt;
+  size_t end;
 
   if (word[s] != '~')
     return NULL;
@@ -249,6 +293,18 @@ char * exp_tilde(char *word, size_t s, size_t *e) {
       return NULL;
     *e = s + 1;
     return st_strdup(hm);
+  } else {
+    end = s + 1;
+    while (word[end] && word[end] != '/')
+      end++;
+    strt = word[end];
+    word[end] = '\0';
+    hm = homedir(word + s + 1);
+    word[end] = strt;
+    if (hm) {
+      *e = end;
+      return hm;
+    }
   }
   return NULL;
 }

@@ -31,25 +31,23 @@ struct shvar {
 
 #define ENV_BUCKETS 39
 #define MAX_ALIAS_DEPTH 10
+#define shvar_val(v) (s_strchrnul(v->var, '=') + 1)
+#define shvar_namelen(v) (s_strchrnul(var, '=') - var)
+
 extern shvar *var_tab[ENV_BUCKETS];
 extern alias *alias_tab[ENV_BUCKETS];
 
-extern void init_env(void);
+extern alias *find_alias(const char *);
+extern char *exp_tilde(char *, size_t, size_t *);
 extern char **build_env(char **);
 extern char *exp_var(char *, size_t, size_t *);
-extern char * exp_tilde(char *, size_t , size_t *);
-extern alias *find_alias(const char *);
-extern void set_alias(const char *, const char *);
+extern char *homedir(char *);
+extern shvar *find_var(const char *);
+extern void init_env(void);
 extern void rm_alias(const char *);
+extern void set_alias(const char *, const char *);
 extern void setvar(char *, char *, shvar_flags);
 extern void unset_var(const char *);
-extern shvar *find_var(const char *);
-
-static inline char *
-shvar_val(const shvar *v)
-{
-  return s_strchrnul(v->var, '=') + 1;
-}
 
 static inline char *
 getvar(const char *vt)
@@ -59,12 +57,6 @@ getvar(const char *vt)
   if ((v = find_var(vt)))
     var = shvar_val(v);
   return var;
-}
-
-static inline size_t
-shvar_namelen(char *var)
-{
-  return s_strchrnul(var, '=') - var;
 }
 
 #endif /* VAR_H */
