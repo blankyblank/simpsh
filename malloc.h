@@ -35,24 +35,6 @@ extern void *grow_stack(size_t);
 extern char *grab_str(size_t);
 extern void init_stack(void);
 
-/* static inline void
-st_putc(int c)
-{
-  if (stleft == 0)
-    grow_stack(1);
-  *stnext++ = c;
-  stleft--;
-} */
-
-/* #define st_putc(c) do { \
-  if (stleft == 0)      \
-    (void)grow_stack(1); \
-  *stnext++ = (c);       \
-  stleft--;              \
-} while (0) */
-
-#define st_putc(c) (void)(stleft == 0 ? grow_stack(1) : (void *)0), *stnext++ = (c), stleft--
-
 static inline char *
 st_strndup(const char *s, size_t len)
 {
@@ -63,10 +45,17 @@ st_strndup(const char *s, size_t len)
   return d;
 }
 
-static inline char *
-st_strdup(const char *s)
-{
-  return st_strndup(s, strlen(s));
-}
+#define st_putc(c) (void)(stleft == 0 ? grow_stack(1) : (void *)0), *stnext++ = (c), stleft--
+
+/** stack allocator strdup */
+#define st_strdup(s) (st_strndup(s, strlen(s)))
+
+/* #define st_putc(c) do { \
+  if (stleft == 0)      \
+    (void)grow_stack(1); \
+  *stnext++ = (c);       \
+  stleft--;              \
+} while (0) */
+
 
 #endif /* !MALLOC_H */
