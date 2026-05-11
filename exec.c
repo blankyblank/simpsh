@@ -71,7 +71,7 @@ builtin_launch(int idx, char **args)
 int
 shexec(char **args, char **env)
 {
-  int wstatus, estatus, tstatus = 0;
+  int wstatus;
   pid_t pid;
   char *fullpath;
 
@@ -80,14 +80,14 @@ shexec(char **args, char **env)
   fullpath = getpath(args[0]);
   if (!fullpath) {
     fprintf(stderr, "%s: %s: command not found\n", sh_argv0, args[0]);
-    goto done;
+    return 1;
   }
 
   pid = fork();
   switch (pid) {
     case -1:
       perror("failed to create");
-      goto done;
+      return 1;
     case 0:
       /* if fork was successful run the command */
       if (execve(fullpath, args, env) < 0) {
@@ -97,19 +97,8 @@ shexec(char **args, char **env)
     /* fall through */
     default:
       waitpid(pid, &wstatus, 0);
-      if (WIFEXITED(wstatus))
-        if ((tstatus = WEXITSTATUS(wstatus)) != 0)
-          estatus = (tstatus > 255) ? 1 : tstatus;
-        else
-          estatus = 1;
-      else
-        estatus = tstatus;
-      return estatus;
+      return WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
   }
-
-done:
-  estatus = 1;
-  return estatus;
 }
 
 int
@@ -280,31 +269,30 @@ run_commands(const cmd_tree *n)
 {
   if (!n)
     return 0;
-  int l_status = 0;
 
   switch (n->type) {
     case CMD:
-      return run_cmd(n);
+      return lstatus = run_cmd(n);
     case SUBSHELL:
-      return run_subsh(n);
+      return lstatus = run_subsh(n);
     case OP:
       if (n->op_t != TPIPE)
-        l_status = run_commands(n->left);
+        lstatus = run_commands(n->left);
       switch (n->op_t) {
         case TSEMI:
-          return run_commands(n->right);
+          return lstatus = run_commands(n->right);
         case TAND:
-          if (l_status != 0)
-            return l_status;
-          return run_commands(n->right);
+          if (lstatus != 0)
+            return lstatus;
+          return lstatus = run_commands(n->right);
         case TOR:
-          if (l_status == 0)
-            return l_status;
-          return run_commands(n->right);
+          if (lstatus == 0)
+            return lstatus;
+          return lstatus = run_commands(n->right);
         case TPIPE:
-          return run_pipe(n);
+          return lstatus = run_pipe(n);
         case TEOF:
-          return l_status;
+          return lstatus;
         default:
           fprintf(stderr, "Unknown Operator\n");
           return 1;
