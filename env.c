@@ -139,6 +139,7 @@ void
 init_env(void)
 {
   size_t i, env_c;
+
   env_c = array_len(environ);
   for (i = 0; i < env_c; i++) {
     char *name, *val;
@@ -147,6 +148,14 @@ init_env(void)
     free(name);
     free(val);
   }
+
+  sh_argv0 = "simpsh";
+  sh_pid_s = malloc(16);
+  sh_pid = getpid();
+  sh_argc = 0;
+  sh_argv = NULL;
+  snprintf(sh_pid_s, 16, "%d", sh_pid);
+  home = getenv("HOME");
 }
 
 /** expand $var style variables */
@@ -162,7 +171,7 @@ var_n(const char *args, size_t i, size_t *end)
       vt_l = j - (i + 1);
 
       if (vt_l == 0) {
-        env_var = &args[i];
+        env_var = NULL;
         break;
       } else {
         env_var = lookupvar(&args[i + 1], vt_l);
