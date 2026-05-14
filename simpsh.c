@@ -32,9 +32,9 @@ static int pmkdir(char *path);
 #ifdef READLINE
 /** read line from interactive shell */
 char *
-lineread(void)
+lineread(char *prompt)
 {
-  char *line = readline(" $ ");
+  char *line = readline(prompt);
   if (line && *line)
     add_history(line);
 
@@ -43,10 +43,10 @@ lineread(void)
 #else
 /** lineread with no readline, for testing */
 char *
-lineread(void)
+lineread(char *prompt)
 {
   char buf[4096];
-  fputs(" $ ", stdout);
+  fputs(prompt, stdout);
   if (!fgets(buf, sizeof(buf), stdin))
     return NULL;
   size_t len = strlen(buf);
@@ -72,9 +72,7 @@ create_histfile(char *home, char *histfile)
       return 0;
   return 1;
 }
-#endif /* ifdef READLINE */
 
-#ifdef READLINE
 /** initialize history */
 void
 init_history(void)
@@ -92,6 +90,87 @@ init_history(void)
   }
 }
 #endif /* ifdef READLINE */
+
+/** take in ps1 char * to do variable expansion for prompt */
+char *
+expand_ps1(char *p)
+{
+  size_t i, end, outlen;
+  size_t pvarlen, cbrace;
+  char *s, *pcpy, *expanded;
+
+  if (!p)
+    return NULL;
+
+  pvarlen = 0;
+  outlen = 0;
+  i = 0;
+  while (p[i]) {
+
+    if (p[i] == '$') {
+      if (p[i + 1] == '$' || p[i + 1] == '?') {
+        pvarlen = 2;
+        pcpy = st_strndup(p + i, pvarlen);
+      } else if (p[i + 1] == '{') {
+        cbrace = i + 2;
+        while (p[cbrace]) {
+          if (p[cbrace] == '}') {
+            pvarlen = cbrace - i + 1;
+            break;
+          }
+          cbrace++;
+        }
+        if (!p[cbrace]) {
+          st_putc(p[i]);
+          outlen++;
+          i++;
+          continue;
+        } else {
+          pcpy = st_strndup(p + i, pvarlen);
+        }
+      } else if (isalnum(p[i + 1])) {
+        pvarlen = i + 1;
+        while (isalnum(p[pvarlen]))
+          pvarlen++;
+        pvarlen -= i;
+        pcpy = st_strndup(p + i, pvarlen);
+      } else {
+        if (p[i + 1] == ' ' || p[i + 1] == '\t' || p[i + 1] == '\0') {
+          if (lstatus == 0)
+            st_putc('$');
+          else
+            st_putc('X');
+          outlen++;
+          i++;
+          continue;
+        }
+        st_putc(p[i]);
+        outlen++;
+        i++;
+        continue;
+      }
+      if ((expanded = exp_var(pcpy, 0, &end))) {
+        s = expanded;
+        for (; *s; s++) {
+          st_putc(*s);
+          outlen++;
+        }
+        i += pvarlen;
+      } else {
+        for (s = pcpy; *s; s++) {
+          st_putc(*s);
+          outlen++;
+        }
+        i += pvarlen;
+      }
+    } else {
+      st_putc(p[i]);
+      outlen++;
+      i++;
+    }
+  }
+  return grab_str(outlen);
+}
 
 /** check in path for name stop at the first one with proper permissions if cdmode 1 check for dir */
 char *

@@ -8,7 +8,8 @@
 
 /* functions for shell */
 extern char *getpath(char *);
-extern char *lineread(void);
+extern char *expand_ps1(char *);
+extern char *lineread(char *);
 extern void getbuildinfo(void);
 extern char *chkpath(const char *, const char *, unsigned int);
 #ifdef READLINE
