@@ -1,0 +1,5 @@
+#!/home/blank/dev/simpsh/simpsh
+
+false &&
+echo true ||
+echo false

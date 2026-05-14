@@ -1,9 +1,11 @@
 #!/bin/sh
 # shellcheck disable=2015
+# shellcheck disable=2016
 set -e
 
 [ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
 
+msg 'running ../simpsh -c "cd /tmp ; pwd"...'
 out=$(../simpsh -c "cd /tmp ; pwd")
 
 if [ "$out" != "/tmp" ]; then

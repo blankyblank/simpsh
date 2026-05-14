@@ -3,6 +3,7 @@
 
 [ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
 
+msg 'running ../simpsh -c "printf '%s' a; printf '%s' b; printf '%s' c"...'
 out=$(../simpsh -c "printf '%s' a; printf '%s' b; printf '%s' c")
 
 if [ "$out" != abc ]; then
