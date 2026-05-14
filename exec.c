@@ -280,6 +280,7 @@ run_commands(const cmd_tree *n)
         lstatus = run_commands(n->left);
       switch (n->op_t) {
         case TSEMI:
+        case TNL:
           return lstatus = run_commands(n->right);
         case TAND:
           if (lstatus != 0)

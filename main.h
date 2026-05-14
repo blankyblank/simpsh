@@ -28,6 +28,7 @@
 extern char **environ;
 extern char *sh_argv0;
 extern char **sh_argv;
+extern char *shps1;
 extern int sh_argc;
 extern int lstatus;
 extern pid_t sh_pid;

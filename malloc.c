@@ -33,7 +33,13 @@ stack_mark(void)
   stmark m = { current, stnext, stleft };
   return m;
 }
-
+void
+stunalloc(void *p)
+{
+    if (p >= (void *)stnext) return;     /* safety */
+    stleft += (char *)stnext - (char *)p;
+    stnext = p;
+}
 /**  clear everything back to stmark  */
 void
 stack_restore(stmark m)

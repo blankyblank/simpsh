@@ -6,19 +6,21 @@
 #include "env.h"
 #include "utils.h"
 #include "malloc.h"
+#include "input.h"
 
+static char *cat_wf(wf *wordf);
+static cmd_tree *parse_andor(const sh_tok *tokens, size_t cnt, token s, size_t *i);
+static cmd_tree *parse_list(const sh_tok *tokens, size_t cnt, token s, size_t *i);
+static cmd_tree *parse_pipe(const sh_tok *tokens, size_t cnt, token s, size_t *i);
+static int eatbnl(void);
+static int is_assn(wf *);
+static void append_wf(wf **, wf **, char *, size_t len, int);
+static void expand_alias(char *val, sh_tok *tokens, size_t *c);
 static wf **get_argv(const sh_tok *, size_t, size_t *);
 static wf **get_assn(wf **, char ***);
-static void append_wf(wf **, wf **, char *, size_t len, int);
-static int is_assn(wf *);
-static char *cat_wf(wf *wordf);
-static void expand_alias(char *val, sh_tok *tokens, size_t *c);
-
-static cmd_tree *parse_list(const sh_tok *tokens, size_t cnt, token s, size_t *i);
-static cmd_tree *parse_andor(const sh_tok *tokens, size_t cnt, token s, size_t *i);
-static cmd_tree *parse_pipe(const sh_tok *tokens, size_t cnt, token s, size_t *i);
 
 static int alias_depth = 0;
+int notclosed = 0;
 
 static inline cmd_tree *
 newcmdnode(wf **args, cmd_false negate, char **sh_vars)
@@ -80,6 +82,24 @@ newoppnode(token opp_t, cmd_tree *left, cmd_tree *right)
   return ot;
 }
 
+static int
+eatbnl(void)
+{
+  char c, n;
+
+  while ((c = shgetchar()) == '\\') {
+    if ((n = shgetchar()) == '\n') {
+      cur_shinpt->linenum++;
+      continue;
+    }
+    if (n != SHEOF) {
+      shungetc(n);
+      return '\\';
+    }
+  }
+  return c;
+}
+
 /* build consecutive TWORDS into command returned in word fragments */
 static wf **
 get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
@@ -94,14 +114,12 @@ get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
     wc++;
   }
   wf **argv = st_alloc((wc + 1) * sizeof(wf *));
-
   t = *i;
   while (t < cnt && tokens[t].type == TWORD) {
     argv[j] = tokens[t].cmd;
     j++;
     t++;
   }
-
   argv[j] = NULL;
   *i = t;
   return argv;
@@ -200,9 +218,8 @@ append_wf(wf **head, wf **tail, char *w, size_t len, int quoted)
   *tail = f;
 }
 
-/**  parses a line extracts a word, handles quoting, escaping.  */
 wf *
-get_wf(char *line, size_t *pos)
+get_wf(int c)
 {
   /*
    * parses a line extracts a word, handles quoting, escaping.
@@ -220,106 +237,94 @@ get_wf(char *line, size_t *pos)
   wf *head = NULL;
   wf *tail = NULL;
   quoted state;
-  size_t i = *pos;
-  char c, n;
-  char *w;
-  size_t len = 0;
+  char n, *w;
+  size_t len;
   // char *s = p;
 
   state = QNONE;
-
-  while (line[i]) {
-    c = line[i];
-    n = line[i + 1];
+  len = 0;
+  for (;;) {
     switch (state) {
-    case QNONE:
-      if (c == '\'') {
-        if (n == '\n') {
-          i += 2;
-          continue;
-        } else if (len > 0) {
-          /* save unquoted frag if nonempty */
-          w = grab_str(len);
-          append_wf(&head, &tail, w, len, state);
-          len = 0;
-        }
-        state = QSINGLE;
-        i++;
-      } else if (is_operator(c)) {
-        goto done;
-      } else if (is_cmd_end(c)) {
-        goto done;
-      } else if (c == '"') {
-        /* save unquoted frag if nonempty */
-        if (len > 0) {
-          w = grab_str(len);
-          append_wf(&head, &tail, w, len, state);
-          len = 0;
-        }
-        state = QDOUBLE;
-        i++;
-      } else if (c == '\\') {
-        if (n == '\0') {
-          i++;
+      case QNONE:
+        if (c == '\'') {
+          if (len > 0) {
+            w = grab_str(len); /* save unquoted frag if nonempty */
+            append_wf(&head, &tail, w, len, state);
+            len = 0;
+          }
+          state = QSINGLE;
+        } else if (is_operator(c)) {
+          shungetc(c);
           goto done;
-        } else {
-          // i think I should use n where I already used n
+        } else if (is_cmd_end(c)) {
+          shungetc(c);
+          goto done;
+        } else if (c == '"') {
+          if (len > 0) {
+            w = grab_str(len); /* save unquoted frag if nonempty */
+            append_wf(&head, &tail, w, len, state);
+            len = 0;
+          }
+          state = QDOUBLE;
+        } else if (c == '\\') {
+          n = eatbnl();
+          if (n == SHEOF)
+            goto done;
           st_putc(n);
           len++;
-          i += 2;
+        } else {
+          st_putc(c);
+          len++;
         }
-      } else {
-        st_putc(c);
-        len++;
-        i++;
-      }
         break;
       case QSINGLE:
         if (c == '\'') {
-          /* save single quoted frag if nonempty */
           if (len > 0) {
-            w = grab_str(len);
+            w = grab_str(len); /* save single quoted frag if nonempty */
             append_wf(&head, &tail, w, len, state);
             len = 0;
           }
           state = QNONE;
-          i++;
         } else {
           st_putc(c);
           len++;
-          i++;
         }
         break;
       case QDOUBLE:
         if (c == '"') {
-          /* save double quoted frag if nonempty */
           if (len > 0) {
-            w = grab_str(len);
+            w = grab_str(len); /* save double quoted frag if nonempty */
             append_wf(&head, &tail, w, len, state);
             len = 0;
           }
           state = QNONE;
-          i++;
         } else if (c == '\\') {
-          if (n == '\n') {
-            i += 2;
-            continue;
-          } else if (n == '$' || n == '"' || n == '\\') {
+          n = eatbnl();
+          if (n == SHEOF)
+            goto done;
+          if (n == '$' || n == '"' || n == '\\') {
             st_putc(n);
             len++;
-            i += 2;
           } else {
             st_putc(c);
             len++;
-            i++;
+            shungetc(n);
           }
         } else {
           st_putc(c);
           len++;
-          i++;
         }
         break;
-      }
+    }
+    if (state == QSINGLE)
+      c = shgetchar();
+    else 
+      c = eatbnl();
+    if (c == SHEOF) {
+      if (state != QNONE)
+        notclosed = 1;
+      goto done;
+    }
   }
 
 done:
@@ -328,95 +333,115 @@ done:
     w = grab_str(len);
     append_wf(&head, &tail, w, len, state);
   }
-  *pos = i;
   return head;
 }
 
 /**  split a line up into tokens store in sh_tok structs  */
 sh_tok *
-tokenize(char *line, int *cnt)
+tokenize(int *cnt)
 {
-  size_t p = 0, c = 0, n;
-  unsigned int expand = 1;
   char *word;
+  int c, n, state;
+  size_t tc = 0;
   wf *f = NULL;
   alias *a = NULL;
+  enum {
+    SKIPNL = 1 << 0,
+    SEP = 1 << 1,
+    XPND = 1 << 2
+  };
+
+  state = (1 << 1) | (1 << 2);
   *cnt = 0;
 
-  if (!line) {
-    *cnt = -1;
-    return NULL;
-  }
-  if (strlen(line) == 0)
-    return NULL;
-
   sh_tok *tokens = st_alloc(16 * (sizeof(sh_tok)));
-  p = 0;
   if (!tokens)
     return NULL;
 
   /* go until we hit the null byte */
-  while (line[p]) {
-    p = skip_ws(line + p) - line; /* skip whitespace */
-    if (!line[p])
-      break;
-
-    n = p + 1; /* the next c-string */
-    /* update c (count) and p (position) by the length of the operator */
-    if (line[p] == '!') {
-      tokens[c].type = TNOT;
-      tokens[c].cmd = NULL;
-      c++;
-      p++;
-    } else if (line[p] == '&' && line[n] == '&') {
-      tokens[c].type = TAND;
-      tokens[c].cmd = NULL;
-      c++;
-      p += 2;
-      expand |= 1;
+  while ((c = shgetchar()) != SHEOF) {
+    if (c == ' ' || c == '\t')
       continue;
-    } else if (line[p] == '|') {
-      if (line[n] == '|') {
-        tokens[c].type = TOR;
-        tokens[c].cmd = NULL;
-        c++;
-        p += 2;
-        expand |= 1;
+
+    /* handle \ nl escape */
+    if (c == '\n') {
+      if (state & SKIPNL) {
+        state &= ~SKIPNL;
+        continue;
+      }
+      if (state & SEP)
+        continue;
+      tokens[tc].type = TNL;
+      tokens[tc].cmd = NULL;
+      tc++;
+      state |= SEP;
+      continue;
+    }
+
+    if (c == '#' && (state & XPND)) { /* handle comments */
+      while ((c = shgetchar()) != '\n' && c != SHEOF);
+      if (c == '\n')
+        shungetc(c);
+      continue;
+    }
+
+    /* update c (count) and p (position) by the length of the operator */
+    if (c == '!') {
+      tokens[tc].type = TNOT;
+      tokens[tc++].cmd = NULL;
+      state |= XPND;
+      continue;
+    } else if (c == '&') {
+      n = eatbnl();
+      if (n == '&') {
+        state |= XPND | SKIPNL;
       } else {
-        tokens[c].type = TPIPE;
-        tokens[c].cmd = NULL;
-        c++;
-        p++;
-        expand |= 1;
+        shungetc(n);
+      }
+      tokens[tc].type = TAND;
+      tokens[tc].cmd = NULL;
+      tc++;
+      state |= XPND;
+      continue;
+    } else if (c == '|') {
+      n = eatbnl();
+      if (n == '|') {
+        tokens[tc].type = TOR;
+        tokens[tc].cmd = NULL;
+        tc++;
+        state |= XPND | SKIPNL;
+      } else {
+        shungetc(n);
+        tokens[tc].type = TPIPE;
+        tokens[tc].cmd = NULL;
+        tc++;
+        state |= XPND | SKIPNL;
       }
       continue;
-    } else if (line[p] == ';') {
-      tokens[c].type = TSEMI;
-      tokens[c].cmd = NULL;
-      c++;
-      p++;
-      expand |= 1;
+    } else if (c == ';') {
+      tokens[tc].type = TSEMI;
+      tokens[tc].cmd = NULL;
+      tc++;
+      state |= XPND;
       continue;
-    } else if (line[p] == '(') {
-      tokens[c].type = TLPAREN;
-      tokens[c].cmd = NULL;
-      c++;
-      p++;
-      expand |= 1;
+    } else if (c == '(') {
+      tokens[tc].type = TLPAREN;
+      tokens[tc].cmd = NULL;
+      tc++;
+      state |= XPND;
       continue;
-    } else if (line[p] == ')') {
-      tokens[c].type = TRPAREN;
-      tokens[c].cmd = NULL;
-      c++;
-      p++;
-      expand |= 1;
+    } else if (c == ')') {
+      tokens[tc].type = TRPAREN;
+      tokens[tc].cmd = NULL;
+      tc++;
+      state |= XPND;
       continue;
     } else {
-      if (!(f = get_wf(line, &p)))
+      if (!(f = get_wf(c)))
         return NULL;
       if (f && f->qs == QNONE && f->next == NULL) {
         word = cat_wf(f);
-        if (expand & 1)
+        if (state & XPND)
           a = find_alias(word);
         if (a) {
           if (alias_depth >= MAX_ALIAS_DEPTH) {
@@ -424,23 +449,25 @@ tokenize(char *line, int *cnt)
             return NULL;
           }
           alias_depth++;
-          expand_alias(a->value, tokens, &c);
+          expand_alias(a->value, tokens, &tc);
           alias_depth--;
           continue;
         }
       }
       if (f->word && f->len > 0) {
-        tokens[c].type = TWORD;
-        tokens[c].cmd = f;
-        c++;
-        expand &= ~1;
+        tokens[tc].type = TWORD;
+        tokens[tc].cmd = f;
+        tc++;
+        state &= ~XPND;
       }
     }
   }
-  tokens[c].type = TEOF;
-  tokens[c].cmd = NULL;
+  if (tokens[tc].type == TAND || tokens[tc].type == TOR || tokens[tc].type == TSEMI)
+    notclosed = 1;
+  tokens[tc].type = TEOF;
+  tokens[tc].cmd = NULL;
 
-  *cnt = c;
+  *cnt = tc;
   return tokens;
 }
 
@@ -459,12 +486,12 @@ parse_list(const sh_tok *tokens, size_t cnt, token stp, size_t *i) {
   if (!left)
     return NULL;
 
-  while (*i < cnt && tokens[*i].type == TSEMI) {
+  while (*i < cnt && (tokens[*i].type == TSEMI || tokens[*i].type == TNL)) {
     token op = tokens[*i].type;
     (*i)++;
     cmd_tree *right = parse_cmd(tokens, cnt, stp, i);
     if (!right)
-      return NULL;
+      break;
     left = newoppnode(op, left, right);
   }
   return left;
@@ -551,51 +578,54 @@ parse_cmd(const sh_tok *tokens, size_t cnt, token s, size_t *i)
 static void
 expand_alias(char *val, sh_tok *tokens, size_t *c)
 {
-  size_t pos = 0;
-  unsigned int expand = 1;
+  int ch;
+  unsigned int expand;
   char *word;
   wf *f;
-  alias *a = NULL;
+  alias *a;
 
-  while (val[pos]) {
-    pos = skip_ws(val + pos) - val;
-    if (!val[pos])
-      break;
+  a = NULL;
+  expand = 1;
+  setinputstrn(val, strlen(val));
 
-    if (is_operator(val[pos])) {
-      expand |= 1;
+  while ((ch = shgetchar()) != SHEOF) {
+    if (ch == ' ' || ch == '\t') {
+      continue;
+    }
+    if (is_operator(ch)) {
+      expand = 1;
       break;
     }
 
-    f = get_wf(val, &pos);
+    f = get_wf(ch);
     if (!f)
       break;
 
-    if (f && f->qs == QNONE && f->next == NULL) {
-      if (expand & 1) {
+    if (f->qs == QNONE && f->next == NULL) {
+      if (expand) {
         word = cat_wf(f);
         a = find_alias(word);
         if (a) {
           if (alias_depth >= MAX_ALIAS_DEPTH) {
-            fprintf(stderr, "alias: too many levels of recursion\n");
+            fprintf(stderr, "alias too many levels of recursion\n");
+            popinput();
             return;
           }
           alias_depth++;
           expand_alias(a->value, tokens, c);
           alias_depth--;
-          expand &= ~1;
+          expand = 0;
           continue;
         }
       }
-      expand &= ~1;
     }
-
+    expand = 0;
     if (f->word && f->len > 0) {
       tokens[*c].type = TWORD;
       tokens[*c].cmd = f;
       (*c)++;
-      expand &= ~1;
+      expand = 0;
     }
   }
+  popinput();
 }
-

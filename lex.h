@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #define BUF_S 32
+extern int notclosed;
 
 typedef enum {
   TNOT,
@@ -15,6 +16,7 @@ typedef enum {
   TAND,
   TOR,
   TSEMI,
+  TNL,
   TEOF,
   TLPAREN,
   TRPAREN,
@@ -77,9 +79,9 @@ struct cmd_tree {
 };
 
 /** Get word fragment */
-extern wf *get_wf(char *, size_t *);
+extern wf *get_wf(int);
 /** create sh_toks out of line */
-extern sh_tok *tokenize(char *, int *);
+extern sh_tok *tokenize(int*);
 /** build ast tree */
 extern cmd_tree *build_tree(const sh_tok *, size_t, token);
 cmd_tree *parse_cmd(const sh_tok *, size_t, token, size_t *);

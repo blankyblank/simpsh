@@ -1,27 +1,30 @@
 /* simpsh - a simple posix shell */
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
-#include <unistd.h>
+#include <fcntl.h>
 #include <locale.h>
 #include <stdio.h>
+#include <unistd.h>
 #ifdef READLINE
-#include <readline/history.h>
+  #include <readline/history.h>
 #endif /* ifdef READLINE */
 
-#include "main.h"
-#include "simpsh.h"
-#include "malloc.h"
-#include "lex.h"
-#include "exec.h"
-#include "env.h"
-#include "utils.h"
 #include "arg.h"
+#include "env.h"
+#include "exec.h"
+#include "input.h"
+#include "lex.h"
+#include "main.h"
+#include "malloc.h"
+#include "simpsh.h"
+#include "utils.h"
 
 /* shell variables */
 int sh_argc;
 pid_t sh_pid;
 char *sh_pid_s = NULL;
 char *sh_argv0;
+char *shps1;
 char **sh_argv;
 char *home;
 int lstatus;
@@ -31,26 +34,20 @@ char histfile[265];
 static int interactive = 1;
 int builtin_tab[BUILTIN_BUCKETS];
 
-static int simpsh_run(char *line);
+__attribute__((always_inline)) static inline void simpsh_core(void);
+static char *read_accumulate(void);
+#define simpsh_run(l) setinputstrn(l, strlen(l)); simpsh_core(); popinput();
 
 /** shell entry point */
 int
 main(int argc, char **argv)
 {
   (void)argc;
-  char *line;
-  char buf[MAX_LENGTH];
-  int estatus, flags;
+  char *acc;
+  int flags, fd;
+  stmark mark;
 
   flags = 0;
-  estatus = -1;
-  /* set up shell variables */
-  sh_argv0 = "simpsh";
-  sh_pid = getpid();
-  home = getenv("HOME");
-  sh_argc = 0;
-  sh_argv = NULL;
-
   ARGBEGIN
   {
     case 'c':
@@ -69,65 +66,128 @@ main(int argc, char **argv)
     flags |= FLAG_t;
   if (flags & (FLAG_c | FLAG_t))
     interactive = 0;
+
   setlocale(LC_ALL, "");
+  /* set up allocator */
   init_stack();
+  /* set up shell variables */
   init_env();
+  /* set up builtin table */
   init_builtins();
+  /* set up input layer */
+  init_input();
 
   snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
-  sh_pid_s = malloc(16);
-  snprintf(sh_pid_s, 16, "%d", sh_pid);
 
   if (flags & FLAG_c) {
-    exit(simpsh_run(s_strdup(argv[0])));
+    setinputstrn(argv[0], strlen(argv[0]));
+    simpsh_run(argv[0]);
+    exit(lstatus);
+  } else if (*argv) {
+    fd = open(*argv, O_RDONLY);
+    if (fd < 0) {
+      perror("simpsh");
+      exit(1);
+    }
+    setinputf(fd);
+    simpsh_core();
+    close(fd);
+    exit(lstatus);
   } else if (flags & FLAG_t) {
-    while (fgets(buf, MAX_LENGTH, stdin) != NULL)
-      estatus = simpsh_run(s_strdup(buf));
-    exit(estatus);
+    setinputf(STDIN_FILENO);
+    simpsh_core();
+    exit(lstatus);
   } else {
     /* run the main loop */
-
-    #ifdef READLINE
+#ifdef READLINE
     init_history(); /* set up history */
-    #endif /* ifdef READLINE */
+#endif              /* ifdef READLINE */
     for (;;) {
-      line = lineread();
-      if (!line)
+      shps1 = expand_ps1(getvar("PS1"));
+      mark = stack_mark();
+      acc = read_accumulate();
+      if (!acc)
         break;
-      estatus = simpsh_run(line);
-      lstatus = estatus;
+      simpsh_run(acc); /* second tokenization, runs the command */
+      stack_restore(mark);
     }
-
-    free(line);
-    exit(0);
   }
 }
 
-/** run a command line */
-int
-simpsh_run(char *line)
+static char *
+read_accumulate(void)
 {
-  int estatus, tok_c;
+  char *line, *acc, *new;
+  stmark mark, accend, m;
+  size_t n, acclen;
   sh_tok *toks;
-  cmd_tree *c;
-  stmark mark;
+  token last;
 
   mark = stack_mark();
-  if (!(toks = tokenize(line, &tok_c)))
-    estatus = 0;
-  if (tok_c < 0) {
+  line = lineread(shps1 ? shps1 : " $ ");
+  if (!line) {
     stack_restore(mark);
-    return 1;
+    return NULL;
   }
-
-  c = build_tree(toks, tok_c, TEOF); /* build the actual command from parsed input */
-  estatus = run_commands(c);   /* then run commands */
-  if (interactive)             /* save command to history file */
-    #ifdef READLINE
-    append_history(1, histfile);
-    #endif /* ifdef READLINE */
-
+  n = strlen(line);
+  acc = st_alloc(n + 2);
+  memcpy(acc, line, n);
+  acc[n] = '\n';
+  acc[n + 1] = '\0';
+  acclen = n + 1;
   free(line);
+  for (;;) {
+    accend = stack_mark(); /* bookmark after acc content */
+    notclosed = 0;
+    setinputstrn(acc, (int)acclen);
+    { /* lightweight: tokenize to check completeness */
+      m = stack_mark();
+      int tc;
+      toks = tokenize(&tc);
+      if (!notclosed && toks && tc > 0) {
+        last = toks[tc - 1].type;
+        if (last == TAND || last == TOR || last == TPIPE)
+          notclosed = 1;
+      }
+      stack_restore(m);
+    }
+    popinput();
+    if (!notclosed)
+      return acc;
+    /* Undo setinputstrn's arena allocation */
+    stack_restore(accend);
+    /* stnext is now right at end of acc content */
+    line = lineread("> ");
+    if (!line) {
+      stack_restore(mark);
+      return NULL;
+    }
+    /* append: new larger buffer, copy old + new */
+    n = strlen(line);
+    new = st_alloc(acclen + n + 2);
+    memcpy(new, acc, acclen);
+    memcpy(new + acclen, line, n);
+    new[acclen + n] = '\n';
+    new[acclen + n + 1] = '\0';
+    free(line);
+    acc = new;
+    acclen += n + 1;
+  }
+}
+
+static inline void
+simpsh_core(void)
+{
+  stmark mark;
+  sh_tok *toks;
+  cmd_tree *c;
+  int tok_c;
+
+  mark = stack_mark();
+  toks = tokenize(&tok_c);
+  if (toks && !notclosed) {
+    c = build_tree(toks, tok_c, TEOF);
+    run_commands(c);
+  }
   stack_restore(mark);
-  return estatus;
 }

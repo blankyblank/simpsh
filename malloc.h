@@ -34,6 +34,7 @@ extern void stack_clear(void);
 extern void *grow_stack(size_t);
 extern char *grab_str(size_t);
 extern void init_stack(void);
+extern void stunalloc(void *p);
 
 static inline char *
 st_strndup(const char *s, size_t len)
@@ -46,7 +47,6 @@ st_strndup(const char *s, size_t len)
 }
 
 #define st_putc(c) (void)(stleft == 0 ? grow_stack(1) : (void *)0), *stnext++ = (c), stleft--
-
 /** stack allocator strdup */
 #define st_strdup(s) (st_strndup(s, strlen(s)))
 
