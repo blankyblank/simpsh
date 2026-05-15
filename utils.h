@@ -2,6 +2,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,7 +17,7 @@
 } while (0)
 
 /**  check if char is whitespace  */
-#define is_ws(c) (c == ' ' || c == '\t' || c == '\n')
+/* is_ws  WARN: for future me. use the posix isspace function instead */
 
 /**  check if char is operator  */
 #define is_operator(c) (c == '&' || c == '|' || c == ';' || c == '(' || c == ')')
@@ -38,7 +39,7 @@ array_len(char **arr)
 static inline const char *
 skip_ws(const char *s)
 {
-  while (is_ws(*s))
+  while (isspace(*s))
     s++;
   return s;
 }
@@ -94,20 +95,6 @@ s_strdup(const char *s)
     dup[len] = '\0';
   }
   return dup;
-}
-
-/**  reallocate buffer to bufsize  */
-static inline char *
-s_realloc(char *buf, size_t *bufsize)
-{
-  char *t;
-
-  *bufsize *= 2;
-  if (!(t = realloc(buf, *bufsize))) {
-    free(buf);
-    return NULL;
-  }
-  return t;
 }
 
 /**  free char* array  */
@@ -171,34 +158,5 @@ st_read_assn(const char *assn, char **name, char **value)
     *value = st_strdup(eq + 1);
   }
 }
-
-/* TODO:
- * nothing is using this anymore possibly remove if nothing ends up
- * needing it later */
-
-/**  get name out of NAME=value  */
-static inline char *
-st_getname(const char *assn)
-{
-  char *name, *eq;
-  int l;
-  eq = strchr(assn, '=');
-  if (!eq) {
-    name = st_strdup(assn);
-  } else {
-    l = eq - assn;
-    name = st_strndup(assn, l);
-  }
-  return name;
-}
-
-/**  check if path contains /  */
-// int
-// startsWithSlash(const char *str)
-// {
-//   if (str != NULL && str[0] == '/')
-//     return (1);
-//   return (0);
-// }
 
 #endif /* !UTILS_H */

@@ -4,20 +4,6 @@
 #include "expand.h"
 #include "utils.h"
 
-/** concatenate to buffer */
-void
-bufcat(char **buf, size_t *bufsize, size_t *buflen, const char *src, size_t n)
-{
-  if (*buflen + n + 1 > *bufsize) {
-    *buf = s_realloc(*buf, bufsize);
-    if (!*buf)
-      return;
-  }
-  memcpy(*buf + *buflen, src, n);
-  *buflen += n;
-  (*buf)[*buflen] = '\0';
-}
-
 /** expand argument vector */
 char **
 expand_argv(wf **args)
@@ -86,9 +72,7 @@ expand_word(wf *wordf)
             }
             idx = end;
           } else {
-            st_putc('$');
-            len++;
-            idx++;
+            idx = end;
           }
         }
       }

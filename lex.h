@@ -6,7 +6,6 @@
 
 #include <stddef.h>
 
-#define BUF_S 32
 extern int notclosed;
 
 typedef enum {
@@ -84,6 +83,7 @@ extern wf *get_wf(int);
 extern sh_tok *tokenize(int*);
 /** build ast tree */
 extern cmd_tree *build_tree(const sh_tok *, size_t, token);
+extern cmd_tree *parse_list(const sh_tok *tokens, size_t cnt, token s, size_t *i);
 cmd_tree *parse_cmd(const sh_tok *, size_t, token, size_t *);
 
 #endif /* LEX_H */

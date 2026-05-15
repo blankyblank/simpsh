@@ -32,7 +32,7 @@ struct shvar {
 #define ENV_BUCKETS 39
 #define MAX_ALIAS_DEPTH 10
 #define shvar_val(v) (s_strchrnul(v->var, '=') + 1)
-#define shvar_namelen(v) (s_strchrnul(var, '=') - var)
+#define shvar_namelen(v) (s_strchrnul(v, '=') - v)
 
 extern shvar *var_tab[ENV_BUCKETS];
 extern alias *alias_tab[ENV_BUCKETS];

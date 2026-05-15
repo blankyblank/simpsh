@@ -1,19 +1,21 @@
 /* exec.c - functions surrounding running external programs or builtins */
 #define _POSIX_C_SOURCE 200809L
 #include <err.h>
+#include <linux/limits.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
-#include "main.h"
-#include "expand.h"
-#include "exec.h"
 #include "builtins.h"
 #include "env.h"
+#include "exec.h"
+#include "expand.h"
+#include "main.h"
 #include "utils.h"
 
 #define MAX_TMP_VARS 40
+#define builtin_launch(i,a) ((*builtin_funcs[i])(a))
 
 static int getbuiltin(char *);
-static int builtin_launch(int, char **);
 static int run_subsh(const cmd_tree *);
 static int run_cmd(const cmd_tree *);
 static int run_pipe(const cmd_tree *);
@@ -30,9 +32,10 @@ typedef struct {
 void
 init_builtins(void)
 {
-  size_t i, n = builtinnum();
+  size_t i, n;
   size_t idx;
 
+  n = builtinnum();
   for (i = 0; i < BUILTIN_BUCKETS; i++)
     builtin_tab[i] = -1;
 
@@ -57,14 +60,98 @@ getbuiltin(char *args)
   return -1;
 }
 
-/** launch builtin */
-int
-builtin_launch(int idx, char **args)
+/** get full path to executable */
+char *
+getpath(char *file)
 {
-  return (*builtin_funcs[idx])(args);
+  char *fullpath;
 
-  fprintf(stderr, "simpsh: builtins you failed me!");
-  return 1;
+  if ((strchr(file, '/')) && access(file, X_OK) == 0)
+    return (st_strdup(file));
+
+  const char *path = getvar("PATH");
+  if (path)
+    fullpath = chkpath(path, file, 0);
+  else
+    fullpath = chkpath(defpath, file, 0);
+
+  if (!fullpath)
+    return NULL;
+  return fullpath;
+}
+
+/** check in path for name stop at the first one with proper permissions if cdmode 1 check for dir */
+char *
+chkpath(const char *path, const char *name, unsigned int cdmode)
+{
+  size_t flen, seg, tlen, blen;
+  char *end, *e, *exp, *bdir;
+  char buf[PATH_MAX], expbuf[PATH_MAX], tildbuf[PATH_MAX];
+  unsigned int noex;
+  const char *s;
+  struct stat statbuf;
+
+  flen = strlen(name);
+  s = path;
+
+  for (e = s_strchrnul(s, ':'); e; e = s_strchrnul(s, ':')) {
+    size_t dirlen, complen;
+    char *comp;
+
+    dirlen = e - s;
+    comp = (char *)s;
+    complen = dirlen;
+
+    noex = 0;
+    if (s[0] == '~') {
+      seg = 0;
+      while (s[seg] != '/' && seg < dirlen)
+        seg++;
+
+      if (seg == 1 || (seg == dirlen && dirlen == 1)) {
+        exp = getvar("HOME");
+        if (exp) {
+          blen = strlen(exp);
+          bdir = exp;
+        } else {
+          noex = 1;
+        }
+      } else {
+        nmemcpy(tildbuf, s + 1, seg - 1);
+        exp = homedir(tildbuf);
+        if (exp) {
+          blen = strlen(exp);
+          bdir = exp;
+        } else {
+          noex = 1;
+        }
+      }
+      if (!noex) {
+        memcpy(expbuf, bdir, blen);
+        if (seg < dirlen)
+          memcpy(expbuf + blen, s + seg, dirlen - seg);
+        tlen = blen + (seg < dirlen ? dirlen - seg : 0);
+        comp = expbuf;
+        complen = tlen;
+      }
+    }
+
+    end = s_mempcpy(buf, comp, complen); /* copy current path segment from s to e */
+    *end++ = '/';                                /* add / and then file to the end of it */
+    memcpy(end, name, flen + 1);
+    if (access(buf, X_OK) == 0) {
+      if (cdmode) {
+        if (!stat(buf, &statbuf) && S_ISDIR(statbuf.st_mode))
+          return st_strdup(buf);
+      } else {
+        return st_strdup(buf);
+      }
+    }
+    if (!*e)
+      break;
+    s = e + 1;
+  }
+  return NULL;
 }
 
 /** fork and exec external command */
@@ -133,7 +220,7 @@ run_cmd(const cmd_tree *n)
 
   b = getbuiltin(*final);
   if (b >= 0) {
-    /*  NOTE: handle name=value cmd  */
+    /*  handle name=value cmd  */
     if (n->sh_vars && n->sh_vars[0]) {
       tmp_var tmp_vars[MAX_TMP_VARS];
       for (i = 0; n->sh_vars[i]; i++) {
@@ -210,7 +297,7 @@ run_subsh(const cmd_tree *n)
 int
 run_pipe(const cmd_tree *n)
 {
-  int status, lwstatus, rwstatus, lstatus, rstatus;
+  int status, lw_status, rw_status, l_status, r_status;
   int pipefd[2];
   pid_t lpid, rpid;
 
@@ -229,8 +316,8 @@ run_pipe(const cmd_tree *n)
         err(1, "dup2");
       if (close(pipefd[1]) < 0)
         err(1, "close");
-      lstatus = run_commands(n->left);
-      _exit(lstatus);
+      l_status = run_commands(n->left);
+      _exit(l_status);
   }
 
   rpid = fork();
@@ -248,17 +335,17 @@ run_pipe(const cmd_tree *n)
         err(1, "dup2");
       if (close(pipefd[0]) < 0)
         err(1, "close");
-      rstatus = run_commands(n->right);
-      _exit(rstatus);
+      r_status = run_commands(n->right);
+      _exit(r_status);
   }
 
   if (close(pipefd[0]) < 0)
     err(1, "close");
   if (close(pipefd[1]) < 0)
     err(1, "close");
-  waitpid(lpid, &lwstatus, 0);
-  waitpid(rpid, &rwstatus, 0);
-  status = WIFEXITED(rwstatus) ? WEXITSTATUS(rwstatus) : 1;
+  waitpid(lpid, &lw_status, 0);
+  waitpid(rpid, &rw_status, 0);
+  status = WIFEXITED(rw_status) ? WEXITSTATUS(rw_status) : 1;
 
   return status;
 }

@@ -1,20 +1,22 @@
 /* builtins.c - builtin shell commands */
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
+#include <ctype.h>
 #include <err.h>
+#include <errno.h>
 #include <limits.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <ctype.h>
+#include <unistd.h>
 
+#include "arg.h"
+#include "builtins.h"
+#include "env.h"
+#include "exec.h"
 #include "main.h"
 #include "simpsh.h"
 #include "utils.h"
-#include "env.h"
-#include "builtins.h"
-#include "arg.h"
 
 #define bad_opt(a,b,c) (fprintf(stderr, "%s: %s: bad option %c\n", a,b,c))
 
@@ -65,7 +67,7 @@ int builtinnum(void) {
   return sizeof(builtins) / sizeof(char *);
 } /* clang-format on */
 
-int
+static int
 aliascmd(char **args)
 {
   int i;
@@ -102,7 +104,7 @@ aliascmd(char **args)
 }
 
 /**  normalize path to set PWD variable with logical path  */
-char *
+static char *
 pwdpath(char *path) {
   char *res = path, *src = path;
 
@@ -162,7 +164,7 @@ pwdpath(char *path) {
 /* TODO: add in cdpath functionality or convert my other path search functions
  * to be generic to use with this, or for running commands */
 
-int
+static int
 cdcmd(char **argv)
 {
   unsigned int argc, prnt;
@@ -278,7 +280,7 @@ cdcmd(char **argv)
 }
 
 
-int
+static int
 echocmd(char *argv[])
 {
   int nf = 0;
@@ -313,7 +315,7 @@ echocmd(char *argv[])
   return 0;
 }
 
-int
+static int
 execcmd(char **args)
 {
   char *fullpath;
@@ -340,28 +342,37 @@ fail:
   return 1;
 }
 
-int
+static int
 exitcmd(char **argv)
 {
   size_t argc;
-  int exnum = 0;
+  int exnum;
+  char *end;
+  long n;
+
+  exnum = 0;
   argc = array_len(argv);
   if (argc > 2) {
     fprintf(stderr, "%s: %s: too many arguements\n", sh_argv0 ,argv[0]);
     return 1;
   } else if (argc == 2) {
-    for (size_t i = 0;argv[1][i];i++) {
+    for (size_t i = 0; argv[1][i]; i++) {
       if (!isdigit(argv[1][i])) {
         fprintf(stderr, "%s: %s: a number is required\n", sh_argv0, argv[1]);
         return 1;
       }
     }
-    exnum = atoi(argv[1]);
+    n = strtol(argv[1], &end, 10);
+    if (*end != '\0' || errno == ERANGE) {
+      fprintf(stderr, "%s: exit: %s: out of range\n", sh_argv0,  argv[1]);
+      return 1;
+    }
+    exnum = (int)n;
   }
   exit(exnum);
 }
 
-int
+static int
 exportcmd(char **args)
 {
   int argc, i;
@@ -393,14 +404,14 @@ exportcmd(char **args)
   return 0;
 }
 
-int
+static int
 falsecmd(char **args)
 {
   (void)args;
   return 1;
 }
 
-int
+static int
 helpcmd(char **args)
 {
   (void)args;
@@ -417,7 +428,7 @@ helpcmd(char **args)
   return 0;
 }
 
-int
+static int
 pwdcmd(char **argv)
 {
   int argc = 0;
@@ -470,7 +481,7 @@ physical:
   }
 }
 
-int
+static int
 truecmd(char **args)
 {
   (void)args;

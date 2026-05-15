@@ -14,8 +14,6 @@
 #include <unistd.h>
 
 #define MAX_ENV 256
-#define MAX_CMDS 256
-#define MAX_LENGTH 256
 
 #define FLAG_N (1 << 0)
 #define FLAG_L (1 << 1)

@@ -8,9 +8,15 @@
 #include "malloc.h"
 #include "input.h"
 
+#define SKIPNL (1 << 0)
+#define SEP (1 << 1)
+#define XPND (1 << 2)
+
+static int alias_depth = 0;
+int notclosed = 0;
+
 static char *cat_wf(wf *wordf);
 static cmd_tree *parse_andor(const sh_tok *tokens, size_t cnt, token s, size_t *i);
-static cmd_tree *parse_list(const sh_tok *tokens, size_t cnt, token s, size_t *i);
 static cmd_tree *parse_pipe(const sh_tok *tokens, size_t cnt, token s, size_t *i);
 static int eatbnl(void);
 static int is_assn(wf *);
@@ -18,9 +24,6 @@ static void append_wf(wf **, wf **, char *, size_t len, int);
 static void expand_alias(char *val, sh_tok *tokens, size_t *c);
 static wf **get_argv(const sh_tok *, size_t, size_t *);
 static wf **get_assn(wf **, char ***);
-
-static int alias_depth = 0;
-int notclosed = 0;
 
 static inline cmd_tree *
 newcmdnode(wf **args, cmd_false negate, char **sh_vars)
@@ -147,7 +150,7 @@ is_assn(wf *cmd)
     }
   }
   return 1;
-} /* is_assn */
+}
 
 /* takes word fragment and returns (char *) */
 static char *
@@ -182,6 +185,7 @@ get_assn(wf **args, char ***sh_vars)
   for (i = 0; args[i]; i++)
     if (!is_assn(args[i]))
       break;
+
   a_c = i;
   if (!a_c) {
     *sh_vars = NULL;
@@ -345,11 +349,6 @@ tokenize(int *cnt)
   size_t tc = 0;
   wf *f = NULL;
   alias *a = NULL;
-  enum {
-    SKIPNL = 1 << 0,
-    SEP = 1 << 1,
-    XPND = 1 << 2
-  };
 
   state = (1 << 1) | (1 << 2);
   *cnt = 0;
@@ -462,7 +461,7 @@ tokenize(int *cnt)
       }
     }
   }
-  if (tokens[tc].type == TAND || tokens[tc].type == TOR || tokens[tc].type == TSEMI)
+  if (tc > 0 && (tokens[tc-1].type == TAND || tokens[tc-1].type == TOR || tokens[tc-1].type == TSEMI))
     notclosed = 1;
   tokens[tc].type = TEOF;
   tokens[tc].cmd = NULL;
@@ -479,8 +478,9 @@ build_tree(const sh_tok *tokens, size_t cnt, token stp) {
   return parse_list(tokens, cnt, stp, &i);
 }
 
+
 /**  parse ; lists  */
-static cmd_tree *
+cmd_tree *
 parse_list(const sh_tok *tokens, size_t cnt, token stp, size_t *i) {
   cmd_tree *left = parse_andor(tokens, cnt, stp, i);
   if (!left)

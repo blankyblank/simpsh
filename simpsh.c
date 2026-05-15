@@ -1,4 +1,7 @@
 /* simpsh.c - functions for running the shell */
+#include "exec.h"
+#include "input.h"
+#include "lex.h"
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <sys/stat.h>
@@ -11,7 +14,6 @@
 
 #include "main.h"
 #include "simpsh.h"
-#include "utils.h"
 #include "env.h"
 
 void
@@ -22,14 +24,33 @@ getbuildinfo(void) {
          sh_argv0, __DATE__, __TIME__, __STDC_ISO_10646__);
 }
 
-#ifdef READLINE
-static int create_histfile(char *, char *);
-#endif /* ifdef READLINE */
-
 /** make directory path */
 static int pmkdir(char *path);
 
 #ifdef READLINE
+/** initialize history */
+void
+init_history(void)
+{
+  char histfile[265];
+  char buf[256];
+  snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
+  using_history();
+  if (access(histfile, W_OK) < 0) {
+    static const char *histdir = ".local/state/simpsh";
+    snprintf(buf, 256, "%s/%s", home, histdir);
+    if (!pmkdir(buf))
+      return;
+    if (access(histfile, W_OK) < 0)
+      if (write_history(histfile) != 0)
+        return;
+  } else {
+    history_truncate_file(histfile, 1000);
+    if (read_history_range(histfile, 0, -1) != 0)
+      perror("Failed to read .simpsh_history");
+  }
+}
+
 /** read line from interactive shell */
 char *
 lineread(char *prompt)
@@ -40,6 +61,7 @@ lineread(char *prompt)
 
   return line;
 }
+
 #else
 /** lineread with no readline, for testing */
 char *
@@ -56,214 +78,168 @@ lineread(char *prompt)
 }
 #endif /* ifdef READLINE */
 
-#ifdef READLINE
-/** create history file */
-int
-create_histfile(char *home, char *histfile)
-{
-  static const char *histdir = ".local/state/simpsh";
-  char buf[256];
-
-  snprintf(buf, 256, "%s/%s", home, histdir);
-  if (!pmkdir(buf))
-    return 0;
-  if (access(histfile, W_OK) < 0)
-    if (write_history(histfile) != 0)
-      return 0;
-  return 1;
-}
-
-/** initialize history */
-void
-init_history(void)
-{
-  char histfile[265];
-  snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
-  using_history();
-  if (access(histfile, W_OK) < 0) {
-    if (!create_histfile(home, histfile)) /* create if needed */
-      perror("Failed to create simpsh_history:");
-  } else {
-    history_truncate_file(histfile, 1000);
-    if (read_history_range(histfile, 0, -1) != 0)
-      perror("Failed to read .simpsh_history");
-  }
-}
-#endif /* ifdef READLINE */
 
 /** take in ps1 char * to do variable expansion for prompt */
 char *
 expand_ps1(char *p)
 {
-  size_t i, end, outlen;
-  size_t pvarlen, cbrace;
-  char *s, *pcpy, *expanded;
+  size_t i, end, varlen, cbrace, flen;
+  char *s, *expanded;
+  char f[4096], vcpy[256];
 
   if (!p)
     return NULL;
 
-  pvarlen = 0;
-  outlen = 0;
+  varlen = 0;
+  flen = 0;
   i = 0;
   while (p[i]) {
-
     if (p[i] == '$') {
       if (p[i + 1] == '$' || p[i + 1] == '?') {
-        pvarlen = 2;
-        pcpy = st_strndup(p + i, pvarlen);
+        varlen = 2;
+        vcpy[0] = p[i];
+        vcpy[1] = p[i + 1];
+        vcpy[2] = '\0';
       } else if (p[i + 1] == '{') {
         cbrace = i + 2;
-        while (p[cbrace]) {
-          if (p[cbrace] == '}') {
-            pvarlen = cbrace - i + 1;
-            break;
-          }
+        while (p[cbrace] && p[cbrace] == '}') {
           cbrace++;
-        }
-        if (!p[cbrace]) {
-          st_putc(p[i]);
-          outlen++;
-          i++;
-          continue;
-        } else {
-          pcpy = st_strndup(p + i, pvarlen);
+          if (!p[cbrace]) {
+            f[flen++] = p[i++];
+            continue;
+          }
+          varlen = cbrace - i + 1;
+          memcpy(vcpy, p + i, varlen);
+          vcpy[varlen] = '\0';
         }
       } else if (isalnum(p[i + 1])) {
-        pvarlen = i + 1;
-        while (isalnum(p[pvarlen]))
-          pvarlen++;
-        pvarlen -= i;
-        pcpy = st_strndup(p + i, pvarlen);
+        varlen = i + 1;
+        while (isalnum(p[varlen]))
+          varlen++;
+        varlen -= i;
+        memcpy(vcpy, p + i, varlen);
+        vcpy[varlen] = '\0';
       } else {
         if (p[i + 1] == ' ' || p[i + 1] == '\t' || p[i + 1] == '\0') {
-          if (lstatus == 0)
-            st_putc('$');
-          else
-            st_putc('X');
-          outlen++;
+          f[flen++] = lstatus == 0 ? '$' : 'X';
           i++;
           continue;
         }
-        st_putc(p[i]);
-        outlen++;
-        i++;
+        f[flen++] = p[i++];
         continue;
       }
-      if ((expanded = exp_var(pcpy, 0, &end))) {
-        s = expanded;
-        for (; *s; s++) {
-          st_putc(*s);
-          outlen++;
-        }
-        i += pvarlen;
-      } else {
-        for (s = pcpy; *s; s++) {
-          st_putc(*s);
-          outlen++;
-        }
-        i += pvarlen;
+      if ((expanded = exp_var(vcpy, 0, &end))) {
+        for (s = expanded; *s; s++)
+          f[flen++] = *s;
       }
+      i += varlen;
     } else {
-      st_putc(p[i]);
-      outlen++;
-      i++;
+      f[flen++] = p[i++];
     }
   }
-  return grab_str(outlen);
+  f[flen] = '\0';
+  s = st_alloc(flen + 1);
+  memcpy(s, f, flen + 1);
+  return s;
 }
 
-/** check in path for name stop at the first one with proper permissions if cdmode 1 check for dir */
-char *
-chkpath(const char *path, const char *name, unsigned int cdmode)
+// int
+// sh_ccmd(char *argv)
+// {
+//   setinputstrn(argv, strlen(argv));
+//   simpsh_run(argv);
+//   
+// }
+
+void
+sh_interactive(void)
 {
-  size_t flen, seg, tlen, blen;
-  char *end, *e, *exp, *bdir;
-  char buf[PATH_MAX], expbuf[PATH_MAX], tildbuf[PATH_MAX];
-  unsigned int noex;
-  const char *s;
-  struct stat statbuf;
+#ifdef READLINE
+  init_history(); /* set up history */
+#endif            /* ifdef READLINE */
 
-  flen = strlen(name);
-  s = path;
+  char *line, *acc, *new;
+  stmark mark, accend, m;
+  size_t n, acclen;
+  sh_tok *toks;
+  token last;
 
-  for (e = s_strchrnul(s, ':'); e; e = s_strchrnul(s, ':')) {
-    size_t dirlen, complen;
-    char *comp;
-
-    dirlen = e - s;
-    comp = (char *)s;
-    complen = dirlen;
-
-    noex = 0;
-    if (s[0] == '~') {
-      seg = 0;
-      while (s[seg] != '/' && seg < dirlen)
-        seg++;
-
-      if (seg == 1 || (seg == dirlen && dirlen == 1)) {
-        exp = getvar("HOME");
-        if (exp) {
-          blen = strlen(exp);
-          bdir = exp;
-        } else {
-          noex = 1;
-        }
-      } else {
-        nmemcpy(tildbuf, s + 1, seg - 1);
-        exp = homedir(tildbuf);
-        if (exp) {
-          blen = strlen(exp);
-          bdir = exp;
-        } else {
-          noex = 1;
-        }
-      }
-      if (!noex) {
-        memcpy(expbuf, bdir, blen);
-        if (seg < dirlen)
-          memcpy(expbuf + blen, s + seg, dirlen - seg);
-        tlen = blen + (seg < dirlen ? dirlen - seg : 0);
-        comp = expbuf;
-        complen = tlen;
-      }
-    }
-
-    end = s_mempcpy(buf, comp, complen); /* copy current path segment from s to e */
-    *end++ = '/';                                /* add / and then file to the end of it */
-    memcpy(end, name, flen + 1);
-    if (access(buf, X_OK) == 0) {
-      if (cdmode) {
-        if (!stat(buf, &statbuf) && S_ISDIR(statbuf.st_mode))
-          return st_strdup(buf);
-      } else {
-        return st_strdup(buf);
-      }
-    }
-    if (!*e)
+  for (;;) {
+    shps1 = expand_ps1(getvar("PS1"));
+    mark = stack_mark();
+    line = lineread(shps1 ? shps1 : " $ ");
+    if (!line) {
+      stack_restore(mark);
       break;
-    s = e + 1;
+    }
+    n = strlen(line);
+    acc = st_alloc(n + 2);
+    memcpy(acc, line, n);
+    acc[n] = '\n';
+    acc[n + 1] = '\0';
+    acclen = n + 1;
+    free(line);
+
+    for (;;) {
+      accend = stack_mark(); /* bookmark after acc content */
+      notclosed = 0;
+      setinputstrn(acc, (int)acclen);
+      { /* lightweight: tokenize to check completeness */
+        int tc;
+        m = stack_mark();
+        toks = tokenize(&tc);
+        if (!notclosed && toks && tc > 0) {
+          last = toks[tc - 1].type;
+          if (last == TAND || last == TOR || last == TPIPE)
+            notclosed = 1;
+        }
+        stack_restore(m);
+      }
+      popinput();
+      if (!notclosed)
+        break;
+
+      stack_restore(accend); /* stnext is now right at end of acc content */
+      line = lineread("> ");
+      if (!line) {
+        stack_restore(mark);
+        return 0;
+      }
+      n = strlen(line); /* append: new larger buffer, copy old + new */
+      new = st_alloc(acclen + n + 2);
+      memcpy(new, acc, acclen);
+      memcpy(new + acclen, line, n);
+      new[acclen + n] = '\n';
+      new[acclen + n + 1] = '\0';
+      free(line);
+      acc = new;
+      acclen += n + 1;
+      if (!acc)
+        break;
+    }
+    simpsh_run(acc); /* second tokenization, runs the command */
+    stack_restore(mark);
   }
-  return NULL;
+  return 0;
 }
 
-/** get full path to executable */
-char *
-getpath(char *file)
+void
+simpsh_core(void)
 {
-  char *fullpath;
+  stmark mark;
+  sh_tok *toks;
+  cmd_tree *c;
+  int tok_c;
 
-  if ((strchr(file, '/')) && access(file, X_OK) == 0)
-    return (st_strdup(file));
-
-  const char *path = getvar("PATH");
-  if (path)
-    fullpath = chkpath(path, file, 0);
-  else
-    fullpath = chkpath(defpath, file, 0);
-
-  if (!fullpath)
-    return NULL;
-  return fullpath;
+  mark = stack_mark();
+  toks = tokenize(&tok_c);
+  if (toks && !notclosed) {
+    size_t i;
+    i = 0;
+    c = parse_list(toks, tok_c, TEOF, &i);
+    run_commands(c);
+  }
+  stack_restore(mark);
 }
 
 /**  created directories and their parents if they don't exist  */
