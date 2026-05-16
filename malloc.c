@@ -51,7 +51,7 @@ stack_restore(stmark m)
   }
   current = m.current;
   stnext = m.next;
-  stleft = current->buf + MINSTACK_S - stnext;
+  stleft = m.stleft;
   stend = stnext + stleft;
 }
 
