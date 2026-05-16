@@ -203,7 +203,7 @@ sh_interactive(void)
       line = lineread("> ");
       if (!line) {
         stack_restore(mark);
-        return 0;
+        return;
       }
       n = strlen(line); /* append: new larger buffer, copy old + new */
       new = st_alloc(acclen + n + 2);
@@ -220,7 +220,7 @@ sh_interactive(void)
     simpsh_run(acc); /* second tokenization, runs the command */
     stack_restore(mark);
   }
-  return 0;
+  return;
 }
 
 void

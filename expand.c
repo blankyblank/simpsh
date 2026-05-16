@@ -26,57 +26,86 @@ expand_argv(wf **args)
 char *
 expand_word(wf *wordf)
 {
-  size_t end, idx;
+  size_t end, i;
   size_t len;
   wf *f;
-  char *s;
+  // char *s;
   char *expanded;
 
   len = 0;
   for (f = wordf; f; f = f->next) {
     switch (f->qs) {
-    case QSINGLE:
-      for (size_t i = 0; i < f->len; i++) {
-        st_putc(f->word[i]);
-        len++;
-      }
-      break;
-    case QDOUBLE:
-    case QNONE:
-      idx = 0;
-
-      while (idx < f->len) {
-        if (f->word[idx] == '~' && f->qs == QNONE) {
-          expanded = exp_tilde(f->word, idx, &end);
-          if (expanded) {
-            for (s = expanded; *s; s++) {
-              st_putc(*s);
-              len++;
-            }
-            idx = end;
-          } else {
+      case QSINGLE:
+        // NOTE: new
+        if (f->len >= stleft)
+          grow_stack(f->len);
+        memcpy(stnext, f->word, f->len);
+        stnext += f->len;
+        stleft -= f->len;
+        len += f->len;
+        // OLD
+        // for (size_t i = 0; i < f->len; i++) {
+        //   st_putc(f->word[i]);
+        //   len++;
+        // }
+        break;
+      case QDOUBLE:
+      case QNONE:
+        i = 0;
+        while (i < f->len) {
+          if (f->word[i] == '~' && f->qs == QNONE) {
+            expanded = exp_tilde(f->word, i, &end);
+            if (expanded) {
+              size_t elen;
+              // NOTE: new
+              elen = strlen(expanded);
+              if (elen >= stleft)
+                grow_stack(elen);
+              memcpy(stnext, expanded, elen);
+              stnext += elen;
+              stleft -= elen;
+              len += elen;
+              i = end;
+              // OLD
+              /* for (s = expanded; *s; s++) {
+                st_putc(*s);
+                len++;
+              }
+              i = end; */
+            } else {
               st_putc('~');
               len++;
-              idx++;
-          }
-        } else if (f->word[idx] != '$') {
-          st_putc(f->word[idx]);
-          len++;
-          idx++;
-        } else {
-          expanded = exp_var(f->word, idx, &end);
-          if (expanded) {
-            for (s = expanded; *s; s++) {
-              st_putc(*s);
-              len++;
+              i++;
             }
-            idx = end;
+          } else if (f->word[i] != '$') {
+            st_putc(f->word[i]);
+            len++;
+            i++;
           } else {
-            idx = end;
+            expanded = exp_var(f->word, i, &end);
+            if (expanded) {
+              size_t vlen;
+              // NOTE: new
+              vlen = strlen(expanded);
+              if (vlen >= stleft)
+                grow_stack(vlen);
+              memcpy(stnext, expanded, vlen);
+              stnext += vlen;
+              stleft -= vlen;
+              len += vlen;
+              i = end;
+              // OLD
+              /* for (s = expanded; *s; s++) {
+                st_putc(*s);
+                len++;
+              }
+              i = end; */
+            } else {
+              i = end;
+            }
           }
         }
-      }
-      break;
+        break;
     }
   }
 

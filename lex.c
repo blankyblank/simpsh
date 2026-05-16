@@ -373,7 +373,7 @@ tokenize(int *cnt)
       tokens[tc].type = TNL;
       tokens[tc].cmd = NULL;
       tc++;
-      state |= SEP;
+      state |= SEP | XPND;
       continue;
     }
 
@@ -458,6 +458,7 @@ tokenize(int *cnt)
         tokens[tc].cmd = f;
         tc++;
         state &= ~XPND;
+        state &= ~SEP;
       }
     }
   }

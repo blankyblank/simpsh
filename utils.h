@@ -130,7 +130,7 @@ static inline void
 read_assn(const char *assn, char **name, char **value)
 {
   char *eq;
-  int l;
+  size_t l;
   eq = s_strchrnul(assn, '=');
   if (!eq) {
     *name = s_strdup(assn);
@@ -147,7 +147,7 @@ static inline void
 st_read_assn(const char *assn, char **name, char **value)
 {
   char *eq;
-  int l;
+  size_t l;
   eq = (char *)strchr(assn, '=');
   if (!eq) {
     *name = st_strdup(assn);

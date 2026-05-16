@@ -1,8 +1,8 @@
 CC := gcc
 # CC := clang
 
-BUILD       ?= sanitize
-# debug | release | sanitize | valgrind
+BUILD       ?= release
+# debug | release | sanitize | valgrind | profile
 BUILD_LINK  ?= dynamic
 # dynamic | static
 READLINE    := y
@@ -15,10 +15,11 @@ LDLIBS  :=
 
 # Build mode presets
 ifeq ($(BUILD),release)
-  CFLAGS += -Os
+  CFLAGS += -O2
 endif
 ifeq ($(BUILD),debug)
   CFLAGS += -Og -g3 -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
+  LDFLAGS += -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
 endif
 ifeq ($(BUILD),sanitize)
   CFLAGS += -Og -g3
@@ -32,6 +33,12 @@ ifeq ($(BUILD),sanitize)
 endif
 ifeq ($(BUILD),valgrind)
   CFLAGS += -Og -g3 -DDEBUG -DENABLE_VALGRIND
+	# callgrind flags
+  # CFLAGS += -g -O2 -DDEBUG -DENABLE_VALGRIND
+endif
+ifeq ($(BUILD),profile)
+  CFLAGS += -Og -g3 -fvar-tracking-assignments -fno-analyzer-state-merge -pg
+  LDFLAGS += -fvar-tracking-assignments -fno-analyzer-state-merge -pg
 endif
 # Link type
 ifeq ($(BUILD_LINK),static)
