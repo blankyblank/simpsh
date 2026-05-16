@@ -2,6 +2,7 @@
 #define INPUT_H
 
 #include <stddef.h>
+#include "lex.h"
 
 /** holds unified input stream data */
 typedef struct shinput shinput;
@@ -18,6 +19,7 @@ struct shinput {
   int linenum;     /* Line counter for error reporting */
   char ungetbuf[4]; /* Small pushback buffer */
   int unget;        /* number to pushback */
+  strpush *strpush;
 };
 
 extern shinput *cur_shinpt;
@@ -25,9 +27,11 @@ extern shinput *cur_shinpt;
 #define BASEBUFSIZE BUFSIZ
 #define shinput_linenum() (cur_shinpt ? cur_shinpt->linenum : 0)
 #define popinput() (cur_shinpt = cur_shinpt->prev)
+#define shinput_isfile() (cur_shinpt && cur_shinpt->fd >= 0)
 
 extern int shgetchar(void);
 extern int shungetc(int);
+extern size_t shgetline(char *, size_t);
 extern void setinputstrn(char *, int);
 extern void setinputf(int);
 extern void init_input(void);

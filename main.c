@@ -16,10 +16,8 @@
 #include "main.h"
 #include "malloc.h"
 #include "simpsh.h"
-#include "utils.h"
 
 char histfile[265];
-static int interactive = 1;
 int builtin_tab[BUILTIN_BUCKETS];
 
 /* global shell variables */
@@ -56,8 +54,6 @@ main(int argc, char **argv)
 
   if (!isatty(STDIN_FILENO))
     flags |= FLAG_t;
-  if (flags & (FLAG_c | FLAG_t))
-    interactive = 0;
 
   /* setup locale then */
   /* set up allocator then */
@@ -74,17 +70,19 @@ main(int argc, char **argv)
 
   if (flags & FLAG_c) {
     sh_ccmd(argv[0]);
+    exit(lstatus);
   } else if (*argv) {
     if ((fd = open(*argv, O_RDONLY)) < 0) {
       perror("simpsh");
       exit(1);
     }
     sh_script(fd);
+    exit(lstatus);
   } else if (flags & FLAG_t) {
     sh_stdin();
+    exit(lstatus);
   } else {
     /* run the main loop */
-    sh_interactive();
-    exit(lstatus);
+    exit(sh_interactive());
   }
 }

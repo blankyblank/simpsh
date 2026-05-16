@@ -1,5 +1,6 @@
 /* lex.c - tokenizer and parser functions */
 #define _POSIX_C_SOURCE 200809L
+#include <string.h>
 #include <ctype.h>
 
 #include "lex.h"
@@ -12,18 +13,19 @@
 #define SEP (1 << 1)
 #define XPND (1 << 2)
 
-static int alias_depth = 0;
+int alias_depth = 0;
 int notclosed = 0;
+sh_tok last_tok = { .type = TNONE };
+int chkwd = 0;
 
 static char *cat_wf(wf *wordf);
-static cmd_tree *parse_andor(const sh_tok *tokens, size_t cnt, token s, size_t *i);
-static cmd_tree *parse_pipe(const sh_tok *tokens, size_t cnt, token s, size_t *i);
+static cmd_tree *parse_andor(void);
+static cmd_tree *parse_pipe(void);
 static int eatbnl(void);
 static int is_assn(wf *);
 static void append_wf(wf **, wf **, char *, size_t len, int);
-static void expand_alias(char *val, sh_tok *tokens, size_t *c);
-static wf **get_argv(const sh_tok *, size_t, size_t *);
 static wf **get_assn(wf **, char ***);
+static wf **get_argv(wf *);
 
 static inline cmd_tree *
 newcmdnode(wf **args, cmd_false negate, char **sh_vars)
@@ -105,28 +107,34 @@ eatbnl(void)
 
 /* build consecutive TWORDS into command returned in word fragments */
 static wf **
-get_argv(const sh_tok *tokens, size_t cnt, size_t *i)
+get_argv(wf *f)
 {
-  size_t t = *i;
-  size_t j = 0;
-  size_t wc = 0;
+  size_t cap, wc;
+  sh_tok t;
+  wf **argv, **new;
 
-  while (t < cnt && tokens[t].type == TWORD) {
-    /* find how many wf's we need */
-    t++;
-    wc++;
+  cap = 8;
+  wc = 1;
+  argv = st_alloc(cap * sizeof(wf *));
+  argv[0] = f;
+
+  for (;;) {
+    t = tokenize();
+    if (t.type != TWORD)
+      break;
+    if (wc >= cap) {
+      cap *= 2;
+      new = st_alloc(cap * sizeof(wf *));
+      memcpy(new, argv, wc * sizeof(wf *));
+      argv = new;
+    }
+    argv[wc++] = t.cmd;
   }
-  wf **argv = st_alloc((wc + 1) * sizeof(wf *));
-  t = *i;
-  while (t < cnt && tokens[t].type == TWORD) {
-    argv[j] = tokens[t].cmd;
-    j++;
-    t++;
-  }
-  argv[j] = NULL;
-  *i = t;
+  last_tok = t;
+  argv[wc] = NULL;
   return argv;
-} /* get_argv */
+}
+
 
 /* check if word is name=value */
 static int
@@ -340,293 +348,223 @@ done:
   return head;
 }
 
-/**  split a line up into tokens store in sh_tok structs  */
-sh_tok *
-tokenize(int *cnt)
+sh_tok
+tokenize(void)
 {
+  sh_tok t;
+  int wd, c, n;
   char *word;
-  int c, n, state;
-  size_t tc = 0;
-  wf *f = NULL;
-  alias *a = NULL;
+  alias *a;
+  wf *f;
 
-  state = (1 << 1) | (1 << 2);
-  *cnt = 0;
-
-  sh_tok *tokens = st_alloc(16 * (sizeof(sh_tok)));
-  if (!tokens)
-    return NULL;
-
-  /* go until we hit the null byte */
+  if (last_tok.type != TNONE) {
+    t = last_tok;
+    last_tok = SHTOK(TNONE);
+    return t;
+  }
+  wd = chkwd;
+  chkwd = 0;
+  
   while ((c = shgetchar()) != SHEOF) {
     if (c == ' ' || c == '\t')
       continue;
-
-    /* handle \ nl escape */
-    if (c == '\n') {
-      if (state & SKIPNL) {
-        state &= ~SKIPNL;
-        continue;
-      }
-      if (state & SEP)
-        continue;
-      tokens[tc].type = TNL;
-      tokens[tc].cmd = NULL;
-      tc++;
-      state |= SEP | XPND;
-      continue;
-    }
-
-    if (c == '#' && (state & XPND)) { /* handle comments */
+    if (c == '#') { /* handle comments */
       while ((c = shgetchar()) != '\n' && c != SHEOF);
       if (c == '\n')
         shungetc(c);
       continue;
-    }
-
-    /* update c (count) and p (position) by the length of the operator */
-    if (c == '!') {
-      tokens[tc].type = TNOT;
-      tokens[tc++].cmd = NULL;
-      state |= XPND;
-      continue;
+    } else if (c == '\n') { /* handle \ nl escape */
+      if (wd & CHKNL)
+        continue;
+      cur_shinpt->linenum++;
+      while ((c = shgetchar()) == '\n')
+        cur_shinpt->linenum++;
+      if (c != SHEOF)
+        shungetc(c);
+      t = SHTOK(TNL);
+      return t;
+    } else if (c == '!') {
+      return t = SHTOK(TNOT);
     } else if (c == '&') {
       n = eatbnl();
-      if (n == '&') {
-        state |= XPND | SKIPNL;
-      } else {
+      if (n == '&')
+        return SHTOK(TAND);
+      if (n != SHEOF)
         shungetc(n);
-      }
-      tokens[tc].type = TAND;
-      tokens[tc].cmd = NULL;
-      tc++;
-      state |= XPND;
-      continue;
+      return SHTOK(TBKGRND);
     } else if (c == '|') {
       n = eatbnl();
-      if (n == '|') {
-        tokens[tc].type = TOR;
-        tokens[tc].cmd = NULL;
-        tc++;
-        state |= XPND | SKIPNL;
-      } else {
+      if (n == '|')
+        return SHTOK(TOR);
+      if (n != SHEOF)
         shungetc(n);
-        tokens[tc].type = TPIPE;
-        tokens[tc].cmd = NULL;
-        tc++;
-        state |= XPND | SKIPNL;
-      }
-      continue;
+      return SHTOK(TPIPE);
     } else if (c == ';') {
-      tokens[tc].type = TSEMI;
-      tokens[tc].cmd = NULL;
-      tc++;
-      state |= XPND;
-      continue;
+      return SHTOK(TSEMI);
     } else if (c == '(') {
-      tokens[tc].type = TLPAREN;
-      tokens[tc].cmd = NULL;
-      tc++;
-      state |= XPND;
-      continue;
+      return SHTOK(TLPAREN);
     } else if (c == ')') {
-      tokens[tc].type = TRPAREN;
-      tokens[tc].cmd = NULL;
-      tc++;
-      state |= XPND;
-      continue;
-    } else {
-      if (!(f = get_wf(c)))
-        return NULL;
-      if (f && f->qs == QNONE && f->next == NULL) {
-        word = cat_wf(f);
-        if (state & XPND)
-          a = find_alias(word);
-        if (a) {
-          if (alias_depth >= MAX_ALIAS_DEPTH) {
-            fprintf(stderr, "alias: too many levels of recursion\n");
-            return NULL;
-          }
-          alias_depth++;
-          expand_alias(a->value, tokens, &tc);
-          alias_depth--;
-          continue;
+      return SHTOK(TRPAREN);
+    }
+
+    f = get_wf(c);
+    if (!f)
+      return SHTOK(TEOF);
+    if ((wd & CHKALIAS) && f->qs == QNONE && f->next == NULL) {
+      word = cat_wf(f);
+      a = find_alias(word);
+      if (a) {
+        if (alias_depth >= MAX_ALIAS_DEPTH) {
+          fprintf(stderr, "alias: too many levels of recursion\n");
+          return SHTOK(TEOF);
         }
-      }
-      if (f->word && f->len > 0) {
-        tokens[tc].type = TWORD;
-        tokens[tc].cmd = f;
-        tc++;
-        state &= ~XPND;
-        state &= ~SEP;
+        pushstring(a->value, strlen(a->value), 1);
+        wd &= ~CHKALIAS;
+        // push string i guess goes here. idk wtf it's even supposed to actually
+        // do yet. idk don't like it. whatever
+        continue;
       }
     }
+    return SHWORD(f);
   }
-  if (tc > 0 && (tokens[tc-1].type == TAND || tokens[tc-1].type == TOR || tokens[tc-1].type == TSEMI))
-    notclosed = 1;
-  tokens[tc].type = TEOF;
-  tokens[tc].cmd = NULL;
-
-  *cnt = tc;
-  return tokens;
+  return SHTOK(TEOF);
 }
 
-
-/** literally the same pointless wrapper I already had */
 cmd_tree *
-build_tree(const sh_tok *tokens, size_t cnt, token stp) {
-  size_t i = 0;
-  return parse_list(tokens, cnt, stp, &i);
-}
+parse_list(token s)
+{
+  sh_tok t;
+  cmd_tree *l, *r;
 
-
-/**  parse ; lists  */
-cmd_tree *
-parse_list(const sh_tok *tokens, size_t cnt, token stp, size_t *i) {
-  cmd_tree *left = parse_andor(tokens, cnt, stp, i);
-  if (!left)
+  t = tokenize();
+  if (t.type == TEOF || t.type == TNL) {
+    if (t.type != TEOF && t.type != s)
+      last_tok = t;
+    return NULL;
+  }
+  last_tok = t;
+ 
+  l = parse_andor();
+  if (!l)
     return NULL;
 
-  while (*i < cnt && (tokens[*i].type == TSEMI || tokens[*i].type == TNL)) {
-    token op = tokens[*i].type;
-    (*i)++;
-    cmd_tree *right = parse_cmd(tokens, cnt, stp, i);
-    if (!right)
+  for (;;) {
+    t = tokenize();
+    if (t.type == TSEMI || (t.type == TNL && s != TEOF)) {
+      chkwd |= CHKALIAS;
+      r = parse_cmd();
+      if (!r)
+        break;
+      l = newoppnode(t.type, l, r);
+    } else if (t.type == TEOF || t.type == s) {
+      if (t.type != TEOF)
+        last_tok = t;
       break;
-    left = newoppnode(op, left, right);
+    } else {
+      last_tok = t;
+      break;
+    }
   }
-  return left;
+  return l;
 }
 
 /**  parse and or, or lists  */
 static cmd_tree *
-parse_andor(const sh_tok *tokens, size_t cnt, token stp, size_t *i) {
-  cmd_tree *left = parse_pipe(tokens, cnt, stp, i);
-  if (!left)
+parse_andor(void)
+{
+  cmd_tree *l, *r;
+  sh_tok t;
+
+  l = parse_pipe();
+  if (!l) 
     return NULL;
 
-  while (*i < cnt && (tokens[*i].type == TAND || tokens[*i].type == TOR)) {
-    token op = tokens[*i].type;
-    (*i)++;
-    cmd_tree *right = parse_cmd(tokens, cnt, stp, i);
-    if (!right)
-      return NULL;
-    left = newoppnode(op, left, right);
+  for (;;) {
+    t = tokenize();
+    if (t.type == TAND || t.type == TOR) {
+      chkwd |= CHKALIAS | CHKNL;
+      r = parse_pipe();
+      if (!r)
+        return NULL;
+      l = newoppnode(t.type, l, r);
+    } else {
+      last_tok = t;
+      break;
+    }
   }
-  return left;
+  return l;
 }
+
 
 /**  parse pipelines  */
 static cmd_tree *
-parse_pipe(const sh_tok *tokens, size_t cnt, token stp, size_t *i) {
-  cmd_tree *left = parse_cmd(tokens, cnt, stp, i);
-  if (!left)
+parse_pipe(void)
+{
+  cmd_tree *l, *r;
+  sh_tok t;
+
+  l = parse_cmd();
+  if (!l)
     return NULL;
-  while (*i < cnt && (tokens[*i].type == TPIPE)) {
-    token op = tokens[*i].type;
-    (*i)++;
-    cmd_tree *right = parse_cmd(tokens, cnt, stp, i);
-    if (!right)
-      return NULL;
-    left = newoppnode(op, left, right);
+
+  for (;;) {
+    t = tokenize();
+    if (t.type == TPIPE) {
+      chkwd |= CHKALIAS | CHKNL;
+      r = parse_cmd();
+      if (!r)
+        return NULL;
+      l = newoppnode(t.type, l, r);
+    } else {
+      last_tok = t;
+      break;
+    }
   }
-  return left;
+  return l;
 }
 
 /**  recursive decent parser  */
 cmd_tree *
-parse_cmd(const sh_tok *tokens, size_t cnt, token s, size_t *i)
+parse_cmd(void)
 {
   size_t neg = 0;
   char **sh_vars = NULL;
   wf **args = NULL;
-  cmd_false negate;
-  cmd_tree *sub, *left = NULL;
-  size_t rcnt = cnt;
+  cmd_tree *sub, *l = NULL;
+  sh_tok t;
 
-  for (; *i < cnt && tokens[*i].type == TNOT; (*i)++)
+  for (;;) {
+    t = tokenize();
+    if (t.type != TNOT) {
+      last_tok = t;
+      break;
+    }
+    chkwd |= CHKALIAS;
     neg++;
-  negate = (neg & 1) ? TRUE : FALSE;
-  neg = 0;
+  }
+  // WARN: I'm pretty sure this is going to break command negation. 
 
-  if (*i >= cnt || tokens[*i].type == s) /* check for command */
-    return NULL;
+  t = tokenize();
 
-  /* if () are found run in SUBSHELL */
-  if (tokens[*i].type == TLPAREN) {
-    (*i)++;
-    rcnt -= *i;
-    cmd_tree *tmp = parse_list(tokens, rcnt, TRPAREN, i);
-    if (!tmp)
+  if (t.type == TLPAREN) {
+    sub = parse_list(TRPAREN);
+    t = tokenize();
+    if (t.type != TRPAREN)
       return NULL;
-    if (*i >= cnt || tokens[*i].type != TRPAREN)
-      return NULL;
-    (*i)++;
-    sub = newsubsh(tmp, negate);
-    return sub;
+    chkwd |= CHKALIAS;
+    return newsubsh(sub, neg & 1);
   }
 
-  args = get_argv(tokens, cnt, i);
+  if (t.type != TWORD) {
+    last_tok = t;
+    return NULL;
+  }
+
+  args = get_argv(t.cmd);
   if (!args || !args[0])
     return NULL;
   args = get_assn(args, &sh_vars);
-  left = newcmdnode(args, negate, sh_vars);
+  l = newcmdnode(args, (neg & 1), sh_vars);
 
-  return left;
-}
-
-/*  expand alias and handles recursive aliases  */
-static void
-expand_alias(char *val, sh_tok *tokens, size_t *c)
-{
-  int ch;
-  unsigned int expand;
-  char *word;
-  wf *f;
-  alias *a;
-
-  a = NULL;
-  expand = 1;
-  setinputstrn(val, strlen(val));
-
-  while ((ch = shgetchar()) != SHEOF) {
-    if (ch == ' ' || ch == '\t') {
-      continue;
-    }
-    if (is_operator(ch)) {
-      expand = 1;
-      break;
-    }
-
-    f = get_wf(ch);
-    if (!f)
-      break;
-
-    if (f->qs == QNONE && f->next == NULL) {
-      if (expand) {
-        word = cat_wf(f);
-        a = find_alias(word);
-        if (a) {
-          if (alias_depth >= MAX_ALIAS_DEPTH) {
-            fprintf(stderr, "alias too many levels of recursion\n");
-            popinput();
-            return;
-          }
-          alias_depth++;
-          expand_alias(a->value, tokens, c);
-          alias_depth--;
-          expand = 0;
-          continue;
-        }
-      }
-    }
-    expand = 0;
-    if (f->word && f->len > 0) {
-      tokens[*c].type = TWORD;
-      tokens[*c].cmd = f;
-      (*c)++;
-      expand = 0;
-    }
-  }
-  popinput();
+  return l;
 }

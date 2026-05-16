@@ -2,7 +2,9 @@
 #ifndef SIMP_H
 #define SIMP_H
 
+#include "input.h"
 #define _POSIX_C_SOURCE 200809L
+#include "main.h"
 
 #define defpath "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
@@ -14,14 +16,12 @@ extern void getbuildinfo(void);
 extern void init_history(void);
 #endif /* ifdef READLINE */
 
-// NOTE: new
-extern void simpsh_core(void);
-extern char *read_accumulate(void);
+// extern char *read_accumulate(void);
+extern void simpsh_run(void);
+extern int sh_interactive(void);
 
-#define simpsh_run(l) setinputstrn(l, strlen(l)); simpsh_core(); popinput();
-#define sh_ccmd(cmd) setinputstrn(cmd, strlen(cmd)); simpsh_core(); exit(lstatus);
-#define sh_script(fd) setinputf(fd); simpsh_core(); close(fd); exit(lstatus);
-#define sh_stdin() setinputf(STDIN_FILENO); simpsh_core(); exit(lstatus);
-extern void sh_interactive(void);
+#define sh_ccmd(s) setinputstrn(s, strlen(s)); simpsh_run(); popinput();
+#define sh_stdin() setinputf(STDIN_FILENO); simpsh_run(); popinput();
+#define sh_script(i) setinputf(i); simpsh_run(); popinput(); close(i);
 
 #endif /* SIMP_H */

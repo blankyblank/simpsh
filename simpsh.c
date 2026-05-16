@@ -1,20 +1,21 @@
 /* simpsh.c - functions for running the shell */
-#include "exec.h"
-#include "input.h"
-#include "lex.h"
+#include "malloc.h"
 #define _POSIX_C_SOURCE 200809L
+#include <linux/limits.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <linux/limits.h>
 #ifdef READLINE
 #include <readline/history.h>
 #include <readline/readline.h>
 #endif /* ifdef READLINE */
 
+#include "env.h"
+#include "exec.h"
+#include "input.h"
+#include "lex.h"
 #include "main.h"
 #include "simpsh.h"
-#include "env.h"
 
 void
 getbuildinfo(void) {
@@ -143,15 +144,29 @@ expand_ps1(char *p)
   return s;
 }
 
-// int
-// sh_ccmd(char *argv)
-// {
-//   setinputstrn(argv, strlen(argv));
-//   simpsh_run(argv);
-//   
-// }
-
 void
+simpsh_run(void)
+{
+  for (;;) {
+    cmd_tree *c;
+    stmark mark;
+
+    if (last_tok.type == TNL)   // ← NEW: consume trailing newline
+      last_tok = SHTOK(TNONE);  // from previous command
+    
+    mark = stack_mark();
+    chkwd = CHKALIAS | CHKNL;
+    c = parse_list(TEOF);
+    if (!c) {
+      stack_restore(mark);
+      break;
+    }
+    run_commands(c);
+    stack_restore(mark);
+  }
+}
+
+int
 sh_interactive(void)
 {
 #ifdef READLINE
@@ -161,8 +176,7 @@ sh_interactive(void)
   char *line, *acc, *new;
   stmark mark, accend, m;
   size_t n, acclen;
-  sh_tok *toks;
-  token last;
+  sh_tok tmp, lastt;
 
   for (;;) {
     shps1 = expand_ps1(getvar("PS1"));
@@ -184,15 +198,19 @@ sh_interactive(void)
       accend = stack_mark(); /* bookmark after acc content */
       notclosed = 0;
       setinputstrn(acc, (int)acclen);
-      { /* lightweight: tokenize to check completeness */
-        int tc;
+      {
+        tmp = SHTOK(TNONE);
         m = stack_mark();
-        toks = tokenize(&tc);
-        if (!notclosed && toks && tc > 0) {
-          last = toks[tc - 1].type;
-          if (last == TAND || last == TOR || last == TPIPE)
-            notclosed = 1;
-        }
+        do {
+          lastt = tmp;
+          if (lastt.type == TAND || lastt.type == TOR || lastt.type == TPIPE) {
+          }
+          chkwd |= CHKNL;
+          tmp = tokenize();
+        } while (tmp.type != TEOF);
+        if (!notclosed &&
+            (lastt.type == TAND || lastt.type == TOR || lastt.type == TPIPE))
+          notclosed = 1;
         stack_restore(m);
       }
       popinput();
@@ -203,7 +221,8 @@ sh_interactive(void)
       line = lineread("> ");
       if (!line) {
         stack_restore(mark);
-        return;
+        //check if this is the right place to return error
+        return 1;
       }
       n = strlen(line); /* append: new larger buffer, copy old + new */
       new = st_alloc(acclen + n + 2);
@@ -217,29 +236,13 @@ sh_interactive(void)
       if (!acc)
         break;
     }
-    simpsh_run(acc); /* second tokenization, runs the command */
+    setinputstrn(acc, (int)acclen);
+    simpsh_run();
+    popinput();
     stack_restore(mark);
   }
-  return;
-}
-
-void
-simpsh_core(void)
-{
-  stmark mark;
-  sh_tok *toks;
-  cmd_tree *c;
-  int tok_c;
-
-  mark = stack_mark();
-  toks = tokenize(&tok_c);
-  if (toks && !notclosed) {
-    size_t i;
-    i = 0;
-    c = parse_list(toks, tok_c, TEOF, &i);
-    run_commands(c);
-  }
-  stack_restore(mark);
+  //check if this is the right place to return lstatus
+  return lstatus;
 }
 
 /**  created directories and their parents if they don't exist  */
