@@ -1,7 +1,7 @@
 CC := gcc
 # CC := clang
 
-BUILD       ?= release
+BUILD       ?= sanitize
 # debug | release | sanitize | valgrind | profile
 BUILD_LINK  ?= dynamic
 # dynamic | static
@@ -15,7 +15,7 @@ LDLIBS  :=
 
 # Build mode presets
 ifeq ($(BUILD),release)
-  CFLAGS += -O2
+  CFLAGS += -march=native -Os -flto
 endif
 ifeq ($(BUILD),debug)
   CFLAGS += -Og -g3 -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
