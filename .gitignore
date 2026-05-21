@@ -5,6 +5,7 @@ compile_commands.json
 .clangd
 doc
 bak
+fake
 notes.txt
 simsh.geany
 .gdb_history
