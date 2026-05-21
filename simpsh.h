@@ -2,14 +2,13 @@
 #ifndef SIMP_H
 #define SIMP_H
 
-#include "input.h"
 #define _POSIX_C_SOURCE 200809L
+#include "input.h"
 #include "main.h"
 
 #define defpath "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 /* functions for shell */
-extern char *expand_ps1(char *);
 extern char *lineread(char *);
 extern void getbuildinfo(void);
 #ifdef READLINE

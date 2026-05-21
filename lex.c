@@ -14,6 +14,7 @@
 #define XPND (1 << 2)
 
 int alias_depth = 0;
+int func_depth = 0;
 int notclosed = 0;
 sh_tok last_tok = { .type = TNONE };
 int chkwd = 0;
@@ -21,120 +22,82 @@ int chkwd = 0;
 static char *cat_wf(wf *wordf);
 static cmd_tree *parse_andor(void);
 static cmd_tree *parse_pipe(void);
+static cmd_tree *parse_group(void);
+static cmd_tree *parse_func(void);
 static int eatbnl(void);
 static int is_assn(wf *);
 static void append_wf(wf **, wf **, char *, size_t len, int);
 static wf **get_assn(wf **, char ***);
-static wf **get_argv(wf *);
 
 static inline cmd_tree *
-newcmdnode(wf **args, cmd_false negate, char **sh_vars)
+newcmdnode(wf **args, int flags, char **sh_vars)
 {
-  cmd_tree *ct = st_alloc(sizeof(cmd_tree));
-  if (!ct) {
-    perror("st_alloc failed");
+  cmd_tree *n = st_alloc(sizeof(cmd_tree));
+  if (!n)
     return NULL;
-  }
-  ct->type = CMD;
-  ct->args = args;
-  ct->negate = negate;
-  ct->sh_vars = sh_vars;
+  n->type = CMD;
+  CARGS(n) = args;
+  CVARS(n) = sh_vars;
+  n->flags = flags;
   /* cmd tree has no children, and doesn't have an operator in it */
-  ct->left = NULL;
-  ct->right = NULL;
-  ct->op_t = 0;
-
-  return ct;
+  return n;
 }
 
 static inline cmd_tree *
-newsubsh(cmd_tree *left, cmd_false negate)
+newsubsh(cmd_tree *left, int negate)
 {
-  cmd_tree *ct = st_alloc(sizeof(cmd_tree));
-  if (!ct) {
+  cmd_tree *n = st_alloc(sizeof(cmd_tree));
+  if (!n)
+    return NULL;
+  n->type = SUBSHELL;
+  n->left = left;
+  n->flags = negate;
+  return n;
+}
+
+static inline cmd_tree *
+newfuncnode(wf *name, cmd_tree *body)
+{
+  cmd_tree *n = st_alloc(sizeof(cmd_tree));
+  if (!n)
+    return NULL;
+  n->type = FUNC;
+  CFUNC(n) = name;
+  n->left = body;
+  /* redir everything else is empty */
+  return n;
+}
+
+static inline cmd_tree *
+newredirnode(cmd_tree *l, redir *r)
+{
+  cmd_tree *n = st_alloc(sizeof(cmd_tree));
+  if (!n) {
     perror("st_alloc failed");
     return NULL;
   }
-  ct->type = SUBSHELL;
-  ct->left = left;
-  ct->negate = negate;
-  /* creating a subshell node we shouldn't need these */
-  ct->args = NULL;
-  ct->sh_vars = NULL;
-  ct->right = NULL;
-  ct->op_t = 0;
-
-  return ct;
+  n->type = REDIR;
+  n->left = l;
+  CREDR(n) = r;
+  n->flags = 0;
+  /* redir everything else is empty */
+  return n;
 }
 
 static inline cmd_tree *
 newoppnode(token opp_t, cmd_tree *left, cmd_tree *right)
 {
-  cmd_tree *ot = st_alloc(sizeof(cmd_tree));
-  if (!ot) {
-    fprintf(stderr, "st_alloc failed");
+  cmd_tree *n = st_alloc(sizeof(cmd_tree));
+  if (!n)
     return NULL;
-  }
-  ot->type = OP;
-  ot->op_t = opp_t;
-  ot->left = left;
-  ot->right = right;
+  n->type = OP;
+  COPP(n) = opp_t;
+  n->left = left;
+  n->right = right;
+  n->flags = 0;
   /* opp tree doesn't have a command stored and doesn't use the ! opperator */
-  ot->sh_vars = NULL;
-  ot->args = NULL;
-  ot->negate = 0;
-
-  return ot;
+  return n;
 }
-
-static int
-eatbnl(void)
-{
-  char c, n;
-
-  while ((c = shgetchar()) == '\\') {
-    if ((n = shgetchar()) == '\n') {
-      cur_shinpt->linenum++;
-      continue;
-    }
-    if (n != SHEOF) {
-      shungetc(n);
-      return '\\';
-    }
-  }
-  return c;
-}
-
-/* build consecutive TWORDS into command returned in word fragments */
-static wf **
-get_argv(wf *f)
-{
-  size_t cap, wc;
-  sh_tok t;
-  wf **argv, **new;
-
-  cap = 8;
-  wc = 1;
-  argv = st_alloc(cap * sizeof(wf *));
-  argv[0] = f;
-
-  for (;;) {
-    t = tokenize();
-    if (t.type != TWORD)
-      break;
-    if (wc >= cap) {
-      cap *= 2;
-      new = st_alloc(cap * sizeof(wf *));
-      memcpy(new, argv, wc * sizeof(wf *));
-      argv = new;
-    }
-    argv[wc++] = t.cmd;
-  }
-  last_tok = t;
-  argv[wc] = NULL;
-  return argv;
-}
-
 
 /* check if word is name=value */
 static int
@@ -160,24 +123,22 @@ is_assn(wf *cmd)
   return 1;
 }
 
-/* takes word fragment and returns (char *) */
-static char *
-cat_wf(wf *wordf)
+static int
+eatbnl(void)
 {
-  wf *f;
-  char *s, *buf;
-  size_t len = 0;
+  char c, n;
 
-  for (f = wordf; f; f = f->next)
-    len += f->len;
-  buf = st_alloc(len + 1);
-  s = buf;
-  for (f = wordf; f; f = f->next) {
-    s = s_mempcpy(s, f->word, f->len);
-    *s = '\0';
+  while ((c = shgetchar()) == '\\') {
+    if ((n = shgetchar()) == '\n') {
+      cur_shinpt->linenum++;
+      continue;
+    }
+    if (n != SHEOF) {
+      shungetc(n);
+      return '\\';
+    }
   }
-
-  return buf;
+  return c;
 }
 
 /** get name and value from NAME=value pair */
@@ -212,6 +173,26 @@ get_assn(wf **args, char ***sh_vars)
   args[k - a_c] = NULL;
 
   return args;
+}
+
+/* takes word fragment and returns (char *) */
+static char *
+cat_wf(wf *wordf)
+{
+  wf *f;
+  char *s, *buf;
+  size_t len = 0;
+
+  for (f = wordf; f; f = f->next)
+    len += f->len;
+  buf = st_alloc(len + 1);
+  s = buf;
+  for (f = wordf; f; f = f->next) {
+    s = s_mempcpy(s, f->word, f->len);
+    *s = '\0';
+  }
+
+  return buf;
 }
 
 /**  add word fragment onto the end of the linked list  */
@@ -330,7 +311,7 @@ get_wf(int c)
     }
     if (state == QSINGLE)
       c = shgetchar();
-    else 
+    else
       c = eatbnl();
     if (c == SHEOF) {
       if (state != QNONE)
@@ -364,12 +345,13 @@ tokenize(void)
   }
   wd = chkwd;
   chkwd = 0;
-  
+
   while ((c = shgetchar()) != SHEOF) {
     if (c == ' ' || c == '\t')
       continue;
     if (c == '#') { /* handle comments */
-      while ((c = shgetchar()) != '\n' && c != SHEOF);
+      while ((c = shgetchar()) != '\n' && c != SHEOF)
+        ;
       if (c == '\n')
         shungetc(c);
       continue;
@@ -402,9 +384,37 @@ tokenize(void)
     } else if (c == ';') {
       return SHTOK(TSEMI);
     } else if (c == '(') {
-      return SHTOK(TLPAREN);
+      return SHTOK(TLP);
     } else if (c == ')') {
-      return SHTOK(TRPAREN);
+      return SHTOK(TRP);
+    } else if (c == '{') {
+      return SHTOK(TLB);
+    } else if (c == '}') {
+      return SHTOK(TRB);
+    } else if (c == '<') {
+      n = eatbnl();
+      if (n == '<') {
+        return SHTOK(TEOF); // TODO: add heredoc support currently no-op
+      } else if (n == '&') {
+        return SHREDIR(RDDUPI);
+      } else if (n == '>') {
+        return SHREDIR(RDRW);
+      } else {
+        shungetc(n);
+        return SHREDIR(RDIN);
+      }
+    } else if (c == '>') {
+      n = eatbnl();
+      if (n == '>') {
+        return SHREDIR(RDAPP);
+      } else if (n == '&') {
+        return SHREDIR(RDDUPO);
+      } else if (n == '|') {
+        return SHREDIR(RDCLOB);
+      } else {
+        shungetc(n);
+        return SHREDIR(RDOUT);
+      }
     }
 
     f = get_wf(c);
@@ -412,7 +422,7 @@ tokenize(void)
       return SHTOK(TEOF);
     if ((wd & CHKALIAS) && f->qs == QNONE && f->next == NULL) {
       word = cat_wf(f);
-      a = find_alias(word);
+      a = findalias(word);
       if (a) {
         if (alias_depth >= MAX_ALIAS_DEPTH) {
           fprintf(stderr, "alias: too many levels of recursion\n");
@@ -443,18 +453,21 @@ parse_list(token s)
     return NULL;
   }
   last_tok = t;
- 
+
   l = parse_andor();
   if (!l)
     return NULL;
 
   for (;;) {
     t = tokenize();
-    if (t.type == TSEMI || (t.type == TNL && s != TEOF)) {
+    if (t.type == TSEMI || (t.type == TNL && s != TEOF) || t.type == TBKGRND) {
       chkwd |= CHKALIAS;
       r = parse_cmd();
       if (!r)
-        break;
+        if (t.type == TBKGRND) {
+          l = newoppnode(TBKGRND, l, NULL);
+          break;
+        }
       l = newoppnode(t.type, l, r);
     } else if (t.type == TEOF || t.type == s) {
       if (t.type != TEOF)
@@ -476,7 +489,7 @@ parse_andor(void)
   sh_tok t;
 
   l = parse_pipe();
-  if (!l) 
+  if (!l)
     return NULL;
 
   for (;;) {
@@ -494,7 +507,6 @@ parse_andor(void)
   }
   return l;
 }
-
 
 /**  parse pipelines  */
 static cmd_tree *
@@ -523,15 +535,65 @@ parse_pipe(void)
   return l;
 }
 
+static cmd_tree *
+parse_group(void)
+{
+  cmd_tree *body;
+  sh_tok t;
+  body = parse_list(TRB);
+  t = tokenize();
+  if (t.type != TRB) {
+    last_tok = t;
+    return NULL;  // syntax error
+  }
+  chkwd |= CHKALIAS;
+  return body;
+}
+
+static cmd_tree *
+parse_func(void)
+{
+  sh_tok t = tokenize();
+  if (t.type == TLB)
+    return parse_group();
+  if (t.type == TLP) {
+    cmd_tree *sub = parse_list(TRP);
+    t = tokenize();
+    if (t.type != TRP)
+      return NULL;
+    chkwd |= CHKALIAS;
+    return sub;
+  }
+  // Anything else is a syntax error
+  last_tok = t;
+  return NULL;
+}
+
+static inline int
+allnum(wf *w)
+{
+  for (size_t i = 0; i < w->len; i++)
+    if (w->word[i] < '0' || w->word[i] > '9')
+      return 0;
+  return 1;
+}
+
 /**  recursive decent parser  */
 cmd_tree *
 parse_cmd(void)
 {
-  size_t neg = 0;
-  char **sh_vars = NULL;
-  wf **args = NULL;
-  cmd_tree *sub, *l = NULL;
-  sh_tok t;
+  size_t neg, wc, cap;
+  char **sh_vars;
+  cmd_tree *sub, *body, *l;
+  redir *redirs, **tail;
+  sh_tok t, close;
+  wf **args;
+
+  sh_vars = NULL;
+  l = NULL;
+  neg = 0;
+  wc = 0;
+  cap = 8;
 
   for (;;) {
     t = tokenize();
@@ -542,29 +604,103 @@ parse_cmd(void)
     chkwd |= CHKALIAS;
     neg++;
   }
-  // WARN: I'm pretty sure this is going to break command negation. 
 
   t = tokenize();
-
-  if (t.type == TLPAREN) {
-    sub = parse_list(TRPAREN);
+  if (t.type == TLP) {
+    sub = parse_list(TRP);
     t = tokenize();
-    if (t.type != TRPAREN)
+    if (t.type != TRP)
       return NULL;
     chkwd |= CHKALIAS;
-    return newsubsh(sub, neg & 1);
+    return newsubsh(sub, (neg & 1) ? NEG : 0);
   }
 
-  if (t.type != TWORD) {
-    last_tok = t;
+  last_tok = t;
+  args = st_alloc(8 * sizeof(wf *));
+  redirs = NULL;
+  tail = &redirs;
+
+  for (;;) {
+    int fd;
+    t = tokenize();
+    switch (t.type) {
+      case TREDIR: {
+          sh_tok name;
+          redir *r;
+          fd = (t.sub == RDIN || t.sub == RDDUPI || t.sub == RDRW) ? 0 : 1;
+          name = tokenize();
+          if (name.type != TWORD)
+            return NULL;
+          r = st_alloc(sizeof(redir));
+          r->fd = fd;
+          r->type = t.sub;
+          r->name = name.cmd;
+          r->next = NULL;
+          *tail = r;
+          tail = &r->next;
+          continue;
+        }
+      case TWORD: {
+          sh_tok n = tokenize();
+          if (n.type == TREDIR && allnum(t.cmd)) {
+            sh_tok name = tokenize();
+            if (name.type != TWORD)
+              return NULL;
+            redir *r;
+            r = st_alloc(sizeof(redir));
+            r->type = n.sub;
+            r->name = name.cmd;
+            r->next = NULL;
+            *tail = r;
+            tail = &r->next;
+            fd = 0;
+            for (size_t i = 0; i < t.cmd->len; i++)
+              fd = fd * 10 + (t.cmd->word[i] - '0');
+            r->fd = fd;
+            continue;
+          }
+          last_tok = n;
+          if (wc >= cap) {
+            wf **new;
+            cap *= 2;
+            new = st_alloc(cap * sizeof(wf *));
+            memcpy(new, args, wc * sizeof(wf *));
+            args = new;
+          }
+          args[wc++] = t.cmd;
+          continue;
+        }
+      default:
+        last_tok = t;
+        break;
+    }
+    break;
+  }
+
+  args[wc] = NULL;
+  if (!wc && redirs) {
+    l = newcmdnode(NULL, (neg & 1) ? NEG : 0, NULL);
+    return newredirnode(l, redirs);
+  }
+  if (!wc && redirs == NULL)
+    return NULL;
+
+  if (wc == 1 && last_tok.type == TLP && redirs == NULL) {
+    last_tok = SHTOK(TNONE);
+    close = tokenize();
+    if (close.type == TRP) {
+      body = parse_func();
+      if (!body)
+        return NULL;
+      return newfuncnode(args[0], body);
+    }
+    last_tok = close;
     return NULL;
   }
 
-  args = get_argv(t.cmd);
-  if (!args || !args[0])
-    return NULL;
   args = get_assn(args, &sh_vars);
-  l = newcmdnode(args, (neg & 1), sh_vars);
-
+  l = newcmdnode(args, (neg & 1) ? NEG : 0, sh_vars);
+  if (redirs)
+    return newredirnode(l, redirs);
   return l;
 }

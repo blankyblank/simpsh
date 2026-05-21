@@ -1,9 +1,10 @@
 /* simpsh.c - functions for running the shell */
-#include "malloc.h"
 #define _POSIX_C_SOURCE 200809L
 #include <linux/limits.h>
+#include <setjmp.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #ifdef READLINE
 #include <readline/history.h>
@@ -13,9 +14,19 @@
 #include "env.h"
 #include "exec.h"
 #include "input.h"
+#include "job.h"
 #include "lex.h"
 #include "main.h"
+#include "malloc.h"
+#include "sig.h"
 #include "simpsh.h"
+
+
+#ifdef READLINE
+/** make directory path */
+static int pmkdir(char *path);
+#endif /* ifdef READLINE */
+static char *expand_ps1(char *);
 
 void
 getbuildinfo(void) {
@@ -25,63 +36,8 @@ getbuildinfo(void) {
          sh_argv0, __DATE__, __TIME__, __STDC_ISO_10646__);
 }
 
-/** make directory path */
-static int pmkdir(char *path);
-
-#ifdef READLINE
-/** initialize history */
-void
-init_history(void)
-{
-  char histfile[265];
-  char buf[256];
-  snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
-  using_history();
-  if (access(histfile, W_OK) < 0) {
-    static const char *histdir = ".local/state/simpsh";
-    snprintf(buf, 256, "%s/%s", home, histdir);
-    if (!pmkdir(buf))
-      return;
-    if (access(histfile, W_OK) < 0)
-      if (write_history(histfile) != 0)
-        return;
-  } else {
-    history_truncate_file(histfile, 1000);
-    if (read_history_range(histfile, 0, -1) != 0)
-      perror("Failed to read .simpsh_history");
-  }
-}
-
-/** read line from interactive shell */
-char *
-lineread(char *prompt)
-{
-  char *line = readline(prompt);
-  if (line && *line)
-    add_history(line);
-
-  return line;
-}
-
-#else
-/** lineread with no readline, for testing */
-char *
-lineread(char *prompt)
-{
-  char buf[4096];
-  fputs(prompt, stdout);
-  if (!fgets(buf, sizeof(buf), stdin))
-    return NULL;
-  size_t len = strlen(buf);
-  if (len > 0 && buf[len - 1] == '\n')
-    buf[len - 1] = '\0';
-  return s_strdup(buf);
-}
-#endif /* ifdef READLINE */
-
-
 /** take in ps1 char * to do variable expansion for prompt */
-char *
+static char *
 expand_ps1(char *p)
 {
   size_t i, end, varlen, cbrace, flen;
@@ -170,15 +126,33 @@ int
 sh_interactive(void)
 {
 #ifdef READLINE
-  init_history(); /* set up history */
+  init_history();
 #endif            /* ifdef READLINE */
 
   char *line, *acc, *new;
-  stmark mark, accend, m;
+  stmark mark, accend, m, base;
   size_t n, acclen;
+  int inp;
   sh_tok tmp, lastt;
 
+  /* set up signal handler to handle ctrl-c */
+  inp = 0;
+  init_sig();
+  init_job();
+
   for (;;) {
+    base = stack_mark();
+    if (sigsetjmp(shenv, 1)) {
+      killjob();
+      tcsetpgrp(STDIN_FILENO, sh_pgid);
+      if (inp) {
+        inp = 0;
+        popinput();
+      }
+      stack_restore(base);
+      putchar('\n');
+    }
+    update_jobs(job_list);
     shps1 = expand_ps1(getvar("PS1"));
     mark = stack_mark();
     line = lineread(shps1 ? shps1 : " $ ");
@@ -237,12 +211,52 @@ sh_interactive(void)
         break;
     }
     setinputstrn(acc, (int)acclen);
+    inp = 1;
     simpsh_run();
+    inp = 0;
+    #ifdef READLINE
+    append_history(1, histfile);
+    #endif /* ifdef READLINE */
     popinput();
     stack_restore(mark);
   }
   //check if this is the right place to return lstatus
   return lstatus;
+}
+
+#ifdef READLINE
+/** initialize history */
+void
+init_history(void)
+{
+  char histfile[265];
+  char buf[256];
+  snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
+  using_history();
+  if (access(histfile, W_OK) < 0) {
+    static const char *histdir = ".local/state/simpsh";
+    snprintf(buf, 256, "%s/%s", home, histdir);
+    if (!pmkdir(buf))
+      return;
+    if (access(histfile, W_OK) < 0)
+      if (write_history(histfile) != 0)
+        return;
+  } else {
+    history_truncate_file(histfile, 1000);
+    if (read_history_range(histfile, 0, -1) != 0)
+      perror("Failed to read .simpsh_history");
+  }
+}
+
+/** read line from interactive shell */
+char *
+lineread(char *prompt)
+{
+  char *line = readline(prompt);
+  if (line && *line)
+    add_history(line);
+
+  return line;
 }
 
 /**  created directories and their parents if they don't exist  */
@@ -264,3 +278,20 @@ pmkdir(char *path)
   return 1;
   /* clang-format on */
 }
+
+#else
+/** lineread with no readline, for testing */
+char *
+lineread(char *prompt)
+{
+  char buf[4096];
+  fputs(prompt, stdout);
+  if (!fgets(buf, sizeof(buf), stdin))
+    return NULL;
+  size_t len = strlen(buf);
+  if (len > 0 && buf[len - 1] == '\n')
+    buf[len - 1] = '\0';
+  return s_strdup(buf);
+}
+#endif /* ifdef READLINE */
+
