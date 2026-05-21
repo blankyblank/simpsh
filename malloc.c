@@ -13,7 +13,7 @@
  *      I don't know if anyone will ever use this shell but I felt like I should
  *      give credit to them for it. I'm mostly doing this to learn. Because I
  *      want understand how this kind of memory management works, and how to
- * write optimized code like dash uses.
+ *      write optimized code like dash.
  */
 
 /* TODO:
@@ -26,20 +26,15 @@ char *stnext = stackbase.buf;
 size_t stleft = MINSTACK_S;
 char *stend;
 
-/**  return stmark with the current state of the allocator  */
-stmark
-stack_mark(void)
-{
-  stmark m = { current, stnext, stleft };
-  return m;
-}
 void
 stunalloc(void *p)
 {
-    if (p >= (void *)stnext) return;     /* safety */
-    stleft += (char *)stnext - (char *)p;
-    stnext = p;
+  if (p >= (void *)stnext)
+    return;
+  stleft += (char *)stnext - (char *)p;
+  stnext = p;
 }
+
 /**  clear everything back to stmark  */
 void
 stack_restore(stmark m)

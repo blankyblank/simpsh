@@ -2,7 +2,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "env.h"
 #include "expand.h"
-#include "utils.h"
 
 /** expand argument vector */
 char **
@@ -36,18 +35,12 @@ expand_word(wf *wordf)
   for (f = wordf; f; f = f->next) {
     switch (f->qs) {
       case QSINGLE:
-        // NOTE: new
         if (f->len >= stleft)
           grow_stack(f->len);
         memcpy(stnext, f->word, f->len);
         stnext += f->len;
         stleft -= f->len;
         len += f->len;
-        // OLD
-        // for (size_t i = 0; i < f->len; i++) {
-        //   st_putc(f->word[i]);
-        //   len++;
-        // }
         break;
       case QDOUBLE:
       case QNONE:
@@ -57,7 +50,6 @@ expand_word(wf *wordf)
             expanded = exp_tilde(f->word, i, &end);
             if (expanded) {
               size_t elen;
-              // NOTE: new
               elen = strlen(expanded);
               if (elen >= stleft)
                 grow_stack(elen);
@@ -66,12 +58,6 @@ expand_word(wf *wordf)
               stleft -= elen;
               len += elen;
               i = end;
-              // OLD
-              /* for (s = expanded; *s; s++) {
-                st_putc(*s);
-                len++;
-              }
-              i = end; */
             } else {
               st_putc('~');
               len++;
@@ -85,7 +71,6 @@ expand_word(wf *wordf)
             expanded = exp_var(f->word, i, &end);
             if (expanded) {
               size_t vlen;
-              // NOTE: new
               vlen = strlen(expanded);
               if (vlen >= stleft)
                 grow_stack(vlen);
@@ -94,12 +79,6 @@ expand_word(wf *wordf)
               stleft -= vlen;
               len += vlen;
               i = end;
-              // OLD
-              /* for (s = expanded; *s; s++) {
-                st_putc(*s);
-                len++;
-              }
-              i = end; */
             } else {
               i = end;
             }

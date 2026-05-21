@@ -33,4 +33,5 @@ extern pid_t sh_pid;
 extern char *sh_pid_s;
 extern char *home;
 
+extern char histfile[265];
 #endif /* !MAIN_H */

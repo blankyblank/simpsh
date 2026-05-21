@@ -20,8 +20,8 @@
 
 #define bad_opt(a,b,c) (fprintf(stderr, "%s: %s: bad option %c\n", a,b,c))
 
-/* builtins */
 static int aliascmd(char **);
+static char *pwdpath(char *);
 static int cdcmd(char **);
 static int echocmd(char **);
 static int execcmd(char **);
@@ -88,14 +88,14 @@ aliascmd(char **args)
   }
 
   if (!(delem = strchr(args[1], '='))) {
-    if (!(e = find_alias(args[1])))
+    if (!(e = findalias(args[1])))
       return 1;
     else
       printf("alias %s=%s\n", e->name, e->value);
   } else {
     n = s_strndup(args[1], strlen(args[1]) - strlen(delem));
     v = s_strdup(delem + 1);
-    set_alias(n, v);
+    setalias(n, v);
     free(n);
     free(v);
   }
@@ -193,13 +193,13 @@ cdcmd(char **argv)
     return 1;
   }
 
-  oldpwd = find_var("OLDPWD");
-  pwd = find_var("PWD");
+  oldpwd = findvar("OLDPWD");
+  pwd = findvar("PWD");
   if (pwd)
     pwdval = shvar_val(pwd);
   else
     pwdval = getcwd(respath, PATH_MAX);
-  cdpth = find_var("CDPATH");
+  cdpth = findvar("CDPATH");
   if (cdpth) {
     if (*argv && argv[0][0] != '/' &&
         !(argv[0][0] == '-' && argv[0][1] == '\0') &&
@@ -387,7 +387,7 @@ exportcmd(char **args)
 
       eq = s_strchrnul(args[i], '=');
       if (*eq == '\0') {
-        v = find_var(args[i]);
+        v = findvar(args[i]);
         if (v)
           v->flags |= VEXPRT;
         else
@@ -495,9 +495,9 @@ unaliascmd(char **args)
   /* int i;
    char *n, *v; */
 
-  e = find_alias(args[1]);
+  e = findalias(args[1]);
   if (e) {
-    rm_alias(args[1]);
+    rmalias(args[1]);
   } else {
     fprintf(stderr, "unalias: %s: alias not found\n", args[1]);
     return 1;
@@ -530,14 +530,14 @@ unsetcmd(char **argv)
     return 0;
   } else {
     for (; c < argc; c++) {
-      v = find_var(argv[c]);
+      v = findvar(argv[c]);
       if (v) {
         if (v->flags & VREADONLY) {
           fprintf(stderr, "%s: unset: %s: cannot unset: readonly variable\n",
                   sh_argv0, argv[c]);
           err = 1;
         } else {
-          unset_var(argv[c]);
+          rmvar(argv[c]);
         }
       }
     }

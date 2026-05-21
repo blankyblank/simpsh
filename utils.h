@@ -11,19 +11,20 @@
 #include "malloc.h"
 
 /** null terminated memcpy */
-#define nmemcpy(d,s,l) do { \
-  memcpy(d, s, l); \
-  d[l] = '\0'; \
-} while (0)
+#define nmemcpy(d,s,l) memcpy(d, s, l), d[l] = '\0'
 
 /**  check if char is whitespace  */
 /* is_ws  WARN: for future me. use the posix isspace function instead */
 
 /**  check if char is operator  */
-#define is_operator(c) (c == '&' || c == '|' || c == ';' || c == '(' || c == ')')
+#define is_operator(c) \
+  (c == '&' || c == '|' || c == ';' || c == '(' || c == ')' || c == '{' || \
+   c == '}' || c == '<' || c == '>')
 
 /**  check if char is line end  */
 #define is_cmd_end(c) ((c == ' ') | (c == '\t') | (c == '\n'))
+
+#define err(r,s) { warn(s); return r; }
 
 /**  get length of char* array  */
 static inline size_t
@@ -60,8 +61,7 @@ s_strndup(const char *s, size_t n)
   char *dup;
   
   if ((dup = malloc(n + 1))) {
-    memcpy(dup, s, n);
-    dup[n] = '\0';
+    nmemcpy(dup, s, n);
   }
   return dup;
 }
@@ -142,7 +142,6 @@ read_assn(const char *assn, char **name, char **value)
   }
 }
 
-/**  stack-based version - for temporary parsing  */
 static inline void
 st_read_assn(const char *assn, char **name, char **value)
 {
