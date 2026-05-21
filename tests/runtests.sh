@@ -11,9 +11,8 @@ fi
 msg "Running shell tests..."
 for f in [0-9][0-9]-*.sh; do
   [ ! -x "./$f" ] && continue
-  if "./$f"; then
-    msg_pass "$f"
-  else
+  msg "$f..."
+  if ! "./$f"; then
     msg_fail "$f"
     exit 1
   fi

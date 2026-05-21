@@ -3,18 +3,21 @@
 
 [ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
 
-msg 'running ../simpsh -c "false; echo $?"...'
-_fail_stat=$(../simpsh -c 'false; echo $?')
-msg 'running ../simpsh -c "true; echo $?"...'
-_success_stat=$(../simpsh -c 'true; echo $?')
 
-msg 'getting results...'
-if [ "$_fail_stat" -eq 0 ]; then
-  msg_fail "exit status shouldn't equal 0"
+msg_run '"false; echo $?"'
+_fail_s=$(../simpsh -c 'false; echo $?')
+if [ "$_fail_s" -eq 0 ]; then
+  msg_fail "\$_fail_s: $_fail_s should be nonzero"
   exit 1
+else
+  msg_pass "\$_fail_s=$_fail_s exit status is nonzero"
 fi
 
-if [ "$_success_stat" -ne 0 ]; then
-  msg_fail "exit status should equal 0"
+msg_run '"true; echo $?"'
+_suc_s=$(../simpsh -c 'true; echo $?')
+if [ "$_suc_s" -ne 0 ]; then
+  msg_fail "\$_suc_s: $_suc_s should be zero"
   exit 1
+else
+  msg_pass "\$_suc_s=$_suc_s exit status is zero"
 fi

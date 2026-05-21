@@ -5,12 +5,14 @@ set -e
 
 [ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
 
-msg 'running ../simpsh -c "cd /tmp ; pwd"...'
+msg_run '"cd /tmp ; pwd"'
 out=$(../simpsh -c "cd /tmp ; pwd")
 
 if [ "$out" != "/tmp" ]; then
   msg_fail "output differs"
   exit 1
+else
+  test_pass "out" "matches" "/tmp"
 fi
 
 exit 0

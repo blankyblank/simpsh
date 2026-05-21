@@ -5,6 +5,12 @@ set -e
 
 [ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
 
-msg 'running echo foo=bar; echo $foo | ../simpsh...'
+msg_run 'echo foo=bar; echo $foo | ../simpsh'
 out=$(echo 'foo=bar; echo $foo' | ../simpsh )
-[ "$out" = "bar" ] || { msg_fail "outputs differ"; exit 1;}
+
+if  [ "$out" = "bar" ]; then
+  test_pass  "out" "matches" "bar"
+else
+  msg_fail "\$out=$out differs from 'bar'"
+  exit 1
+fi

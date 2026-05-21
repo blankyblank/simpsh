@@ -5,7 +5,12 @@ set -e
 
 [ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
 
-msg 'running ../simpsh -c "testvar=1 env" | grep testvar...'
+msg_run '"testvar=1 env" | grep testvar'
 out="$(../simpsh -c "testvar=1 env" | grep testvar)"
 
-[ "$out" = testvar=1 ] || { msg_fail "output differs" ; exit 1;}
+if [ "$out" = testvar=1 ]; then
+  test_pass  "out" "matches" "testvar=1"
+else
+  msg_fail "\$out=$out differs from 'testvar=1'"
+  exit 1
+fi
