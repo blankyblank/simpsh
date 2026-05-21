@@ -318,15 +318,15 @@ echocmd(char *argv[])
 static int
 execcmd(char **args)
 {
+  if (!args[1])
+    return 0;
   char *fullpath;
-  fullpath = getpath(args[1]);
   char **env = build_env(NULL);
   if (!env) {
     warn("exec: failed to get environ");
   }
 
-  if (!args[1])
-    goto fail;
+  fullpath = getpath(args[1]);
   if (!fullpath)
     goto fail;
   if (execve(fullpath, &args[1], env) < 0)

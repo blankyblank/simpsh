@@ -440,7 +440,7 @@ tokenize(void)
   return SHTOK(TEOF);
 }
 
-cmd_tree *
+__attribute__((hot)) cmd_tree *
 parse_list(token s)
 {
   sh_tok t;

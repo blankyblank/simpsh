@@ -3,6 +3,7 @@
 #include <linux/limits.h>
 #include <setjmp.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -127,6 +128,11 @@ sh_interactive(void)
 {
 #ifdef READLINE
   init_history();
+  FILE *tty = fopen("/dev/tty", "w+");
+  if (tty) {
+    setbuf(tty, NULL);  // unbuffered for immediate echo
+    rl_outstream = tty;
+  }
 #endif            /* ifdef READLINE */
 
   char *line, *acc, *new;
@@ -225,11 +231,17 @@ sh_interactive(void)
 }
 
 #ifdef READLINE
+static void
+readline_cleanup(void)
+{
+  clear_history();
+  rl_free_line_state();
+}
+
 /** initialize history */
 void
 init_history(void)
 {
-  char histfile[265];
   char buf[256];
   snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
   using_history();
@@ -246,6 +258,7 @@ init_history(void)
     if (read_history_range(histfile, 0, -1) != 0)
       perror("Failed to read .simpsh_history");
   }
+  atexit(readline_cleanup);
 }
 
 /** read line from interactive shell */

@@ -310,6 +310,7 @@ run_bg(const cmd_tree *n)
   pid_t pid;
   sigset_t sigold;
   job *j;
+  int status;
 
   jobsig_blk(&sigold);
   pid = fork();
@@ -323,7 +324,9 @@ run_bg(const cmd_tree *n)
       signal(SIGINT, SIG_IGN);
       signal(SIGQUIT, SIG_IGN);
       jobsig_unblk(&sigold);
-      _exit(run_commands(n->left));
+      status = run_commands(n->left);
+      fflush(NULL);
+      _exit(status);
     default:
       setpgid(pid, pid);
       j = newjob(pid, bg_cmd(n->left));
@@ -357,7 +360,9 @@ run_subsh(const cmd_tree *n)
       signal(SIGINT, SIG_DFL);
       signal(SIGQUIT, SIG_DFL);
       chld_setpgid(0);
-      _exit(run_commands(n->left));
+      status = run_commands(n->left);
+      fflush(NULL);
+      _exit(status);
     default:
       setpgid(pid, pid);
       if (getpid() == sh_pgid) {
@@ -405,6 +410,7 @@ run_pipe(const cmd_tree *n)
       DUPFD(pipefd[1], STDOUT_FILENO);
       CLOSEFD(pipefd[1]);
       l_status = run_commands(n->left);
+      fflush(NULL);
       _exit(l_status);
     default:
       setpgid(lpid, lpid);
@@ -427,6 +433,7 @@ run_pipe(const cmd_tree *n)
       DUPFD(pipefd[0], STDIN_FILENO);
       CLOSEFD(pipefd[0]);
       r_status = run_commands(n->right);
+      fflush(NULL);
       _exit(r_status);
     default:
       setpgid(rpid, lpid);
@@ -610,7 +617,14 @@ run_redir(const cmd_tree *n)
   }
 
   lstatus = run_commands(n->left);
-  restore_fd(sfd, sfdc);
+  if (!(n->left && n->left->type == CMD &&
+        CARGS(n->left) &&
+        CARGS(n->left)[0] &&
+        !CARGS(n->left)[1] &&
+        !strcmp(CARGS(n->left)[0]->word, "exec"))) {
+    fflush(NULL);
+    restore_fd(sfd, sfdc);
+  }
   return lstatus;
 }
 
