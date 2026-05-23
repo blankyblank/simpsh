@@ -9,7 +9,7 @@ msg_run '"echo Test test!"'
 out=$(../simpsh -c "echo Test test!")
 
 if [ "$out" != "Test test!" ]; then
-  msg_fail "output differs"
+  test_fail "out" "differs from" "Test test!"
   exit 1
 else
   test_pass "out" "matches" "Test test!"

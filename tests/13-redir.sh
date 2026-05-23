@@ -1,6 +1,5 @@
 #!/bin/sh
-### shellcheck #disable=2015
-# set -x
+# shellcheck disable=2015
 
 [ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
 
@@ -26,4 +25,5 @@ if [ "$out2" != "$res" ]; then
   exit 1
 else
   msg_pass ">> append redirection"
+  rm $f
 fi
