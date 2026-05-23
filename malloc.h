@@ -35,7 +35,6 @@ extern void stack_restore(stmark);
 extern void *st_alloc(size_t);
 extern void stack_clear(void);
 extern void *grow_stack(size_t);
-extern char *grab_str(size_t);
 extern void init_stack(void);
 extern void stunalloc(void *p);
 
@@ -49,6 +48,20 @@ st_strndup(const char *s, size_t len)
   d[len] = '\0';
   return d;
 }
+
+/**  grab string from arena  */
+static inline char *
+grab_str(size_t len)
+{
+  if (len >= stleft)
+    grow_stack(1);
+  char *start = stnext - len;
+  *stnext++ = '\0';
+  stleft--;
+
+  return start;
+}
+
 
 /** stack allocated strdup */
 #define st_strdup(s) (st_strndup(s, strlen(s)))

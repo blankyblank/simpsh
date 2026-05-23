@@ -111,7 +111,7 @@ freeptr(char **args)
   }
 }
 
-/**  hash string to put in hash table  */
+/**  hash string for hash table  */
 static inline unsigned int
 hash(const char *s, unsigned int buckets)
 {
@@ -125,6 +125,17 @@ hash(const char *s, unsigned int buckets)
   return h % buckets;
 }
 
+/**  hash string with known length  */
+static inline unsigned int
+hash_n(const char *s, size_t n, unsigned int buckets) {
+  unsigned long h = 525201411107845655ull;
+  for (size_t i = 0; i < n; i++) {
+    h ^= (unsigned char)s[i];
+    h *= 0x5bd1e9955bd1e995;
+    h ^= h >> 47;
+  }
+  return h % buckets;
+}
 /**  brief find name and value from name=value pair  */
 static inline void
 read_assn(const char *assn, char **name, char **value)

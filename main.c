@@ -17,7 +17,7 @@
 #include "malloc.h"
 #include "simpsh.h"
 
-char histfile[265];
+char histfile[256];
 int builtin_tab[BUILTIN_BUCKETS];
 
 /* global shell variables */
@@ -66,7 +66,7 @@ main(int argc, char **argv)
   init_builtins();
   init_input();
 
-  snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
+  snprintf(histfile, 256, "%s/.local/state/simpsh/simpsh_history", home);
 
   if (flags & FLAG_c) {
     sh_ccmd(argv[0]);

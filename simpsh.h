@@ -5,6 +5,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "input.h"
 #include "main.h"
+#include <sys/mman.h>
 
 #define defpath "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 

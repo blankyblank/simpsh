@@ -243,7 +243,7 @@ void
 init_history(void)
 {
   char buf[256];
-  snprintf(histfile, 265, "%s/.local/state/simpsh/simpsh_history", home);
+  snprintf(histfile, 256, "%s/.local/state/simpsh/simpsh_history", home);
   using_history();
   if (access(histfile, W_OK) < 0) {
     static const char *histdir = ".local/state/simpsh";

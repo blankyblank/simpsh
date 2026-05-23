@@ -51,7 +51,7 @@ stack_restore(stmark m)
 }
 
 /**  allocate new stack block  */
-void *
+__attribute__((hot)) void *
 st_alloc(size_t dsize)
 {
   size_t asize = align_mem(dsize);
@@ -94,7 +94,7 @@ st_alloc(size_t dsize)
 }
 
 /**  grow the stack allocation  */
-void *
+__attribute__((hot)) void *
 grow_stack(size_t msize)
 {
   size_t nsize;
@@ -118,19 +118,6 @@ grow_stack(size_t msize)
   stleft = nsize - used;
   stend = nb->buf + nsize;
   return stnext;
-}
-
-/**  grab string from arena  */
-char *
-grab_str(size_t len)
-{
-  if (len >= stleft)
-    grow_stack(1);
-  char *start = stnext - len;
-  *stnext++ = '\0';
-  stleft--;
-
-  return start;
 }
 
 /**  clear the stack arena  */
