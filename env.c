@@ -12,6 +12,8 @@
 #include "lex.h"
 #include "main.h"
 #include "utils.h"
+#define isalpha_(c) (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z') || (c) == '_')
+#define isalnum_(c)  (isalpha_(c) || ((c) >= '0' && (c) <= '9'))
 
 alias *alias_tab[ENV_BUCKETS];
 shvar *var_tab[ENV_BUCKETS];
@@ -20,100 +22,6 @@ static char *var_n(const char *, size_t, size_t *);
 static char *varbrace_n(const char *, size_t, size_t *);
 static char *lookupvar(const char *, size_t);
 static cmd_tree *tree_dup(cmd_tree *);
-
-/** find variable by name */
-shvar *
-findvar(const char *name)
-{
-  unsigned int i;
-  shvar *v;
-  size_t namelen;
-
-  i = hash(name, ENV_BUCKETS);
-  v = var_tab[i];
-  namelen = strlen(name);
-  while (v) {
-    if (v->var[0] == name[0])
-      if (strncmp(v->var, name, namelen) == 0)
-        return v;
-    v = v->next;
-  }
-  return NULL;
-}
-
-/** set variable value */
-void
-setvar(char *name, char *val, shvar_flags flags)
-{
-  shvar *v;
-  char *nvar;
-  size_t vlen, nlen, i;
-
-  nlen = strlen(name);
-  if (!val) {
-    nvar = s_strndup(name, nlen + 2);
-    nvar[nlen] = '=';
-    nvar[nlen + 1] = '\0';
-  } else {
-    vlen = strlen(val);
-    if (!(nvar = malloc(nlen + 1 + vlen + 1)))
-      return;
-    memcpy(nvar, name, nlen);
-    nvar[nlen] = '=';
-    memcpy(nvar + nlen + 1, val, vlen + 1);
-  }
-
-  i = hash(name, ENV_BUCKETS);
-  v = var_tab[i];
-  while (v) {
-    if (v->var[0] == name[0])
-      if (strncmp(v->var, name, nlen) == 0 && v->var[nlen] == '=') {
-        if (v->flags & VREADONLY) {
-          free(nvar);
-          return;
-        }
-        free(v->var);
-        v->var = nvar;
-        v->flags = flags;
-        return;
-      }
-    v = v->next;
-  }
-  if (!(v = malloc(sizeof(shvar))))
-    return;
-  v->var = nvar;
-  v->flags = flags;
-  v->func = NULL;
-  v->next = var_tab[i];
-  var_tab[i] = v;
-}
-
-/** unset variable */
-void
-rmvar(const char *name)
-{
-  unsigned int i;
-  shvar **prev;
-  shvar *v;
-  size_t len;
-
-  i = hash(name, ENV_BUCKETS);
-  prev = &var_tab[i];
-  v = var_tab[i];
-
-  len = strlen(name);
-  while (v) {
-    if (v->var[0] == name[0])
-      if (strncmp(v->var, name, len) == 0) {
-        *prev = v->next;
-        free(v->var);
-        free(v);
-        return;
-      }
-    prev = &v->next;
-    v = v->next;
-  }
-}
 
 /** get the variable for the return status of last command */
 static inline char *
@@ -183,7 +91,7 @@ var_n(const char *args, size_t i, size_t *end)
   size_t j, vt_l;
 
   for (j = i + 1;; j++) {
-    if ((isalnum(args[j]) == 0 && args[j] != '_') || args[j] == '\0') {
+    if ((isalnum_(args[j]) == 0 && args[j] != '_') || args[j] == '\0') {
       vt_l = j - (i + 1);
 
       if (vt_l == 0) {
@@ -230,6 +138,120 @@ varbrace_n(const char *args, size_t i, size_t *end)
   return var;
 }
 
+/** find variable by name */
+__attribute__((hot)) shvar *
+findvar(const char *name)
+{
+  unsigned int i;
+  shvar *v;
+  size_t nlen;
+
+  nlen = strlen(name);
+  i = hash_n(name, nlen, ENV_BUCKETS);
+  v = var_tab[i];
+  while (v) {
+    if (v->var[0] == name[0])
+      if (strncmp(v->var, name, nlen) == 0)
+        return v;
+    v = v->next;
+  }
+  return NULL;
+}
+
+/** set variable value */
+void
+setvar(char *name, char *val, shvar_flags flags)
+{
+  shvar *v;
+  char *nvar;
+  size_t vlen, nlen, i;
+
+  nlen = strlen(name);
+  if (!val) {
+    nvar = s_strndup(name, nlen + 2);
+    nvar[nlen] = '=';
+    nvar[nlen + 1] = '\0';
+  } else {
+    vlen = strlen(val);
+    if (!(nvar = malloc(nlen + 1 + vlen + 1)))
+      return;
+    memcpy(nvar, name, nlen);
+    nvar[nlen] = '=';
+    memcpy(nvar + nlen + 1, val, vlen + 1);
+  }
+
+  i = hash_n(name, nlen, ENV_BUCKETS);
+  v = var_tab[i];
+  while (v) {
+    if (v->var[0] == name[0])
+      if (strncmp(v->var, name, nlen) == 0 && v->var[nlen] == '=') {
+        if (v->flags & VREADONLY) {
+          free(nvar);
+          return;
+        }
+        free(v->var);
+        v->var = nvar;
+        v->flags = flags;
+        return;
+      }
+    v = v->next;
+  }
+  if (!(v = malloc(sizeof(shvar))))
+    return;
+  v->var = nvar;
+  v->flags = flags;
+  v->func = NULL;
+  v->next = var_tab[i];
+  var_tab[i] = v;
+}
+
+/** unset variable */
+void
+rmvar(const char *name)
+{
+  unsigned int i;
+  shvar **prev;
+  shvar *v;
+  size_t nlen;
+
+  nlen = strlen(name);
+  i = hash_n(name, nlen, ENV_BUCKETS);
+  prev = &var_tab[i];
+  v = var_tab[i];
+
+  while (v) {
+    if (v->var[0] == name[0])
+      if (strncmp(v->var, name, nlen) == 0) {
+        *prev = v->next;
+        free(v->var);
+        free(v);
+        return;
+      }
+    prev = &v->next;
+    v = v->next;
+  }
+}
+
+tmp_var
+grabvar(char *name)
+{
+  tmp_var tmp;
+  shvar *v;
+
+  v = findvar(name);
+  if (v) {
+    tmp.set = 1;
+    tmp.name = st_strdup(name);
+    tmp.val = st_strdup(shvar_val(v));
+    tmp.oldflags = v->flags;
+  } else {
+    tmp.set = 0;
+    tmp.name = st_strdup(name);
+    tmp.val = NULL;
+  }
+  return tmp;
+}
+
 /** lookup variable by name */
 char *
 lookupvar(const char *vt, size_t vlen)
@@ -245,7 +267,7 @@ lookupvar(const char *vt, size_t vlen)
       n = n * 10 + (vt[j] - '0');
     var = get_posparam(n);
   } else {
-    i = hash(vt, ENV_BUCKETS);
+    i = hash_n(vt, vlen, ENV_BUCKETS);
     v = var_tab[i];
     while (v) {
       if (memcmp(v->var, vt, vlen) == 0)
@@ -406,7 +428,6 @@ tree_dup(cmd_tree *s)
       break;
 
     case CMD:
-      CREDR(n) = redirdup(CREDR(s));
       cnt = 0;
       for (size_t i = 0; CARGS(s)[i]; i++)
         cnt++;

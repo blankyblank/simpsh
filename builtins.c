@@ -1,6 +1,7 @@
 /* builtins.c - builtin shell commands */
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
+#include <stddef.h>
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
@@ -14,6 +15,7 @@
 #include "builtins.h"
 #include "env.h"
 #include "exec.h"
+#include "lex.h"
 #include "main.h"
 #include "simpsh.h"
 #include "utils.h"
@@ -29,7 +31,9 @@ static int exitcmd(char **);
 static int exportcmd(char **);
 static int falsecmd(char **);
 static int helpcmd(char **);
+static int localcmd(char **);
 static int pwdcmd(char **);
+static int readonlycmd(char **);
 static int truecmd(char **);
 static int unaliascmd(char **);
 static int unsetcmd(char **);
@@ -44,7 +48,9 @@ const char *builtins[] = {
   "export",
   "false",
   "help",
+  "local",
   "pwd",
+  "readonly",
   "true",
   "unalias",
   "unset",
@@ -58,7 +64,9 @@ int (* const builtin_funcs[])(char **) = {
   &exportcmd,
   &falsecmd,
   &helpcmd,
+  &localcmd,
   &pwdcmd,
+  &readonlycmd,
   &truecmd,
   &unaliascmd,
   &unsetcmd,
@@ -169,7 +177,7 @@ cdcmd(char **argv)
 {
   unsigned int argc, prnt;
   char *dest, *end, *pwdval;
-  char fflag = '\0', respath[PATH_MAX];
+  char flag = '\0', respath[PATH_MAX];
   const char *dir;
   shvar *pwd, *oldpwd, *cdpth;
 
@@ -178,10 +186,10 @@ cdcmd(char **argv)
   ARGBEGIN
   {
     case 'L':
-      fflag = FLAG_L;
+      flag = FLAG_L;
       break;
     case 'P':
-      fflag = FLAG_P;
+      flag = FLAG_P;
       break;
     default:
       bad_opt(sh_argv0, argv0, ARGC());
@@ -233,7 +241,7 @@ cdcmd(char **argv)
     dest = (char *)dir;
   }
 
-  if (fflag == FLAG_P) {
+  if (flag == FLAG_P) {
     if (!realpath(dest, respath)) {
       warn("cd: %s", dest);
       return 1;
@@ -375,12 +383,12 @@ exitcmd(char **argv)
 static int
 exportcmd(char **args)
 {
-  int argc, i;
+  size_t argc;
   argc = array_len(args);
 
   /* nvar = s_strndup(args[i], nvarlen + 1); */ 
   if (argc > 1) {
-    for (i = 1; i < argc; i++) {
+    for (size_t i = 1; i < argc; i++) {
       char *eq;
       char *name, *val;
       shvar *v;
@@ -428,21 +436,50 @@ helpcmd(char **args)
   return 0;
 }
 
+static int localcmd(char **argv)
+{
+  size_t argc;
+
+  argc = array_len(argv);
+
+  if (func_depth == 0) {
+    fprintf(stderr, "simpsh: local: can only be used in a function\n");
+    return 1;
+  }
+  if (argc > 1) {
+    for (size_t i = 1; i < argc; i++) {
+      char *name, *val;
+
+      st_read_assn(argv[i], &name, &val);
+      localvars[localsp++] = grabvar(name);
+      if (localsp >= LOCAL_MAX)
+        err(1, "local variables exceeded max");
+      if (val) {
+        setvar(name, val, 0);
+      } else {
+        val = localvars[localsp - 1].val ? localvars[localsp - 1].val : "";
+        setvar(name, val, 0);
+      }
+    }
+  }
+  return 0;
+}
+
 static int
 pwdcmd(char **argv)
 {
   int argc = 0;
   (void)argc;
-  char fflag = '\0';
+  char flag = '\0';
   char pwdbuf[PATH_MAX + 1];
 
   ARGBEGIN
   {
     case 'L':
-      fflag = FLAG_L;
+      flag = FLAG_L;
       break;
     case 'P':
-      fflag = FLAG_P;
+      flag = FLAG_P;
       break;
     default:
       bad_opt(sh_argv0, argv0, ARGC());
@@ -450,7 +487,7 @@ pwdcmd(char **argv)
   }
   ARGEND;
 
-  if (fflag != FLAG_P) {
+  if (flag != FLAG_P) {
     char *pwd = getvar("PWD");
     struct stat sbuf, cwdsbuf;
 
@@ -479,6 +516,38 @@ physical:
     warn("pwd");
     return 1;
   }
+}
+
+static int
+readonlycmd(char **argv)
+{
+  int argc, i;
+  argc = array_len(argv);
+
+  /* nvar = s_strndup(args[i], nvarlen + 1); */ 
+  if (argc > 1) {
+    for (i = 1; i < argc; i++) {
+      char *eq;
+      char *name, *val;
+      shvar *v;
+
+      eq = s_strchrnul(argv[i], '=');
+      if (*eq == '\0') {
+        v = findvar(argv[i]);
+        if (v)
+          v->flags |= VREADONLY;
+        else
+          setvar(argv[i], NULL, VEXPRT);
+      } else {
+        read_assn(argv[i], &name, &val);
+        setvar(name, val, VREADONLY);
+        free(name);
+        free(val);
+      }
+    }
+  }
+
+  return 0;
 }
 
 static int
@@ -513,37 +582,50 @@ unsetcmd(char **argv)
   size_t argc, c;
   unsigned int err;
   argc = array_len(argv);
+  enum {
+    VARS,
+    FUNC,
+  } flag;
 
+  flag = 0;
   ARGBEGIN
   {
     case 'v':
-    break;
-
+      flag = VARS;
+      break;
+    case 'f':
+      flag = FUNC;
+      break;
     default:
       bad_opt(sh_argv0, argv0, ARGC());
-    return 1;
-  } ARGEND
+      return 1;
+  }
+  ARGEND
 
   err = 0;
   c = 0;
   if (argc < 1) {
     return 0;
+
   } else {
     for (; c < argc; c++) {
-      v = findvar(argv[c]);
-      if (v) {
-        if (v->flags & VREADONLY) {
-          fprintf(stderr, "%s: unset: %s: cannot unset: readonly variable\n",
-                  sh_argv0, argv[c]);
-          err = 1;
-        } else {
-          rmvar(argv[c]);
+      if (flag == FUNC) {
+        rmfunc(argv[c]);
+      } else {
+        v = findvar(argv[c]);
+        if (v) {
+          if (v->flags & VREADONLY) {
+            fprintf(stderr, "%s: unset: %s: cannot unset: readonly variable\n",
+                    sh_argv0, argv[c]);
+            err = 1;
+          } else {
+            rmvar(argv[c]);
+          }
         }
       }
+      if (err)
+        return 1;
     }
-    if (err)
-      return 1;
-
   }
 
   return 0;
