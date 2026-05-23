@@ -1,4 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
+#include <sys/stat.h>
+#include <sys/mman.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,7 +11,6 @@
 #include "lex.h"
 #include "simpsh.h"
 
-int shreadbuf(void);
 static char basebuf[BASEBUFSIZE];
 shinput base_shinput;
 shinput *cur_shinpt = &base_shinput;
@@ -21,14 +22,11 @@ init_input(void)
   base_shinput.buf = basebuf;
   base_shinput.nchar = basebuf;
   base_shinput.nleft = 0;
-  base_shinput.strn = NULL;
-  base_shinput.strnpos = 0;
-  base_shinput.strnleft = 0;
   base_shinput.fd = STDIN_FILENO;
-  base_shinput.eof = 0;
   base_shinput.linenum = 1;
   base_shinput.unget = 0;
   base_shinput.strpush = NULL;
+  base_shinput.mapsize = 0;
   cur_shinpt = &base_shinput;
 }
 
@@ -65,31 +63,6 @@ popstring(void)
   free(sp);
 }
 
-int
-shgetchar(void)
-{
-  if (cur_shinpt->unget > 0) {
-    cur_shinpt->unget--;
-    return cur_shinpt->ungetbuf[cur_shinpt->unget];
-  }
-  if (cur_shinpt->nleft > 0) {
-    cur_shinpt->nleft--;
-    return *cur_shinpt->nchar++;
-  }
-  if (cur_shinpt->strpush) {
-    popstring();
-    return shgetchar();
-  }
-
-  if (shreadbuf() == 0)
-    return SHEOF;
-  cur_shinpt->nleft--;
-  if (*cur_shinpt->nchar == '\n')
-    cur_shinpt->linenum++;
-  
-  return *cur_shinpt->nchar++;
-}
-
 size_t
 shgetline(char *buf, size_t sz)
 {
@@ -107,23 +80,6 @@ shgetline(char *buf, size_t sz)
 }
 
 int
-shreadbuf(void)
-{
-  // WARN: This is worrying to me. check on this, does this even handle readline correctly??????
-  int readbc;
-
-  if (cur_shinpt->fd < 0)
-    return 0;
-  readbc = read(cur_shinpt->fd, cur_shinpt->buf, BUFSIZ);
-  if (readbc <= 0)
-    return 0;
-  cur_shinpt->nchar = cur_shinpt->buf;
-  cur_shinpt->nleft = readbc;
-  return readbc;
-}
-
-
-int
 shungetc(int c)
 {
   if (cur_shinpt->unget < 4) {
@@ -139,15 +95,12 @@ setinputstrn(char *s, int len)
   new = st_alloc(sizeof(shinput));
   new->prev = cur_shinpt;
   new->buf = NULL; // I GUESS????
-  new->strn = s;
-  new->strnpos = 0;
-  new->strnleft = len;
   new->fd = -1;
   new->nleft = len;
   new->nchar = s;
-  new->eof = 0;
   new->linenum = 1;
   new->unget = 0;
+  new->mapsize = 0;
   new->strpush = NULL;
   cur_shinpt = new;
 }
@@ -155,17 +108,35 @@ setinputstrn(char *s, int len)
 void
 setinputf(int fd)
 {
+  void *map;
+  struct stat st;
+  if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
+    map = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (map != MAP_FAILED) {
+      close(fd);
+  shinput *new;
+      new = st_alloc(sizeof(shinput));
+      new->prev = cur_shinpt;
+      new->buf = map;
+      new->nchar = map;
+      new->nleft = st.st_size;
+      new->mapsize = st.st_size;
+      new->fd = -1;
+      new->linenum = 1;
+      new->unget = 0;
+      new->strpush = NULL;
+      cur_shinpt = new;
+      return;
+    }
+  }
   shinput *new;
   new = st_alloc(sizeof(shinput));
-  new->prev = cur_shinpt;
   new->buf = st_alloc(BUFSIZ);
-  new->strn = NULL;
-  new->strnpos = 0;
-  new->strnleft = 0;
+  new->prev = cur_shinpt;
   new->fd = fd;
   new->nleft = 0;
   new->nchar = new->buf;
-  new->eof = 0;
+  new->mapsize = 0;
   new->linenum = 1;
   new->unget = 0;
   new->strpush = NULL;
