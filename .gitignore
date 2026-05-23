@@ -1,7 +1,7 @@
 simpsh
 obj/*.o
 .cache/
-compile_commands.json
+*.json
 .clangd
 doc
 bak
@@ -9,7 +9,6 @@ fake
 notes.txt
 simsh.geany
 .gdb_history
-.vimspector.json
 .dir-locals.el
 *vterm*
 *.ede
