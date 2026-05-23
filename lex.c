@@ -13,21 +13,71 @@
 #define SEP (1 << 1)
 #define XPND (1 << 2)
 
+static const unsigned char nchars[256] = {
+  [' '] = C_SPACE,
+  ['\t'] = C_SPACE,
+  ['\n'] = C_NL,
+  ['#'] = C_COMMENT,
+  ['\''] = C_SQUOTE,
+  ['"'] = C_DQUOTE,
+  ['\\'] = C_BSLASH,
+  ['!'] = C_EXCL,
+  ['&'] = C_AMP,
+  ['|'] = C_PIPE,
+  [';'] = C_SEMI,
+  ['('] = C_LP,
+  [')'] = C_RP,
+  ['{'] = C_LB,
+  ['}'] = C_RB,
+  ['<'] = C_LT,
+  ['>'] = C_GT,
+  /* everything else is 0 = C_WORD */
+};
+  // ['$'] = C_DOLLAR,
+
+static const unsigned char dqchars[256] = {
+  ['"'] = C_DQUOTE, ['\\'] = C_BSLASH,
+};
+
+static const unsigned char sqchars[256] = {
+  ['\''] = C_SQUOTE,
+};
+
 int alias_depth = 0;
 int func_depth = 0;
 int notclosed = 0;
 sh_tok last_tok = { .type = TNONE };
 int chkwd = 0;
+static redir *heredoc_head;
+static redir **heredoc_tail = &heredoc_head;
 
-static char *cat_wf(wf *wordf);
+static char *join_wf(wf *wordf);
 static cmd_tree *parse_andor(void);
 static cmd_tree *parse_pipe(void);
 static cmd_tree *parse_group(void);
 static cmd_tree *parse_func(void);
-static int eatbnl(void);
+static void parse_heredoc(void);
 static int is_assn(wf *);
 static void append_wf(wf **, wf **, char *, size_t len, int);
 static wf **get_assn(wf **, char ***);
+
+static inline int
+eatbnl(void)
+{
+  char c, n;
+
+  while ((c = shgetchar()) == '\\') {
+    if ((n = shgetchar()) == '\n') {
+      cur_shinpt->linenum++;
+      continue;
+    }
+    if (n != SHEOF) {
+      shungetc(n);
+      return '\\';
+    }
+  }
+  return c;
+}
 
 static inline cmd_tree *
 newcmdnode(wf **args, int flags, char **sh_vars)
@@ -123,24 +173,6 @@ is_assn(wf *cmd)
   return 1;
 }
 
-static int
-eatbnl(void)
-{
-  char c, n;
-
-  while ((c = shgetchar()) == '\\') {
-    if ((n = shgetchar()) == '\n') {
-      cur_shinpt->linenum++;
-      continue;
-    }
-    if (n != SHEOF) {
-      shungetc(n);
-      return '\\';
-    }
-  }
-  return c;
-}
-
 /** get name and value from NAME=value pair */
 wf **
 get_assn(wf **args, char ***sh_vars)
@@ -165,7 +197,7 @@ get_assn(wf **args, char ***sh_vars)
     return NULL;
 
   for (j = 0; j < a_c; j++)
-    (*sh_vars)[j] = cat_wf(args[j]);
+    (*sh_vars)[j] = join_wf(args[j]);
   (*sh_vars)[a_c] = NULL;
 
   for (k = a_c; args[k]; k++)
@@ -177,7 +209,7 @@ get_assn(wf **args, char ***sh_vars)
 
 /* takes word fragment and returns (char *) */
 static char *
-cat_wf(wf *wordf)
+join_wf(wf *wordf)
 {
   wf *f;
   char *s, *buf;
@@ -211,87 +243,51 @@ append_wf(wf **head, wf **tail, char *w, size_t len, int quoted)
   *tail = f;
 }
 
-wf *
+__attribute__((hot)) wf *
 get_wf(int c)
 {
   /*
    * parses a line extracts a word, handles quoting, escaping.
    *
-   * used in tokenize, it returns immediately if it's at the position of an
+   * returns immediately if it's at the position of an
    * opterator tokenize handles finding those. also whitespace etc.
    * it advances the position for the caller, then the caller needs to advance
    * through whitespace, and operators when it handles them.
-   *
-   * it returns word fragments, they're a linked list for (char *)s
-   * that are used to track the quoting state of the line later
-   * (maybe other metadate too later, if needed)
+   * it returns word fragments, a linked list of (char *)s
+   * that are used to track the quote state of the line later
    */
 
-  wf *head = NULL;
-  wf *tail = NULL;
-  quoted state;
+  wf *head;
+  wf *tail;
+  // quoted state;
   char n, *w;
   size_t len;
-  // char *s = p;
+  const unsigned char *state;
 
-  state = QNONE;
+  head = NULL;
+  tail = NULL;
+  state = nchars;
   len = 0;
   for (;;) {
-    switch (state) {
-      case QNONE:
-        if (c == '\'') {
-          if (len > 0) {
-            w = grab_str(len); /* save unquoted frag if nonempty */
-            append_wf(&head, &tail, w, len, state);
-            len = 0;
-          }
-          state = QSINGLE;
-        } else if (is_operator(c)) {
-          shungetc(c);
-          goto done;
-        } else if (is_cmd_end(c)) {
-          shungetc(c);
-          goto done;
-        } else if (c == '"') {
-          if (len > 0) {
-            w = grab_str(len); /* save unquoted frag if nonempty */
-            append_wf(&head, &tail, w, len, state);
-            len = 0;
-          }
-          state = QDOUBLE;
-        } else if (c == '\\') {
-          n = eatbnl();
-          if (n == SHEOF)
-            goto done;
-          st_putc(n);
-          len++;
-        } else {
-          st_putc(c);
-          len++;
+    switch (state[(unsigned char)c]) {
+      case C_SQUOTE:
+        if (len > 0) {
+          w = grab_str(len); /* save unquoted frag if nonempty */
+          append_wf(&head, &tail, w, len, state == sqchars ? QSINGLE : QNONE);
+          len = 0;
         }
+        state = (state == sqchars) ? nchars : sqchars;
         break;
-      case QSINGLE:
-        if (c == '\'') {
-          if (len > 0) {
-            w = grab_str(len); /* save single quoted frag if nonempty */
-            append_wf(&head, &tail, w, len, state);
-            len = 0;
-          }
-          state = QNONE;
-        } else {
-          st_putc(c);
-          len++;
+      case C_DQUOTE:
+        if (len > 0) {
+          w = grab_str(len); /* save unquoted frag if nonempty */
+          append_wf(&head, &tail, w, len, state == dqchars ? QDOUBLE : QNONE);
+          len = 0;
         }
+        state = (state == dqchars) ? nchars : dqchars;
         break;
-      case QDOUBLE:
-        if (c == '"') {
-          if (len > 0) {
-            w = grab_str(len); /* save double quoted frag if nonempty */
-            append_wf(&head, &tail, w, len, state);
-            len = 0;
-          }
-          state = QNONE;
-        } else if (c == '\\') {
+      case C_BSLASH:
+        if (state == dqchars) {
           n = eatbnl();
           if (n == SHEOF)
             goto done;
@@ -303,33 +299,58 @@ get_wf(int c)
             len++;
             shungetc(n);
           }
+          break;
         } else {
-          st_putc(c);
+          n = eatbnl();
+          if (n == SHEOF)
+            goto done;
+          st_putc(n);
           len++;
+          break;
         }
+      case C_AMP:
+      case C_PIPE:
+      case C_SEMI:
+      case C_LP:
+      case C_RP:
+      case C_LB:
+      case C_RB:
+      case C_LT:
+      case C_GT:
+      case C_SPACE:
+      case C_NL:
+        if (state == nchars) {
+          shungetc(c);
+          goto done;
+        }
+      /* falls through */
+      default:
+      case C_WORD:
+      case C_COMMENT:
+        st_putc(c);
+        len++;
         break;
     }
-    if (state == QSINGLE)
-      c = shgetchar();
-    else
-      c = eatbnl();
+
+    c = (state == sqchars) ? shgetchar() : eatbnl();
     if (c == SHEOF) {
-      if (state != QNONE)
+      if (state != nchars)
         notclosed = 1;
       goto done;
     }
   }
-
 done:
   /*  one last save  */
   if (len) {
     w = grab_str(len);
-    append_wf(&head, &tail, w, len, state);
+    append_wf(&head, &tail, w, len,
+              state == sqchars ? QSINGLE :
+              state == dqchars ? QDOUBLE : QNONE);
   }
   return head;
 }
 
-sh_tok
+__attribute__((hot)) sh_tok
 tokenize(void)
 {
   sh_tok t;
@@ -347,95 +368,99 @@ tokenize(void)
   chkwd = 0;
 
   while ((c = shgetchar()) != SHEOF) {
-    if (c == ' ' || c == '\t')
-      continue;
-    if (c == '#') { /* handle comments */
-      while ((c = shgetchar()) != '\n' && c != SHEOF)
-        ;
-      if (c == '\n')
-        shungetc(c);
-      continue;
-    } else if (c == '\n') { /* handle \ nl escape */
-      if (wd & CHKNL)
+    switch (nchars[(unsigned char)c]) {
+      case C_SPACE:
         continue;
-      cur_shinpt->linenum++;
-      while ((c = shgetchar()) == '\n')
+      case C_COMMENT:
+        while ((c = shgetchar()) != '\n' && c != SHEOF)
+          ;
+        if (c == '\n')
+          shungetc(c);
+        continue;
+      case C_NL:
+        if (wd & CHKNL)
+          continue;
         cur_shinpt->linenum++;
-      if (c != SHEOF)
-        shungetc(c);
-      t = SHTOK(TNL);
-      return t;
-    } else if (c == '!') {
-      return t = SHTOK(TNOT);
-    } else if (c == '&') {
-      n = eatbnl();
-      if (n == '&')
-        return SHTOK(TAND);
-      if (n != SHEOF)
-        shungetc(n);
-      return SHTOK(TBKGRND);
-    } else if (c == '|') {
-      n = eatbnl();
-      if (n == '|')
-        return SHTOK(TOR);
-      if (n != SHEOF)
-        shungetc(n);
-      return SHTOK(TPIPE);
-    } else if (c == ';') {
-      return SHTOK(TSEMI);
-    } else if (c == '(') {
-      return SHTOK(TLP);
-    } else if (c == ')') {
-      return SHTOK(TRP);
-    } else if (c == '{') {
-      return SHTOK(TLB);
-    } else if (c == '}') {
-      return SHTOK(TRB);
-    } else if (c == '<') {
-      n = eatbnl();
-      if (n == '<') {
-        return SHTOK(TEOF); // TODO: add heredoc support currently no-op
-      } else if (n == '&') {
-        return SHREDIR(RDDUPI);
-      } else if (n == '>') {
-        return SHREDIR(RDRW);
-      } else {
-        shungetc(n);
-        return SHREDIR(RDIN);
-      }
-    } else if (c == '>') {
-      n = eatbnl();
-      if (n == '>') {
-        return SHREDIR(RDAPP);
-      } else if (n == '&') {
-        return SHREDIR(RDDUPO);
-      } else if (n == '|') {
-        return SHREDIR(RDCLOB);
-      } else {
-        shungetc(n);
-        return SHREDIR(RDOUT);
-      }
-    }
-
-    f = get_wf(c);
-    if (!f)
-      return SHTOK(TEOF);
-    if ((wd & CHKALIAS) && f->qs == QNONE && f->next == NULL) {
-      word = cat_wf(f);
-      a = findalias(word);
-      if (a) {
-        if (alias_depth >= MAX_ALIAS_DEPTH) {
-          fprintf(stderr, "alias: too many levels of recursion\n");
-          return SHTOK(TEOF);
+        while ((c = shgetchar()) == '\n')
+          cur_shinpt->linenum++;
+        if (c != SHEOF)
+          shungetc(c);
+        t = SHTOK(TNL);
+        return t;
+      case C_EXCL:
+        return t = SHTOK(TNOT);
+      case C_AMP:
+        n = eatbnl();
+        if (n == '&')
+          return SHTOK(TAND);
+        if (n != SHEOF)
+          shungetc(n);
+        return SHTOK(TBKGRND);
+      case C_PIPE:
+        n = eatbnl();
+        if (n == '|')
+          return SHTOK(TOR);
+        if (n != SHEOF)
+          shungetc(n);
+        return SHTOK(TPIPE);
+      case C_SEMI:
+        return SHTOK(TSEMI);
+      case C_LP:
+        return SHTOK(TLP);
+      case C_RP:
+        return SHTOK(TRP);
+      case C_LB:
+        return SHTOK(TLB);
+      case C_RB:
+        return SHTOK(TRB);
+      case C_LT:
+        n = eatbnl();
+        if (n == '<') {
+          if ((n = eatbnl()) == '-')
+            return SHREDIR(RDHERE_D);
+          shungetc(n);
+          return SHREDIR(RDHERE);
+        } else if (n == '&') {
+          return SHREDIR(RDDUPI);
+        } else if (n == '>') {
+          return SHREDIR(RDRW);
+        } else {
+          shungetc(n);
+          return SHREDIR(RDIN);
         }
-        pushstring(a->value, strlen(a->value), 1);
-        wd &= ~CHKALIAS;
-        // push string i guess goes here. idk wtf it's even supposed to actually
-        // do yet. idk don't like it. whatever
-        continue;
-      }
+      case C_GT:
+        n = eatbnl();
+        if (n == '>') {
+          return SHREDIR(RDAPP);
+        } else if (n == '&') {
+          return SHREDIR(RDDUPO);
+        } else if (n == '|') {
+          return SHREDIR(RDCLOB);
+        } else {
+          shungetc(n);
+          return SHREDIR(RDOUT);
+        }
+      default:
+        f = get_wf(c);
+        if (!f)
+          return SHTOK(TEOF);
+        if ((wd & CHKALIAS) && f->qs == QNONE && f->next == NULL) {
+          word = join_wf(f);
+          a = findalias(word);
+          if (a) {
+            if (alias_depth >= MAX_ALIAS_DEPTH) {
+              fprintf(stderr, "alias: too many levels of recursion\n");
+              return SHTOK(TEOF);
+            }
+            pushstring(a->value, strlen(a->value), 1);
+            wd &= ~CHKALIAS;
+            // push string i guess goes here. idk wtf it's even supposed to
+            // actually do yet. idk don't like it. whatever
+            continue;
+          }
+        }
+        return SHWORD(f);
     }
-    return SHWORD(f);
   }
   return SHTOK(TEOF);
 }
@@ -462,6 +487,8 @@ parse_list(token s)
     t = tokenize();
     if (t.type == TSEMI || (t.type == TNL && s != TEOF) || t.type == TBKGRND) {
       chkwd |= CHKALIAS;
+      if (heredoc_head)
+        parse_heredoc();
       r = parse_cmd();
       if (!r)
         if (t.type == TBKGRND) {
@@ -469,12 +496,15 @@ parse_list(token s)
           break;
         }
       l = newoppnode(t.type, l, r);
-    } else if (t.type == TEOF || t.type == s) {
-      if (t.type != TEOF)
-        last_tok = t;
-      break;
     } else {
-      last_tok = t;
+      if (heredoc_head)
+        parse_heredoc();
+      if (t.type == TEOF || t.type == s) {
+        if (t.type != TEOF)
+          last_tok = t;
+      } else {
+        last_tok = t;
+      }
       break;
     }
   }
@@ -553,11 +583,13 @@ parse_group(void)
 static cmd_tree *
 parse_func(void)
 {
-  sh_tok t = tokenize();
+  sh_tok t;
+  t = tokenize();
   if (t.type == TLB)
     return parse_group();
   if (t.type == TLP) {
-    cmd_tree *sub = parse_list(TRP);
+    cmd_tree *sub;
+    sub = parse_list(TRP);
     t = tokenize();
     if (t.type != TRP)
       return NULL;
@@ -572,14 +604,76 @@ parse_func(void)
 static inline int
 allnum(wf *w)
 {
+  if (w->len == 0 || w->word[0] < '0' || w->word[0] > '9')
+    return 0;
   for (size_t i = 0; i < w->len; i++)
     if (w->word[i] < '0' || w->word[i] > '9')
       return 0;
   return 1;
 }
 
+/*
+ * parser for heredocs
+ */
+void
+parse_heredoc(void)
+{
+  if (!heredoc_head)
+    return;
+
+  redir *r;
+  char *eofv, *bpos;
+  char c;
+  size_t eofvlen, bodylen;
+
+  while (heredoc_head) {
+    bpos = NULL;
+    eofvlen = 0;
+    r = heredoc_head;
+    heredoc_head = heredoc_head->heredoc_next;
+    eofv = join_wf(r->name);
+    eofvlen = strlen(eofv);
+    if (r->type == RDHERE_D) {
+      c = shgetchar();
+      while (c == '\t')
+        c = shgetchar();
+      shungetc(c);
+    }
+    bpos = stnext;
+
+    for (;;) {
+      char *lpos;
+      size_t llen;
+      lpos = stnext;
+
+      for (;;) {
+        c = shgetchar();
+        if (c == SHEOF) {
+          fprintf(stderr, "unexpected EOF while looking for delimiter\n");
+          return;
+        } else if (c == '\n') {
+          break;
+        }
+        st_putc(c);
+      }
+      llen = stnext - lpos;
+      if (llen == eofvlen && memcmp(lpos, eofv, eofvlen) == 0) {
+        stunalloc(lpos);
+        break;
+      } else {
+        st_putc('\n');
+        continue;
+      }
+    }
+
+    bodylen = stnext - bpos;
+    r->heredoc = grab_str(bodylen);
+  }
+  heredoc_tail = &heredoc_head;
+}
+
 /**  recursive decent parser  */
-cmd_tree *
+__attribute__((hot)) cmd_tree *
 parse_cmd(void)
 {
   size_t neg, wc, cap;
@@ -624,23 +718,33 @@ parse_cmd(void)
     int fd;
     t = tokenize();
     switch (t.type) {
-      case TREDIR: {
+      case TREDIR:
+        {
           sh_tok name;
           redir *r;
-          fd = (t.sub == RDIN || t.sub == RDDUPI || t.sub == RDRW) ? 0 : 1;
           name = tokenize();
           if (name.type != TWORD)
             return NULL;
           r = st_alloc(sizeof(redir));
-          r->fd = fd;
+          if (t.sub == RDHERE || t.sub == RDHERE_D) {
+            r->fd = 0;
+          } else {
+            r->fd = (t.sub == RDIN || t.sub == RDDUPI || t.sub == RDRW) ? 0 : 1;
+          }
           r->type = t.sub;
           r->name = name.cmd;
           r->next = NULL;
           *tail = r;
+          if (t.sub == RDHERE || t.sub == RDHERE_D) {
+            r->heredoc_next = NULL;
+            *heredoc_tail = r;
+            heredoc_tail = &r->heredoc_next;
+          }
           tail = &r->next;
           continue;
         }
-      case TWORD: {
+      case TWORD:
+        {
           sh_tok n = tokenize();
           if (n.type == TREDIR && allnum(t.cmd)) {
             sh_tok name = tokenize();

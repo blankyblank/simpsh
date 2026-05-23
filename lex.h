@@ -7,6 +7,27 @@
 #include <stddef.h>
 #include "utils.h"
 
+enum chars {
+  C_WORD,
+  C_SPACE,
+  C_NL,
+  C_COMMENT,
+  C_SQUOTE,
+  C_DQUOTE,
+  C_BSLASH,
+  C_DOLLAR,
+  C_EXCL,
+  C_AMP,
+  C_PIPE,
+  C_SEMI,
+  C_LP,
+  C_RP,
+  C_LB,
+  C_RB,
+  C_LT,
+  C_GT,
+};
+
 typedef enum {
   TNONE,
   TNOT,
@@ -69,6 +90,8 @@ struct redir {
   int fd;
   int type;
   wf *name;
+  char *heredoc;
+  redir *heredoc_next;
 };
 
 /*
@@ -131,16 +154,18 @@ extern int chkwd;
 #define RDDUPI 5
 #define RDRW 6
 #define RDCLOB 7
+#define RDHERE 8
+#define RDHERE_D 9
 
 /** Get word fragment */
-extern wf *get_wf(int);
+wf *get_wf(int);
 /** create sh_toks out of line */
-extern sh_tok tokenize(void);
+sh_tok tokenize(void);
 void pushstring(char *, size_t, int);
 void popstring(void);
 
 /** build ast tree */
-extern cmd_tree *parse_list(token s);
+cmd_tree *parse_list(token s);
 cmd_tree *parse_cmd(void);
 
 static inline wf *

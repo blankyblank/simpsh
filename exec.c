@@ -27,12 +27,8 @@
 #define MAX_TMP_VARS 40
 #define builtin_launch(i, a) ((*builtin_funcs[i])(a))
 
-typedef struct tmp_var {
-  char *name;
-  char *val;
-  shvar_flags oldflags;
-  int set;
-} tmp_var;
+tmp_var localvars[LOCAL_MAX];
+size_t localsp;
 
 typedef struct fdlist {
   int orig;
@@ -41,7 +37,6 @@ typedef struct fdlist {
 
 static int getbuiltin(char *);
 static void poptmpvars(tmp_var *, size_t);
-static int pushtmpvar(char **, tmp_var *);
 static int restore_fd(fdlist *, size_t);
 static void save_fd(redir *, fdlist *, size_t *);
 static char *bg_cmd(const cmd_tree *);
@@ -85,34 +80,6 @@ getbuiltin(char *args)
         strcmp(builtins[builtin_tab[idx]], args) == 0)
       return builtin_tab[idx];
   return -1;
-}
-
-static int
-pushtmpvar(char **shvars, tmp_var *tmp)
-{
-  shvar *v;
-  size_t i, vc;
-
-  vc = 0;
-  for (i = 0; shvars[i]; i++) {
-    char *name, *val;
-    st_read_assn(shvars[i], &name, &val);
-    v = findvar(name);
-    if (v) {
-      tmp[vc].set = 1;
-      tmp[vc].name = st_strdup(name);
-      tmp[vc].val = st_strdup(shvar_val(v));
-      tmp[vc].oldflags = v->flags;
-      vc++;
-    } else {
-      tmp[vc].set = 0;
-      tmp[vc].name = st_strdup(name);
-      tmp[vc].val = NULL;
-      vc++;
-    }
-    setvar(shvars[i], val, 0);
-  }
-  return vc;
 }
 
 static void
@@ -283,24 +250,43 @@ run_func(const cmd_tree *n, char **args)
   char **oldargv;
   int oldargc;
   int status;
+  tmp_var *loc;
+  stmark fmark;
+  size_t savedsp;
 
+  loc = localvars;
+  fmark = stack_mark();
+  savedsp = localsp;
   oldargc = sh_argc;
   oldargv = sh_argv;
   sh_argc = array_len(args) - 1;
   sh_argv = args + 1;
 
+
   if (func_depth >= MAX_FUNC_DEPTH) {
     fprintf(stderr, "function: too many levels of recursion\n");
-    sh_argv = oldargv;
-    sh_argc = oldargc;
-    return 1;
+    status = 1;
+    goto done;
   }
   func_depth++;
 
   status = run_commands(n);
+  func_depth--;
+  goto done;
+
+done:
+
+  while (localsp > savedsp) {
+    localsp--;
+    if (loc[localsp].set)
+      setvar(loc[localsp].name, loc[localsp].val, loc[localsp].oldflags);
+    else
+      rmvar(loc[localsp].name);
+  }
+
+  stack_restore(fmark);
   sh_argv = oldargv;
   sh_argc = oldargc;
-  func_depth--;
   return status;
 }
 
@@ -491,7 +477,7 @@ bg_cmd(const cmd_tree *n)
   }
 }
 
-int
+__attribute__((hot)) int
 run_cmd(const cmd_tree *n)
 {
   int status;
@@ -527,7 +513,13 @@ run_cmd(const cmd_tree *n)
   if ((f = findfunc(final[0]))) {
     if (CVARS(n) && CVARS(n)[0]) {
       tmp_var tmp[MAX_TMP_VARS];
-      vc = pushtmpvar(CVARS(n), tmp);
+      for (vc = 0, i = 0; CVARS(n)[i]; i++) {
+        char *name, *val;
+        st_read_assn(CVARS(n)[i], &name, &val);
+        tmp[i] = grabvar(name);
+        vc++;
+        setvar(name, val, 0);
+      }
       status = run_func(f->body, final);
       poptmpvars(tmp, vc);
     } else {
@@ -537,7 +529,13 @@ run_cmd(const cmd_tree *n)
     /*  handle name=value cmd  */
     if (CVARS(n) && CVARS(n)[0]) {
       tmp_var tmp[MAX_TMP_VARS];
-      vc = pushtmpvar(CVARS(n), tmp);
+      for (vc = 0, i = 0; CVARS(n)[i]; i++) {
+        char *name, *val;
+        st_read_assn(CVARS(n)[i], &name, &val);
+        tmp[i] = grabvar(name);
+        vc++;
+        setvar(name, val, 0);
+      }
       status = builtin_launch(b, final);
       poptmpvars(tmp, vc);
     } else {
@@ -563,11 +561,12 @@ run_redir(const cmd_tree *n)
   fdlist sfd[10];
   size_t sfdc;
   redir *r;
+  int qs;
 
   sfdc = 0;
   r = CREDR(n);
   save_fd(CREDR(n), sfd, &sfdc);
-  
+
   while (r) {
     char *name;
     int fd;
@@ -612,15 +611,47 @@ run_redir(const cmd_tree *n)
           DUPFD(fd, r->fd);
         }
         break;
+      case RDHERE_D:
+      case RDHERE:
+        {
+          wf b;
+          char *body;
+          int p[2];
+          size_t blen;
+
+          qs = 0;
+          for (wf *f = r->name; f; f = f->next)
+            if (f->qs != QNONE) {
+              qs = 1;
+              break;
+            }
+          if (qs) {
+            body = r->heredoc;
+            blen = strlen(body);
+          } else {
+            b.word = r->heredoc;
+            b.len = strlen(r->heredoc);
+            b.qs = QDOUBLE;
+            b.next = NULL;
+            body = expand_word(&b);
+            blen = strlen(body);
+          }
+          if (pipe(p) < 0)
+            err(1, "pipe");
+          if (write(p[1], body, blen) < 0)
+            err(1, "write");
+          CLOSEFD(p[1]);
+          DUPFD(p[0], r->fd);
+          CLOSEFD(p[0]);
+          break;
+        }
     }
     r = r->next;
   }
 
   lstatus = run_commands(n->left);
-  if (!(n->left && n->left->type == CMD &&
-        CARGS(n->left) &&
-        CARGS(n->left)[0] &&
-        !CARGS(n->left)[1] &&
+  if (!(n->left && n->left->type == CMD && CARGS(n->left) &&
+        CARGS(n->left)[0] && !CARGS(n->left)[1] &&
         !strcmp(CARGS(n->left)[0]->word, "exec"))) {
     fflush(NULL);
     restore_fd(sfd, sfdc);
@@ -629,7 +660,7 @@ run_redir(const cmd_tree *n)
 }
 
 /**  run command tree  */
-int
+__attribute__((hot)) int
 run_commands(const cmd_tree *n)
 {
   if (!n)

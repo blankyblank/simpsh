@@ -1,4 +1,6 @@
 /* expand.c - string expandsion logic */
+#include "malloc.h"
+#include <string.h>
 #define _POSIX_C_SOURCE 200809L
 #include "env.h"
 #include "expand.h"
@@ -22,7 +24,7 @@ expand_argv(wf **args)
 }
 
 /** expand word with variable substitution */
-char *
+__attribute__((hot)) char *
 expand_word(wf *wordf)
 {
   size_t end, i;
@@ -46,6 +48,26 @@ expand_word(wf *wordf)
       case QNONE:
         i = 0;
         while (i < f->len) {
+          size_t s, r;
+          s = i;
+          if (f->qs == QNONE) {
+            while (i < f->len && f->word[i] != '$' && f->word[i] != '~')
+              i++;
+          } else {
+            while (i < f->len && f->word[i] != '$')
+              i++;
+          }
+          r = i - s;
+          if (r) {
+            if (r >= stleft)
+              grow_stack(r);
+            memcpy(stnext, f->word + s, r);
+            stnext += r;
+            stleft -= r;
+            len += r;
+          }
+          if (i>= f->len)
+            continue;
           if (f->word[i] == '~' && f->qs == QNONE) {
             expanded = exp_tilde(f->word, i, &end);
             if (expanded) {
