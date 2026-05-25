@@ -1,7 +1,6 @@
 /* exec.c - functions surrounding running external programs or builtins */
 #define _POSIX_C_SOURCE 200809L
 #include <err.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <linux/limits.h>
 #include <signal.h>
@@ -21,6 +20,7 @@
 #include "lex.h"
 #include "main.h"
 #include "malloc.h"
+#include "opts.h"
 #include "sig.h"
 #include "utils.h"
 
@@ -40,7 +40,7 @@ static void poptmpvars(tmp_var *, size_t);
 static int restore_fd(fdlist *, size_t);
 static void save_fd(redir *, fdlist *, size_t *);
 static char *bg_cmd(const cmd_tree *);
-static int shexec(char **, char **);
+static int shexec(char **, const cmd_tree *, char **);
 static int run_funcdef(const cmd_tree *);
 static int run_func(const cmd_tree *, char **);
 static int run_pipe(const cmd_tree *);
@@ -147,7 +147,7 @@ chkpath(const char *path, const char *name, unsigned int cdmode)
   flen = strlen(name);
   s = path;
 
-  for (e = s_strchrnul(s, ':'); e; e = s_strchrnul(s, ':')) {
+  for (e = strchrnul_(s, ':'); e; e = strchrnul_(s, ':')) {
     size_t dirlen, complen;
     char *end, *comp;
 
@@ -169,7 +169,7 @@ chkpath(const char *path, const char *name, unsigned int cdmode)
       }
     }
 
-    end = s_mempcpy(buf, comp, complen); /* copy current path segment from s to e */
+    end = mempcpy_(buf, comp, complen); /* copy current path segment from s to e */
     *end++ = '/';                    /* add / and then file to the end of it */
     memcpy(end, name, flen + 1);
     if (access(buf, X_OK) == 0) {
@@ -187,11 +187,52 @@ chkpath(const char *path, const char *name, unsigned int cdmode)
   return NULL;
 }
 
+static void
+save_fd(redir *r, fdlist *sfd, size_t *sfdc)
+{
+  redir *t;
+  t = r;
+  while (t) {
+    sfd[*sfdc].orig = t->fd;
+    sfd[(*sfdc)++].saved = dup(t->fd);
+    t = t->next;
+  }
+  return;
+}
+
+static int
+restore_fd(fdlist *sfd, size_t sfdc)
+{
+  for (size_t i = sfdc; i-- > 0;)
+    DUPFD(sfd[i].saved, sfd[i].orig)
+  for (size_t i = sfdc; i-- > 0;)
+    CLOSEFD(sfd[i].saved)
+  return 0;
+}
+
+char *
+bg_cmd(const cmd_tree *n)
+{
+  switch (n->type) {
+    case CMD:
+      {
+        char **argv;
+        size_t len;
+        argv = expand_argv(CARGS(n), &len);
+        return join_strn(argv, len);
+      }
+    case OP:
+      return "(pipeline)";
+    default:
+      return "(command)";
+  }
+}
+
 /** fork and exec external command */
 int
-shexec(char **args, char **env)
+shexec(char **args, const cmd_tree *n, char **env)
 {
-  int wstatus, jc;
+  int wstatus;
   pid_t pid;
   sigset_t sigold;
   char *fullpath;
@@ -203,7 +244,6 @@ shexec(char **args, char **env)
     return 1;
   }
 
-  jc = 0;
   jobsig_blk(&sigold);
   pid = fork();
   switch (pid) {
@@ -215,23 +255,38 @@ shexec(char **args, char **env)
       /* if fork was successful run the command */
       signal(SIGINT, SIG_DFL);
       signal(SIGQUIT, SIG_DFL);
-      chld_setpgid(0);
+      signal(SIGTSTP, SIG_DFL);
+      if (mflag)
+        chld_setpgid(0);
       if (execve(fullpath, args, env) < 0) {
         perror(args[0]);
         _exit(1);
       }
     /* fall through */
     default:
-      setpgid(pid, pid);
-      if (getpid() == sh_pgid) {
-        jc = 1;
-        startjob(pid);
+      {
+        int jc;
+        jc = 0;
+        if (mflag) {
+          setpgid(pid, pid);
+          if (getpid() == sh_pgid) {
+            jc = 1;
+            startjob(pid);
+          }
+        }
+        jobsig_unblk(&sigold);
+        waitpid(pid, &wstatus, WUNTRACED);
+        if (WIFSTOPPED(wstatus)) {
+          if (jc) {
+            endjob();
+            newjob(pid, bg_cmd(n));
+          }
+          return 128 + WSTOPSIG(wstatus);
+        }
+        if (jc)
+          endjob();
+        return WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
       }
-      jobsig_unblk(&sigold);
-      waitpid(pid, &wstatus, 0);
-      if (jc)
-        endjob();
-      return WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
   }
 }
 
@@ -306,7 +361,8 @@ run_bg(const cmd_tree *n)
       jobsig_unblk(&sigold);
       return 1;
     case 0:
-      setpgid(0, 0);
+      if (mflag)
+        setpgid(0, 0);
       signal(SIGINT, SIG_IGN);
       signal(SIGQUIT, SIG_IGN);
       jobsig_unblk(&sigold);
@@ -314,7 +370,8 @@ run_bg(const cmd_tree *n)
       fflush(NULL);
       _exit(status);
     default:
-      setpgid(pid, pid);
+      if (mflag)
+        setpgid(pid, pid);
       j = newjob(pid, bg_cmd(n->left));
       jobsig_unblk(&sigold);
       printf("[%d] %d\n", j->num, pid);
@@ -325,7 +382,7 @@ run_bg(const cmd_tree *n)
 static int
 run_subsh(const cmd_tree *n)
 {
-  int status, wstatus, jc;
+  int status, wstatus;
   pid_t pid;
   sigset_t sigold;
 
@@ -334,7 +391,6 @@ run_subsh(const cmd_tree *n)
     return 1;
   }
 
-  jc = 0;
   jobsig_blk(&sigold);
   pid = fork();
   switch (pid) {
@@ -345,24 +401,38 @@ run_subsh(const cmd_tree *n)
     case 0:
       signal(SIGINT, SIG_DFL);
       signal(SIGQUIT, SIG_DFL);
-      chld_setpgid(0);
+      signal(SIGTSTP, SIG_DFL);
+      if (mflag)
+        chld_setpgid(0);
       status = run_commands(n->left);
       fflush(NULL);
       _exit(status);
     default:
-      setpgid(pid, pid);
-      if (getpid() == sh_pgid) {
-        jc = 1;
-        startjob(pid);
+      {
+        int jc;
+
+        jc = 0;
+        if (mflag)
+          setpgid(pid, pid);
+        if (getpid() == sh_pgid) {
+          jc = 1;
+          startjob(pid);
+        }
+        jobsig_unblk(&sigold);
+        waitpid(pid, &wstatus, WUNTRACED);
+        status = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+        if (CNEG(n))
+          status = !status;
+        if (jc) {
+          if (WIFSTOPPED(wstatus)) {
+            endjob();
+            newjob(pid, bg_cmd(n));
+            return status;
+          }
+          endjob();
+        }
+        return status;
       }
-      jobsig_unblk(&sigold);
-      waitpid(pid, &wstatus, 0);
-      status = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
-      if (CNEG(n))
-        status = !status;
-      if (jc)
-        endjob();
-      return status;
   }
 }
 
@@ -391,7 +461,9 @@ run_pipe(const cmd_tree *n)
     case 0:
       signal(SIGINT, SIG_DFL);
       signal(SIGQUIT, SIG_DFL);
-      chld_setpgid(0);
+      signal(SIGTSTP, SIG_DFL);
+      if (mflag)
+        chld_setpgid(0);
       CLOSEFD(pipefd[0]);
       DUPFD(pipefd[1], STDOUT_FILENO);
       CLOSEFD(pipefd[1]);
@@ -399,7 +471,8 @@ run_pipe(const cmd_tree *n)
       fflush(NULL);
       _exit(l_status);
     default:
-      setpgid(lpid, lpid);
+      if (mflag)
+        setpgid(lpid, lpid);
       break;
   }
 
@@ -414,7 +487,9 @@ run_pipe(const cmd_tree *n)
     case 0:
       signal(SIGINT, SIG_DFL);
       signal(SIGQUIT, SIG_DFL);
-      chld_setpgid(lpid);
+      signal(SIGTSTP, SIG_DFL);
+      if (mflag)
+        chld_setpgid(lpid);
       CLOSEFD(pipefd[1]);
       DUPFD(pipefd[0], STDIN_FILENO);
       CLOSEFD(pipefd[0]);
@@ -422,59 +497,30 @@ run_pipe(const cmd_tree *n)
       fflush(NULL);
       _exit(r_status);
     default:
-      setpgid(rpid, lpid);
+      if (mflag)
+        setpgid(rpid, lpid);
       break;
   }
 
-  if (outer)
+  if (mflag && outer)
     startjob(lpid);
   jobsig_unblk(&sigold);
   CLOSEFD(pipefd[0]);
   CLOSEFD(pipefd[1]);
-  waitpid(lpid, &lw_status, 0);
-  waitpid(rpid, &rw_status, 0);
+  waitpid(lpid, &lw_status, WUNTRACED);
+  waitpid(rpid, &rw_status, WUNTRACED);
   status = WIFEXITED(rw_status) ? WEXITSTATUS(rw_status) : 1;
-  if (outer)
+  if (mflag && outer) {
+    if (WIFSTOPPED(rw_status)) {
+      endjob();
+      newjob(rpid, bg_cmd(n));
+      return status;
+    }
     endjob();
+  }
 
   pipedepth--;
   return status;
-}
-
-static void
-save_fd(redir *r, fdlist *sfd, size_t *sfdc)
-{
-  redir *t;
-  t = r;
-  while (t) {
-    sfd[*sfdc].orig = t->fd;
-    sfd[(*sfdc)++].saved = dup(t->fd);
-    t = t->next;
-  }
-  return;
-}
-
-static int
-restore_fd(fdlist *sfd, size_t sfdc)
-{
-  for (size_t i = sfdc; i-- > 0;)
-    DUPFD(sfd[i].saved, sfd[i].orig)
-  for (size_t i = sfdc; i-- > 0;)
-    CLOSEFD(sfd[i].saved)
-  return 0;
-}
-
-char *
-bg_cmd(const cmd_tree *n)
-{
-  switch (n->type) {
-    case CMD:
-      return CARGS(n)[0] ? CARGS(n)[0]->word : "(null)";
-    case OP:
-      return "(pipeline)";
-    default:
-      return "(command)";
-  }
 }
 
 __attribute__((hot)) int
@@ -485,11 +531,19 @@ run_cmd(const cmd_tree *n)
   char **env = NULL;
   shvar *v;
   shfunc *f;
-  size_t i, vc;
+  size_t i, vc, len;
   int b;
 
   vc = 0;
-  final = expand_argv(CARGS(n));
+  final = expand_argv(CARGS(n), &len);
+
+  if (xflag) {
+    char *xline;
+    shps4 = getvar("PS4");
+    shps4 = shps4 ? shps4 : "+";
+    xline = join_strn(final, len);
+    printf("%s %s\n", shps4, xline);
+  }
   if (!final || !final[0]) {
     /*  if no command only name=value  */
     if (CVARS(n) && CVARS(n)[0]) {
@@ -547,7 +601,7 @@ run_cmd(const cmd_tree *n)
       perror("idk build_env failed I guess");
       return 1;
     }
-    status = shexec(final, env);
+    status = shexec(final, n, env);
     free(env);
   }
   if (CNEG(n))
@@ -599,15 +653,13 @@ run_redir(const cmd_tree *n)
         if (strcmp(name, "-") == 0) {
           CLOSEFD(r->fd)
         } else {
-          long fdl;
-          char *end;
-          errno = 0;
-          fdl = strtol(name, &end, 10);
-          if (*end != '\0' || errno == ERANGE) {
-            perror("simpsh");
-            return 1;
+          char *p = name;
+          while (*p && isdigit_(*p))
+            p++;
+          if (*p) {
+            err(1, "simpsh");
           }
-          fd = (int)fdl;
+          fd = atoi_(name);
           DUPFD(fd, r->fd);
         }
         break;

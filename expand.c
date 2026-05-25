@@ -7,15 +7,17 @@
 
 /** expand argument vector */
 char **
-expand_argv(wf **args)
+expand_argv(wf **args, size_t *t)
 {
   size_t i, argc = 0;
   while (args[argc])
     argc++;
 
+  *t = 0;
   char **argv = st_alloc((argc + 1) * sizeof(char *));
   for (i = 0; i < argc; i++) {
     argv[i] = expand_word(args[i]);
+    *t += args[i]->len;
     if (!argv[i])
       return NULL;
   }

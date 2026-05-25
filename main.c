@@ -9,6 +9,7 @@
   #include <readline/history.h>
 #endif /* ifdef READLINE */
 
+#include "opts.h"
 #include "arg.h"
 #include "env.h"
 #include "exec.h"
@@ -16,6 +17,7 @@
 #include "main.h"
 #include "malloc.h"
 #include "simpsh.h"
+#include "utils.h"
 
 char histfile[256];
 int builtin_tab[BUILTIN_BUCKETS];
@@ -26,6 +28,9 @@ pid_t sh_pid;
 char *sh_pid_s = NULL;
 char *sh_argv0;
 char *shps1;
+char *shps2;
+// char *shps3; // TODO: bring back when i implement select
+char *shps4;
 char **sh_argv;
 char *home;
 int lstatus;
@@ -37,23 +42,69 @@ main(int argc, char **argv)
   (void)argc;
   int flags, fd;
 
+  init_opts();
+
   flags = 0;
   ARGBEGIN
   {
+    case 'a':
+      aflag = 1;
+      break;
+    case 'b':
+      bflag = 1;
+      break;
     case 'c':
       flags |= FLAG_c;
       break;
+    case 'C':
+      Cflag = 1;
+      break;
+    case 'e':
+      eflag = 1;
+      break;
+    case 'f':
+      fflag = 1;
+      break;
+    case 'h':
+      hflag = 1;
+      break;
+    case 'i':
+      iflag = 1;
+      break;
+    case 'I':
+      Iflag = 1;
+      break;
+    case 'm':
+      mflag = 1;
+      break;
+    case 'n':
+      nflag = 1;
+      break;
+    case 'o':
+      break;
+    case 's':
+      sflag = 1;
+      break;
+    case 'u':
+      uflag = 1;
+      break;
+    case 'v':
+      vflag = 1;
+      break;
     case 'V':
+      Vflag = 1;
       getbuildinfo();
       exit(0);
+      break;
+    case 'x':
+      xflag = 1;
+      break;
     default:
       fprintf(stderr, "%s: %c: bad option\n", argv0, ARGC());
       exit(1);
   }
   ARGEND
 
-  if (!isatty(STDIN_FILENO))
-    flags |= FLAG_t;
 
   /* setup locale then */
   /* set up allocator then */
@@ -71,14 +122,16 @@ main(int argc, char **argv)
   if (flags & FLAG_c) {
     sh_ccmd(argv[0]);
     exit(lstatus);
-  } else if (*argv) {
+  } else if (!sflag && *argv) {
     if ((fd = open(*argv, O_RDONLY)) < 0) {
       perror("simpsh");
       exit(1);
     }
     sh_script(fd);
     exit(lstatus);
-  } else if (flags & FLAG_t) {
+  } else if (!iflag || sflag) {
+    sh_argv = argv;
+    sh_argc = array_len(argv);
     sh_stdin();
     exit(lstatus);
   } else {
