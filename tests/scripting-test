@@ -1,15 +1,25 @@
-#!/home/blank/dev/simpsh/simpsh
+#!/bin/sh
+
+set -m
+##!/home/blank/dev/simpsh/simpsh
 # vim: set filetype=sh:
 
-ls
+sleep 8 &
+sleep 8 &
+sleep 8 &
+sleep 8 &
+bg %1
+jobs
 
-false &&
-echo true ||
-echo false
-
-alias ec='echo test'
-ec
-
-PATH=$PATH:/home/blank/dev/simpsh/simpsh
-
-echo $PATH
+# ls
+#
+# false &&
+# echo true ||
+# echo false
+#
+# alias ec='echo test'
+# ec
+#
+# PATH=$PATH:/home/blank/dev/simpsh/simpsh
+#
+# echo $PATH
