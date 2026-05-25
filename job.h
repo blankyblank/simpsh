@@ -19,6 +19,7 @@ struct job {
 
 #define JRUN 0
 #define JSTP 1
+#define JDONE 2
 
 
 extern job *job_list;
@@ -28,9 +29,10 @@ extern int startjob(pid_t);
 extern void killjob(void);
 extern void chld_setpgid(pid_t);
 extern job *newjob(pid_t, const char *);
-extern job *update_jobs(job *);
-extern job * rmjob(job *j); // is extern needed?
-
+extern job *rmjob(job *j);
+extern job *updatejobs(job *);
+extern void notify_done(void);
+extern job *findjob(const char *);
 /*
  * unblock job signal
  */

@@ -27,7 +27,7 @@ newjob(pid_t pgid, const char *cmd)
   nj->pgid = pgid;
   nj->num = njn++;
   nj->state = JRUN;
-  nj->cmd = s_strdup(cmd);
+  nj->cmd = strdup_(cmd);
   nj->next = job_list;
   job_list = nj;
   return nj;
@@ -50,45 +50,12 @@ rmjob(job *j)
   return n;
 }
 
-job *
-update_jobs(job *c)
-{
-  int wstatus;
-  pid_t pid;
-
-  if (!c)
-    return NULL;
-
-  pid = waitpid(-c->pgid, &wstatus, WNOHANG);
-  switch (pid) {
-    case -1:
-      if (errno == ECHILD) {
-        printf("[%d] Done        %s\n", c->num, c->cmd);
-        // c = rmjob(c);
-        return update_jobs(rmjob(c));
-      }
-      break;
-    case 0:
-      break;
-    default:
-      while ((pid = waitpid(-c->pgid, &wstatus, WNOHANG)) > 0)
-        ;
-      if (pid == -1 && errno == ECHILD) {
-        printf("[%d] Done        %s\n", c->num, c->cmd);
-        return update_jobs(rmjob(c));
-      }
-      break;
-  }
-  c->next = update_jobs(c->next);
-  return c;
-}
-
 int
 startjob(pid_t pgid)
 {
   job_pgid = pgid;
   if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
-    err(-1, "simpsh: tcset");
+    err(-1, "tcset");
   return 0;
 }
 
@@ -100,6 +67,100 @@ killjob(void)
     kill(-job_pgid, SIGTERM);
     job_pgid = 0;
   }
+}
+
+job *
+updatejobs(job *c)
+{
+  int wstatus;
+  pid_t pid;
+
+  if (!c)
+    return NULL;
+
+  if (c->state == JRUN) {
+    pid = waitpid(-c->pgid, &wstatus, WNOHANG);
+    switch (pid) {
+      case -1:
+        if (errno == ECHILD)
+          c->state = JDONE;
+        break;
+      case 0:
+        break;
+      default:
+        while ((pid = waitpid(-c->pgid, &wstatus, WNOHANG)) > 0)
+          ;
+        if (pid == -1 && errno == ECHILD)
+          c->state = JDONE;
+        break;
+    }
+  }
+  c->next = updatejobs(c->next);
+  return c;
+}
+
+void
+notify_done(void)
+{
+  job *j, *cur, *sec;
+  j = job_list;
+  char c;
+  cur = findjob(NULL);
+  sec = findjob("%-");
+
+  while (j) {
+    if (cur == j)
+      c = '+';
+    else if (sec == j)
+      c = '-';
+    else
+      c = ' ';
+    if (j->state == JDONE) {
+      printf("[%d]%c Done\t\t\t\t\t\t\t\t\t\t\t\t%s\n", j->num, c, j->cmd);
+      j = rmjob(j);
+    } else
+    j = j->next;
+  }
+}
+
+// void
+// cleanjobs(void)
+// {
+//   job *j;
+//   j = job_list;
+//   
+//   while (j) {
+//     if (j->state == JDONE)
+//     else
+//       j = j->next;
+//   }
+// }
+
+job *
+findjob(const char *s)
+{
+  job *j;
+
+  j = job_list;
+  if (!s || (s[0] == '%' && s[1] == '+') || (s[0] == '%' && s[1] == '%')) {
+    for (job *t = j; t; t = t->next)
+      if (t->state == JSTP)
+        return t;
+    for (job *t = j; t; t = t->next)
+      if (t->state == JRUN)
+        return t;
+    return j;
+  } else if (s[0] == '%' && s[1] == '-') {
+    job *second;
+    second = findjob(NULL);
+    return second ? second->next : NULL;
+  } else if (s[0] == '%' && isdigit_(s[1])) {
+    int jnum = atoi_(s + 1);
+    for (job *t = j; t; t = t->next)
+      if (t->num == jnum)
+        return t;
+  }
+  return NULL;
 }
 
 void
