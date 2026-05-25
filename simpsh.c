@@ -70,9 +70,9 @@ expand_ps1(char *p)
           memcpy(vcpy, p + i, varlen);
           vcpy[varlen] = '\0';
         }
-      } else if (isalnum(p[i + 1])) {
+      } else if (isalnum_(p[i + 1])) {
         varlen = i + 1;
-        while (isalnum(p[varlen]))
+        while (isalnum_(p[varlen]))
           varlen++;
         varlen -= i;
         memcpy(vcpy, p + i, varlen);
@@ -158,7 +158,8 @@ sh_interactive(void)
       stack_restore(base);
       putchar('\n');
     }
-    update_jobs(job_list);
+    updatejobs(job_list);
+    notify_done();
     shps1 = expand_ps1(getvar("PS1"));
     mark = stack_mark();
     line = lineread(shps1 ? shps1 : " $ ");
