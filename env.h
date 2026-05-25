@@ -48,8 +48,8 @@ typedef struct tmp_var {
 #define MAX_ALIAS_DEPTH 10
 #define MAX_FUNC_DEPTH 40
 #define LOCAL_MAX 256
-#define shvar_val(v) (s_strchrnul(v->var, '=') + 1)
-#define shvar_namelen(v) (s_strchrnul(v, '=') - v)
+#define shvar_val(v) (strchrnul_(v->var, '=') + 1)
+#define shvar_namelen(v) (strchrnul_(v, '=') - v)
 
 extern shvar *var_tab[ENV_BUCKETS];
 extern alias *alias_tab[ENV_BUCKETS];

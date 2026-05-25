@@ -163,6 +163,7 @@ wf *get_wf(int);
 sh_tok tokenize(void);
 void pushstring(char *, size_t, int);
 void popstring(void);
+char *join_wf(wf *wordf);
 
 /** build ast tree */
 cmd_tree *parse_list(token s);
@@ -176,7 +177,7 @@ wfdup(wf *s)
   if (!s)
     return NULL;
   n = malloc(sizeof(wf));
-  n->word = s_strndup(s->word, s->len);
+  n->word = strndup_(s->word, s->len);
   n->len = s->len;
   n->qs = s->qs;
   n->next = wfdup(s->next);

@@ -51,7 +51,6 @@ int chkwd = 0;
 static redir *heredoc_head;
 static redir **heredoc_tail = &heredoc_head;
 
-static char *join_wf(wf *wordf);
 static cmd_tree *parse_andor(void);
 static cmd_tree *parse_pipe(void);
 static cmd_tree *parse_group(void);
@@ -163,10 +162,10 @@ is_assn(wf *cmd)
 
   for (p = cmd->word; p < eq; p++) {
     if (p == cmd->word) {
-      if (!isalpha(*p) && *p != '_')
+      if (!isalpha_(*p) && *p != '_')
         return 0;
     } else {
-      if (!isalnum(*p) && *p != '_')
+      if (!isalnum_(*p) && *p != '_')
         return 0;
     }
   }
@@ -208,7 +207,7 @@ get_assn(wf **args, char ***sh_vars)
 }
 
 /* takes word fragment and returns (char *) */
-static char *
+char *
 join_wf(wf *wordf)
 {
   wf *f;
@@ -220,7 +219,7 @@ join_wf(wf *wordf)
   buf = st_alloc(len + 1);
   s = buf;
   for (f = wordf; f; f = f->next) {
-    s = s_mempcpy(s, f->word, f->len);
+    s = mempcpy_(s, f->word, f->len);
     *s = '\0';
   }
 

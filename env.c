@@ -12,8 +12,6 @@
 #include "lex.h"
 #include "main.h"
 #include "utils.h"
-#define isalpha_(c) (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z') || (c) == '_')
-#define isalnum_(c)  (isalpha_(c) || ((c) >= '0' && (c) <= '9'))
 
 alias *alias_tab[ENV_BUCKETS];
 shvar *var_tab[ENV_BUCKETS];
@@ -76,7 +74,7 @@ is_posparam(const char *var, size_t var_l)
   if (!var || !*var)
     return 0;
   for (i = 0; i < var_l; i++) {
-    if (!isdigit(var[i]))
+    if (!isdigit_(var[i]))
       return 0;
   }
   return 1;
@@ -168,7 +166,7 @@ setvar(char *name, char *val, shvar_flags flags)
 
   nlen = strlen(name);
   if (!val) {
-    nvar = s_strndup(name, nlen + 2);
+    nvar = strndup_(name, nlen + 2);
     nvar[nlen] = '=';
     nvar[nlen + 1] = '\0';
   } else {
@@ -441,7 +439,7 @@ tree_dup(cmd_tree *s)
           cnt++;
         CVARS(n) = malloc((cnt + 1) * sizeof(char *));
         for (size_t i = 0; i < cnt; i++)
-          CVARS(n)[i] = s_strdup(CVARS(s)[i]);
+          CVARS(n)[i] = strdup_(CVARS(s)[i]);
         CVARS(n)[cnt] = NULL;
       } else {
         CVARS(n) = NULL;
@@ -477,14 +475,14 @@ setfunc(const char *name, cmd_tree *body)
   if (f) {
     free_tree(f->body);
     free(f->name);
-    f->name = s_strdup(name);
+    f->name = strdup_(name);
     f->body = tree_dup(body);
   } else {
     i = hash(name, ENV_BUCKETS);
     n = malloc(sizeof(shfunc));
     if (!n)
       return;
-    n->name = s_strdup(name);
+    n->name = strdup_(name);
     n->body = tree_dup(body);
     n->next = func_tab[i];
     func_tab[i] = n;
@@ -518,12 +516,12 @@ setalias(const char *name, const char *val)
 
   if ((a = findalias(name))) {
     free(a->value);
-    a->value = s_strdup(val);
+    a->value = strdup_(val);
   } else {
     if (!(a = malloc(sizeof(alias))))
       return;
-    a->name = s_strdup(name);
-    a->value = s_strdup(val);
+    a->name = strdup_(name);
+    a->value = strdup_(val);
     unsigned int i = hash(name, ENV_BUCKETS);
     a->next = alias_tab[i];
     alias_tab[i] = a;
@@ -605,7 +603,7 @@ build_env(char **sh_env)
     sh_c = array_len(sh_env);
     for (size_t i = 0; i < sh_c; i++) {
       lenarr[c] = strlen(sh_env[i]) + 1;
-      eq = s_strchrnul(sh_env[i], '=');
+      eq = strchrnul_(sh_env[i], '=');
       tmpname[i] = sh_env[i];
       tmplen[i] = eq - sh_env[i];
       len += lenarr[c++];
@@ -615,7 +613,7 @@ build_env(char **sh_env)
     var = var_tab[i];
     while (var) {
       if (var->flags & VEXPRT) {
-        namelen = s_strchrnul(var->var, '=') - var->var;
+        namelen = strchrnul_(var->var, '=') - var->var;
         skip = 0;
         for (size_t s = 0; s < sh_c; s++) {
           if (namelen == tmplen[s] &&
