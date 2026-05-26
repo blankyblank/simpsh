@@ -18,3 +18,4 @@ AGENTS.md
 project*.md
 tags
 tmp*.md
+tests/scripting-test
