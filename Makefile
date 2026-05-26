@@ -1,6 +1,5 @@
 CC := gcc
-# CC := clang
-
+# cc | gcc | clang
 BUILD       ?= sanitize
 # debug | release | sanitize | valgrind | profile
 BUILD_LINK  ?= dynamic
@@ -15,41 +14,71 @@ LDLIBS  :=
 
 # Build mode presets
 ifeq ($(BUILD),release)
-  CFLAGS += -march=native -Os -flto
+	CFLAGS += -march=native -Os -flto
 endif
 ifeq ($(BUILD),debug)
-  CFLAGS += -Og -g3 -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
-  LDFLAGS += -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
-endif
-ifeq ($(BUILD),sanitize)
-  CFLAGS += -Og -g3
-  ifeq ($(BUILD_LINK),static)
-    CFLAGS += -fsanitize=undefined,bounds -fno-omit-frame-pointer
-    LDFLAGS += -static-libasan -fsanitize=undefined,bounds
-  else
-    CFLAGS += -fsanitize=address,leak,undefined,bounds -fno-omit-frame-pointer
-    LDFLAGS += -fsanitize=address,leak,undefined,bounds
+	CFLAGS += -Og -g3 -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
+  ifeq ($(CC),gcc)
+  		CFLAGS += -ggdb
+  		LDFLAGS += -ggdb
+  	endif
+  	ifeq ($(CC),clang)
+  		CFLAGS += -glldb -fstandalone-debug
   endif
 endif
+ifeq ($(BUILD),sanitize)
+	CFLAGS += -O0 -g3  -fno-omit-frame-pointer
+  ifeq ($(BUILD_LINK),static)
+		CFLAGS += -fsanitize=undefined,bounds
+		LDFLAGS += -fsanitize=undefined,bounds
+    ifeq ($(CC),gcc)
+    		CFLAGS += -ggdb
+    		LDFLAGS += -static-libasan
+    	endif
+    	ifeq ($(CC),clang)
+    		CFLAGS += -glldb -fstandalone-debug
+				LDFLAGS += -static-libsan
+    endif
+  else
+		CFLAGS += -fsanitize=address,leak,undefined,bounds
+		LDFLAGS += -fsanitize=address,leak,undefined,bounds
+    ifeq ($(CC),gcc)
+    		CFLAGS += -ggdb
+    		# LDFLAGS += -ggdb
+    	endif
+    	ifeq ($(CC),clang)
+    		CFLAGS += -glldb -fstandalone-debug
+    endif
+endif
+endif
 ifeq ($(BUILD),valgrind)
-  CFLAGS += -Og -g3 -DDEBUG -DENABLE_VALGRIND
+	# just use gcc for valgrind
+	CC := gcc
+	CFLAGS += -Og -g3 -DDEBUG -DENABLE_VALGRIND
 	# callgrind flags
   # CFLAGS += -g -O2 -DDEBUG -DENABLE_VALGRIND
 endif
 ifeq ($(BUILD),profile)
-  CFLAGS += -Og -g3 -fvar-tracking-assignments -fno-analyzer-state-merge -pg
-  LDFLAGS += -fvar-tracking-assignments -fno-analyzer-state-merge -pg
+	CFLAGS += -O2 -g3 -fvar-tracking-assignments -fno-analyzer-state-merge
+  ifeq ($(CC),gcc)
+  	CFLAGS += -pg
+  	LDFLAGS += -pg
+  endif
+  ifeq ($(CC),clang)
+		CFLAGS += -fprofile-instr-generate -fcoverage-mapping
+		LDFLAGS += -fprofile-instr-generate
+  endif
 endif
 # Link type
 ifeq ($(BUILD_LINK),static)
-  LDFLAGS += -static
+	LDFLAGS += -static
 endif
 # Readline
 ifdef READLINE
-  CFLAGS += -DREADLINE
-  LDLIBS += -lreadline
+	CFLAGS += -DREADLINE
+	LDLIBS += -lreadline
   ifeq ($(BUILD_LINK),static)
-      LDLIBS += -lncurses
+		LDLIBS += -lncurses
   endif
 endif
 
