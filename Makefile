@@ -1,6 +1,6 @@
 CC := gcc
 # cc | gcc | clang
-BUILD       ?= sanitize
+BUILD       ?= debug
 # debug | release | sanitize | valgrind | profile
 BUILD_LINK  ?= dynamic
 # dynamic | static
@@ -8,7 +8,7 @@ READLINE    := y
 # set to anything to enable, unset to disable
 
 # Compiler flags
-CFLAGS  := --std=c99 -I. -Wall -Wextra -pedantic -pipe
+CFLAGS  := -D_FORTIFY_SOURCE=3 --std=c99 -I. -Wall -Wextra -pedantic -pipe
 LDFLAGS :=
 LDLIBS  :=
 
@@ -17,13 +17,13 @@ ifeq ($(BUILD),release)
 	CFLAGS += -march=native -Os -flto
 endif
 ifeq ($(BUILD),debug)
-	CFLAGS += -Og -g3 -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
+	CFLAGS += -Og -g3
   ifeq ($(CC),gcc)
-  		CFLAGS += -ggdb
+  		CFLAGS +=  -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
   		LDFLAGS += -ggdb
   	endif
   	ifeq ($(CC),clang)
-  		CFLAGS += -glldb -fstandalone-debug
+  		CFLAGS += -glldb  -fstandalone-debug
   endif
 endif
 ifeq ($(BUILD),sanitize)
@@ -69,6 +69,10 @@ ifeq ($(BUILD),profile)
 		LDFLAGS += -fprofile-instr-generate
   endif
 endif
+# ifeq ($(BUILD),analyze)
+# 	CC := clang
+# 	CFLAGS += -Og -g3 --analyze -Xanalyzer
+# endif
 # Link type
 ifeq ($(BUILD_LINK),static)
 	LDFLAGS += -static
@@ -111,6 +115,7 @@ uninstall:
 	rm -f /home/blank/.local/bin/simpsh
 clean:
 	rm -f simpsh obj/*.o
-
+analyze:
+	scan-build --use-cc=$(CC) -enable-checker core -enable-checker unix -enable-checker security -analyze-headers -o reports make clean all
 test:
 	cd tests && ./runtests.sh
