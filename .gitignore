@@ -19,3 +19,4 @@ project*.md
 tags
 tmp*.md
 tests/scripting-test
+reports
