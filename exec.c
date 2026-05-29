@@ -2,33 +2,18 @@
 #define _POSIX_C_SOURCE 200809L
 #include <err.h>
 #include <fcntl.h>
-#include <linux/limits.h>
-#include <signal.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <unistd.h>
 
 #include "builtins.h"
 #include "env.h"
 #include "exec.h"
 #include "expand.h"
-#include "job.h"
-#include "lex.h"
+#include "path.h"
 #include "main.h"
-#include "malloc.h"
-#include "opts.h"
 #include "sig.h"
-#include "utils.h"
+#include "var.h"
 
 #define MAX_TMP_VARS 40
 #define builtin_launch(i, a) ((*builtin_funcs[i])(a))
-
-tmp_var localvars[LOCAL_MAX];
-size_t localsp;
 
 typedef struct fdlist {
   int orig;
@@ -37,7 +22,7 @@ typedef struct fdlist {
 
 static int getbuiltin(char *);
 static void poptmpvars(tmp_var *, size_t);
-static int restore_fd(fdlist *, size_t);
+// static int restore_fd(fdlist *, size_t);
 static void save_fd(redir *, fdlist *, size_t *);
 static char *bg_cmd(const cmd_tree *);
 static int shexec(char **, const cmd_tree *, char **);
@@ -49,24 +34,14 @@ static int run_redir(const cmd_tree *);
 static int run_subsh(const cmd_tree *);
 static int run_cmd(const cmd_tree *);
 
-
-/**  initialize builtin hash table  */
-void
-init_builtins(void)
+static inline int
+restore_fd(fdlist *sfd, size_t sfdc)
 {
-  size_t i, n;
-  size_t idx;
-
-  n = builtinnum();
-  for (i = 0; i < BUILTIN_BUCKETS; i++)
-    builtin_tab[i] = -1;
-
-  for (i = 0; i < n; i++) {
-    idx = hash(builtins[i], BUILTIN_BUCKETS);
-    while (builtin_tab[idx] >= 0)
-      idx = (idx + 1) % BUILTIN_BUCKETS;
-    builtin_tab[idx] = i;
-  }
+  for (size_t i = sfdc; i-- > 0;)
+    DUPFD(sfd[i].saved, sfd[i].orig)
+  for (size_t i = sfdc; i-- > 0;)
+    CLOSEFD(sfd[i].saved)
+  return 0;
 }
 
 /**  get builtin command  */
@@ -93,100 +68,6 @@ poptmpvars(tmp_var *tmp, size_t vc)
   }
 }
 
-/** get full path to executable */
-char *
-getpath(char *file)
-{
-  char *fullpath;
-
-  if ((strchr(file, '/')) && access(file, X_OK) == 0)
-    return (st_strdup(file));
-
-  const char *path = getvar("PATH");
-  if (path)
-    fullpath = chkpath(path, file, 0);
-  else
-    fullpath = chkpath(defpath, file, 0);
-
-  if (!fullpath)
-    return NULL;
-  return fullpath;
-}
-
-char *
-tildepath(const char *s, size_t dirlen, size_t *seg)
-{
-  size_t lseg;
-  char *hm;
-
-  lseg = 1;
-  while (s[lseg] != '/' && lseg < dirlen)
-    lseg++;
-
-  if (lseg == 1 || (lseg == dirlen && dirlen == 1)) {
-    hm = getvar("HOME");
-  } else {
-    char tildbuf[PATH_MAX];
-    nmemcpy(tildbuf, s + 1, lseg - 1);
-    hm = homedir(tildbuf);
-  }
-  *seg = lseg;
-  return hm;
-}
-
-/** check in path for name stop at the first one with proper permissions if
- * cdmode 1 check for dir */
-char *
-chkpath(const char *path, const char *name, unsigned int cdmode)
-{
-  size_t flen, seg;
-  char *e, buf[PATH_MAX], expbuf[PATH_MAX];
-  const char *s;
-  struct stat statbuf;
-
-  flen = strlen(name);
-  s = path;
-
-  for (e = strchrnul_(s, ':'); e; e = strchrnul_(s, ':')) {
-    size_t dirlen, complen;
-    char *end, *comp;
-
-    dirlen = e - s;
-    comp = (char *)s;
-    complen = dirlen;
-    if (s[0] == '~') {
-      char  *hm;
-      seg = 0;
-      hm = tildepath(s, dirlen, &seg);
-      if (hm) {
-        size_t hmlen;
-        hmlen = strlen(hm);
-        memcpy(expbuf, hm, hmlen);
-        if (seg < dirlen)
-          memcpy(expbuf + hmlen, s + seg, dirlen - seg);
-        comp = expbuf;
-        complen = hmlen + (seg < dirlen ? dirlen - seg : 0);
-      }
-    }
-
-    end = mempcpy_(buf, comp, complen); /* copy current path segment from s to e */
-    *end++ = '/';                    /* add / and then file to the end of it */
-    memcpy(end, name, flen + 1);
-    if (access(buf, X_OK) == 0) {
-      if (cdmode) {
-        if (!stat(buf, &statbuf) && S_ISDIR(statbuf.st_mode))
-          return st_strdup(buf);
-      } else {
-        return st_strdup(buf);
-      }
-    }
-    if (!*e)
-      break;
-    s = e + 1;
-  }
-  return NULL;
-}
-
 static void
 save_fd(redir *r, fdlist *sfd, size_t *sfdc)
 {
@@ -200,17 +81,7 @@ save_fd(redir *r, fdlist *sfd, size_t *sfdc)
   return;
 }
 
-static int
-restore_fd(fdlist *sfd, size_t sfdc)
-{
-  for (size_t i = sfdc; i-- > 0;)
-    DUPFD(sfd[i].saved, sfd[i].orig)
-  for (size_t i = sfdc; i-- > 0;)
-    CLOSEFD(sfd[i].saved)
-  return 0;
-}
-
-char *
+static char *
 bg_cmd(const cmd_tree *n)
 {
   switch (n->type) {
@@ -229,64 +100,50 @@ bg_cmd(const cmd_tree *n)
 }
 
 /** fork and exec external command */
-int
+static int
 shexec(char **args, const cmd_tree *n, char **env)
 {
-  int wstatus;
   pid_t pid;
-  sigset_t sigold;
+  sigset_t old;
   char *fullpath;
 
-  /* test if the command has a /, if not return the first executable on PATH with the command name given */
+  /* get full command path */
   fullpath = getpath(args[0]);
   if (!fullpath) {
-    fprintf(stderr, "%s: %s: command not found\n", sh_argv0, args[0]);
+    fprintf(stderr, "%s: %s: command not found\n", sh_argv0, args[0]); /*NOLINT*/
     return 1;
   }
 
-  jobsig_blk(&sigold);
+  job_lock(&old);
   pid = fork();
   switch (pid) {
     case -1:
       perror("failed to create");
-      jobsig_unblk(&sigold);
+      job_unlock(&old);
       return 1;
     case 0:
       /* if fork was successful run the command */
-      signal(SIGINT, SIG_DFL);
-      signal(SIGQUIT, SIG_DFL);
-      signal(SIGTSTP, SIG_DFL);
-      if (mflag)
-        chld_setpgid(0);
+      job_unlock(&old);
+      child_setup_fg(0);
       if (execve(fullpath, args, env) < 0) {
         perror(args[0]);
         _exit(1);
       }
     /* fall through */
     default:
-      {
-        int jc;
-        jc = 0;
-        if (mflag) {
-          setpgid(pid, pid);
-          if (getpid() == sh_pgid) {
-            jc = 1;
-            startjob(pid);
-          }
-        }
-        jobsig_unblk(&sigold);
-        waitpid(pid, &wstatus, WUNTRACED);
-        if (WIFSTOPPED(wstatus)) {
-          if (jc) {
-            endjob();
-            newjob(pid, bg_cmd(n));
-          }
-          return 128 + WSTOPSIG(wstatus);
-        }
-        if (jc)
-          endjob();
-        return WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+      // XXX: i really want to clean up all this jobcontrol stuff
+      if (mflag && getpid() == sh_pgid) {
+        job *j;
+        setpgid(pid, pid);
+        j = newjob(pid, bg_cmd(n));
+        j->flags |= JFG;
+        startjob(pid);
+        job_unlock(&old);
+        return fgwait(j);
       }
+      /* no job control */
+      job_unlock(&old);
+      return _wait_(pid);
   }
 }
 
@@ -303,8 +160,7 @@ static int
 run_func(const cmd_tree *n, char **args)
 {
   char **oldargv;
-  int oldargc;
-  int status;
+  int oldargc, status, oldalloced;
   tmp_var *loc;
   stmark fmark;
   size_t savedsp;
@@ -314,12 +170,14 @@ run_func(const cmd_tree *n, char **args)
   savedsp = localsp;
   oldargc = sh_argc;
   oldargv = sh_argv;
+  oldalloced = alloc_sh_argv;
   sh_argc = array_len(args) - 1;
   sh_argv = args + 1;
+  alloc_sh_argv = 0;
 
 
   if (func_depth >= MAX_FUNC_DEPTH) {
-    fprintf(stderr, "function: too many levels of recursion\n");
+    fprintf(stderr, "function: too many levels of recursion\n"); /*NOLINT*/
     status = 1;
     goto done;
   }
@@ -340,6 +198,8 @@ done:
   }
 
   stack_restore(fmark);
+  freeshargv();
+  alloc_sh_argv = oldalloced;
   sh_argv = oldargv;
   sh_argc = oldargc;
   return status;
@@ -353,19 +213,16 @@ run_bg(const cmd_tree *n)
   job *j;
   int status;
 
-  jobsig_blk(&sigold);
+  job_lock(&sigold);
   pid = fork();
   switch (pid) {
     case -1:
       perror("failed to create subshell");
-      jobsig_unblk(&sigold);
+      job_unlock(&sigold);
       return 1;
     case 0:
-      if (mflag)
-        setpgid(0, 0);
-      signal(SIGINT, SIG_IGN);
-      signal(SIGQUIT, SIG_IGN);
-      jobsig_unblk(&sigold);
+      child_setup_bg();
+      job_unlock(&sigold);
       status = run_commands(n->left);
       fflush(NULL);
       _exit(status);
@@ -373,8 +230,8 @@ run_bg(const cmd_tree *n)
       if (mflag)
         setpgid(pid, pid);
       j = newjob(pid, bg_cmd(n->left));
-      jobsig_unblk(&sigold);
-      printf("[%d] %d\n", j->num, pid);
+      job_unlock(&sigold);
+      jobmsg(j);
       return run_commands(n->right);
   }
 }
@@ -382,72 +239,69 @@ run_bg(const cmd_tree *n)
 static int
 run_subsh(const cmd_tree *n)
 {
-  int status, wstatus;
+  int status;
   pid_t pid;
-  sigset_t sigold;
+  sigset_t old;
 
   if (!n->left) {
     fprintf(stderr, "empty subshell\n");
     return 1;
   }
 
-  jobsig_blk(&sigold);
+  job_lock(&old);
   pid = fork();
   switch (pid) {
     case -1:
       perror("failed to create subshell");
-      jobsig_unblk(&sigold);
+      job_unlock(&old);
       return 1;
     case 0:
-      signal(SIGINT, SIG_DFL);
-      signal(SIGQUIT, SIG_DFL);
-      signal(SIGTSTP, SIG_DFL);
-      if (mflag)
-        chld_setpgid(0);
+      job_unlock(&old);
+      child_setup_fg(0);
       status = run_commands(n->left);
+      if (eflag && status != 0 && !iflag)
+        exit(status);
       fflush(NULL);
       _exit(status);
+    // XXX: might be able to clean this more idk
     default:
-      {
-        int jc;
-
-        jc = 0;
-        if (mflag)
-          setpgid(pid, pid);
-        if (getpid() == sh_pgid) {
-          jc = 1;
-          startjob(pid);
-        }
-        jobsig_unblk(&sigold);
-        waitpid(pid, &wstatus, WUNTRACED);
-        status = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+      if (mflag && getpid() == sh_pgid) {
+        job *j;
+        setpgid(pid, pid);
+        j = newjob(pid, bg_cmd(n));
+        j->flags |= JFG;
+        startjob(pid);
+        job_unlock(&old);
+        status = fgwait(j);
         if (CNEG(n))
           status = !status;
-        if (jc) {
-          if (WIFSTOPPED(wstatus)) {
-            endjob();
-            newjob(pid, bg_cmd(n));
-            return status;
-          }
-          endjob();
-        }
+        if (eflag && status != 0 && !iflag)
+          exit(status);
         return status;
       }
+      job_unlock(&old);
+      status = _wait_(pid);
+      if (CNEG(n))
+        status = !status;
+      if (eflag && status != 0 && !iflag && !(n->flags & EFLAG_SAFE))
+        exit(status);
+      return status;
   }
 }
 
 static int
 run_pipe(const cmd_tree *n)
 {
-  int status, lw_status, rw_status, l_status, r_status;
+  int status, lwstatus;
+  int lstatus, rstatus;
   int pipefd[2], outer;
   static int pipedepth;
   pid_t lpid, rpid;
-  sigset_t sigold;
+  sigset_t old;
 
   pipedepth++;
   outer = (pipedepth == 1);
-  jobsig_blk(&sigold);
+  job_lock(&old);
 
   if (pipe(pipefd) < 0)
     err(1, "pipe");
@@ -456,20 +310,17 @@ run_pipe(const cmd_tree *n)
     case -1:
       CLOSEFD(pipefd[0]);
       CLOSEFD(pipefd[1]);
-      jobsig_unblk(&sigold);
+      job_unlock(&old);
       err(1, "fork");
     case 0:
-      signal(SIGINT, SIG_DFL);
-      signal(SIGQUIT, SIG_DFL);
-      signal(SIGTSTP, SIG_DFL);
-      if (mflag)
-        chld_setpgid(0);
+      job_unlock(&old);
+      child_setup_fg(0);
       CLOSEFD(pipefd[0]);
       DUPFD(pipefd[1], STDOUT_FILENO);
-      CLOSEFD(pipefd[1]);
-      l_status = run_commands(n->left);
+      CLOSEFD(pipefd[1]); 
+      int _st = run_commands(n->left);
       fflush(NULL);
-      _exit(l_status);
+      _exit(_st);
     default:
       if (mflag)
         setpgid(lpid, lpid);
@@ -482,48 +333,69 @@ run_pipe(const cmd_tree *n)
       CLOSEFD(pipefd[1]);
       kill(lpid, SIGTERM);
       waitpid(lpid, NULL, 0);
-      jobsig_unblk(&sigold);
+      job_unlock(&old);
       err(1, "fork");
     case 0:
-      signal(SIGINT, SIG_DFL);
-      signal(SIGQUIT, SIG_DFL);
-      signal(SIGTSTP, SIG_DFL);
-      if (mflag)
-        chld_setpgid(lpid);
+      job_unlock(&old);
+      child_setup_fg(lpid);
       CLOSEFD(pipefd[1]);
       DUPFD(pipefd[0], STDIN_FILENO);
       CLOSEFD(pipefd[0]);
-      r_status = run_commands(n->right);
+      int _st = run_commands(n->right);
       fflush(NULL);
-      _exit(r_status);
+      _exit(_st);
     default:
       if (mflag)
         setpgid(rpid, lpid);
       break;
   }
 
-  if (mflag && outer)
-    startjob(lpid);
-  jobsig_unblk(&sigold);
   CLOSEFD(pipefd[0]);
   CLOSEFD(pipefd[1]);
-  waitpid(lpid, &lw_status, WUNTRACED);
-  waitpid(rpid, &rw_status, WUNTRACED);
-  status = WIFEXITED(rw_status) ? WEXITSTATUS(rw_status) : 1;
-  if (mflag && outer) {
-    if (WIFSTOPPED(rw_status)) {
-      endjob();
-      newjob(rpid, bg_cmd(n));
-      return status;
+
+  if (mflag && outer && getpid() == sh_pgid) {
+    job *j;
+    j = newjob(lpid, bg_cmd(n));
+    j->nlive = 2;
+    j->status_pid = rpid;
+    j->flags |= JFG;
+    startjob(lpid);
+    job_unlock(&old);
+    status = fgwait(j);
+  } else {
+    int wstatus;
+    job_unlock(&old);
+    if (!mflag) {
+      waitpid(rpid, &wstatus, 0);
+      waitpid(lpid, &lwstatus, 0);
+      rstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+      lstatus = WIFEXITED(lwstatus) ? WEXITSTATUS(lwstatus) : 1;
+      status = pipeflag ? (rstatus ? rstatus : lstatus) : rstatus;
+    } else {
+      for (;;) {
+        if (intsig) {
+          intsig = 0;
+          kill(lpid, SIGINT);
+          kill(rpid, SIGINT);
+        }
+        if (waitpid(rpid, &wstatus, WNOHANG) > 0)
+          break;
+        sigsuspend(&emptyset);
+      }
+      waitpid(lpid, &lwstatus, 0);
+      rstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+      lstatus = WIFEXITED(lwstatus) ? WEXITSTATUS(lwstatus) : 1;
+      status = pipeflag ? (rstatus ? rstatus : lstatus) : rstatus;
     }
-    endjob();
   }
 
   pipedepth--;
+  if (eflag && status != 0 && !iflag && !(n->flags & EFLAG_SAFE))
+    exit(status);
   return status;
 }
 
-__attribute__((hot)) int
+__attribute__((hot)) static int
 run_cmd(const cmd_tree *n)
 {
   int status;
@@ -534,8 +406,13 @@ run_cmd(const cmd_tree *n)
   size_t i, vc, len;
   int b;
 
-  vc = 0;
   final = expand_argv(CARGS(n), &len);
+  if (nounseterr) {
+    nounseterr = 0;
+    if (!iflag)
+      exit(1);
+    return 1;
+  }
 
   if (xflag) {
     char *xline;
@@ -545,8 +422,7 @@ run_cmd(const cmd_tree *n)
     printf("%s %s\n", shps4, xline);
   }
   if (!final || !final[0]) {
-    /*  if no command only name=value  */
-    if (CVARS(n) && CVARS(n)[0]) {
+    if (CVARS(n) && CVARS(n)[0]) { /*  if no command only name=value  */
       for (i = 0; CVARS(n)[i]; i++) {
         char *name, *val;
         shvar_flags flags;
@@ -564,7 +440,7 @@ run_cmd(const cmd_tree *n)
     }
   }
 
-  if ((f = findfunc(final[0]))) {
+  if ((f = findfunc(final[0]))) { /* if this is a shell function */
     if (CVARS(n) && CVARS(n)[0]) {
       tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; CVARS(n)[i]; i++) {
@@ -579,9 +455,8 @@ run_cmd(const cmd_tree *n)
     } else {
       status = run_func(f->body, final);
     }
-  } else if ((b = getbuiltin(*final)) >= 0) {
-    /*  handle name=value cmd  */
-    if (CVARS(n) && CVARS(n)[0]) {
+  } else if ((b = getbuiltin(*final)) >= 0) { /* if this is a builtin */
+    if (CVARS(n) && CVARS(n)[0]) { /*  handle name=value cmd  */
       tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; CVARS(n)[i]; i++) {
         char *name, *val;
@@ -595,10 +470,10 @@ run_cmd(const cmd_tree *n)
     } else {
       status = builtin_launch(b, final);
     }
-  } else {
+  } else { /* if this is a external command */
     env = build_env(CVARS(n));
     if (!env) {
-      perror("idk build_env failed I guess");
+      perror("idk your shit's all fucked up i guess");
       return 1;
     }
     status = shexec(final, n, env);
@@ -606,10 +481,12 @@ run_cmd(const cmd_tree *n)
   }
   if (CNEG(n))
     status = !status;
+  if (eflag && status != 0 && !iflag && !(n->flags & EFLAG_SAFE) && !CNEG(n))
+    exit(status);
   return status;
 }
 
-int
+static int
 run_redir(const cmd_tree *n)
 {
   fdlist sfd[10];
@@ -624,7 +501,7 @@ run_redir(const cmd_tree *n)
   while (r) {
     char *name;
     int fd;
-    if (!(name = expand_word(r->name)))
+    if (!(name = exp_word(r->name)))
       return 1;
     switch (r->type) {
       case RDIN:
@@ -633,8 +510,18 @@ run_redir(const cmd_tree *n)
         CLOSEFD(fd)
         break;
       case RDOUT:
+        if (Cflag) {
+          if ((fd = open(name, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, 0666)) <
+              0) {
+            warn("%s", name);
+            return 1;
+          }
+          goto dupfall;
+        }
+      /* fall through */
       case RDCLOB:
         OPENFD(name, O_WRONLY | O_CREAT | O_TRUNC, fd)
+dupfall:
         DUPFD(fd, r->fd)
         CLOSEFD(fd)
         break;
@@ -685,7 +572,7 @@ run_redir(const cmd_tree *n)
             b.len = strlen(r->heredoc);
             b.qs = QDOUBLE;
             b.next = NULL;
-            body = expand_word(&b);
+            body = exp_word(&b);
             blen = strlen(body);
           }
           if (pipe(p) < 0)
@@ -702,14 +589,19 @@ run_redir(const cmd_tree *n)
   }
 
   lstatus = run_commands(n->left);
+
   if (!(n->left && n->left->type == CMD && CARGS(n->left) &&
         CARGS(n->left)[0] && !CARGS(n->left)[1] &&
         !strcmp(CARGS(n->left)[0]->word, "exec"))) {
     fflush(NULL);
     restore_fd(sfd, sfdc);
   }
+
+  if (eflag && lstatus != 0 && !iflag && !(n->flags & EFLAG_SAFE))
+    exit(lstatus);
   return lstatus;
 }
+
 
 /**  run command tree  */
 __attribute__((hot)) int
@@ -748,7 +640,7 @@ run_commands(const cmd_tree *n)
         case TEOF:
           return lstatus;
         default:
-          fprintf(stderr, "Unknown Operator\n");
+          fprintf(stderr, "Unknown Operator\n"); /*NOLINT*/
           return 1;
       }
   }

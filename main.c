@@ -9,15 +9,18 @@
   #include <readline/history.h>
 #endif /* ifdef READLINE */
 
-#include "opts.h"
+/* XXX: not sure all these are needed */
 #include "arg.h"
-#include "env.h"
-#include "exec.h"
+#include "builtins.h"
 #include "input.h"
+#include "job.h"
 #include "main.h"
 #include "malloc.h"
+#include "opts.h"
+#include "sig.h"
 #include "simpsh.h"
 #include "utils.h"
+#include "var.h"
 
 char histfile[256];
 int builtin_tab[BUILTIN_BUCKETS];
@@ -32,6 +35,7 @@ char *shps2;
 // char *shps3; // TODO: bring back when i implement select
 char *shps4;
 char **sh_argv;
+int alloc_sh_argv = 0;
 char *home;
 int lstatus;
 
@@ -40,7 +44,8 @@ int
 main(int argc, char **argv)
 {
   (void)argc;
-  int flags, fd;
+  int flags, fd, i;
+  char *oarg;
 
   init_opts();
 
@@ -70,6 +75,7 @@ main(int argc, char **argv)
       break;
     case 'i':
       iflag = 1;
+      flags |= FLAG_i;
       break;
     case 'I':
       Iflag = 1;
@@ -81,6 +87,14 @@ main(int argc, char **argv)
       nflag = 1;
       break;
     case 'o':
+      oarg = EARGF(usage());
+      i = checkopt(oarg);
+      if (i >= 0)
+        shopts[i] = 1;
+      else {
+        fprintf(stderr, "%s: -o: %s: invalid option name\n", argv0, oarg);
+        exit(1);
+      }
       break;
     case 's':
       sflag = 1;
@@ -116,13 +130,26 @@ main(int argc, char **argv)
   init_env();
   init_builtins();
   init_input();
+  init_sig();
+  if (mflag) {
+    init_pgrp();
+    init_job();
+  }
 
   snprintf(histfile, 256, "%s/.local/state/simpsh/simpsh_history", home);
 
   if (flags & FLAG_c) {
+    if (vflag) {
+      fputs(argv[0], stderr);
+      fputc('\n', stderr);
+    }
     sh_ccmd(argv[0]);
     exit(lstatus);
   } else if (!sflag && *argv) {
+    if (!(flags & FLAG_i)) {
+      iflag = 0;
+      mflag = 0;
+    }
     if ((fd = open(*argv, O_RDONLY)) < 0) {
       perror("simpsh");
       exit(1);

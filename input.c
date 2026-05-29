@@ -33,7 +33,7 @@ init_input(void)
 void
 pushstring(char *s, size_t len, int alias)
 {
-  strpush *sp = malloc(sizeof(strpush));
+  strpush *sp = st_alloc(sizeof(strpush));
   sp->prev = cur_shinpt->strpush;
   sp->saved_nchar = cur_shinpt->nchar;
   sp->saved_nleft = cur_shinpt->nleft;
@@ -60,7 +60,6 @@ popstring(void)
   cur_shinpt->strpush = sp->prev;
   if (sp->alias)
     alias_depth--;
-  free(sp);
 }
 
 size_t
@@ -114,7 +113,7 @@ setinputf(int fd)
     map = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (map != MAP_FAILED) {
       close(fd);
-  shinput *new;
+      shinput *new;
       new = st_alloc(sizeof(shinput));
       new->prev = cur_shinpt;
       new->buf = map;
@@ -126,6 +125,8 @@ setinputf(int fd)
       new->unget = 0;
       new->strpush = NULL;
       cur_shinpt = new;
+      if (vflag)
+        write(STDERR_FILENO, map, st.st_size);
       return;
     }
   }

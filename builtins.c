@@ -1,49 +1,28 @@
 /* builtins.c - builtin shell commands */
-#include <bits/types/sigset_t.h>
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
 #include <err.h>
 #include <limits.h>
-#include <signal.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <termios.h>
 #include <unistd.h>
 
 #include "arg.h"
 #include "builtins.h"
-#include "env.h"
-#include "exec.h"
+#include "path.h"
 #include "job.h"
-#include "lex.h"
+#include "env.h"
 #include "main.h"
-#include "simpsh.h"
+#include "opts.h"
 #include "utils.h"
+#include "var.h"
 
-static const char * const jstates[] = { "Running", "Stopped", "Done" };
-#define bad_opt(a,b,c) (fprintf(stderr, "%s: %s: bad option %c\n", a,b,c))
-
-static int aliascmd(char **);
 static char *pwdpath(char *);
-static int bgcmd(char **);
-static int cdcmd(char **);
-static int echocmd(char **);
-static int execcmd(char **);
-static int exitcmd(char **);
-static int exportcmd(char **);
-static int falsecmd(char **);
-static int fgcmd(char **);
-static int helpcmd(char **);
-static int jobscmd(char **);
-static int localcmd(char **);
-static int pwdcmd(char **);
-static int readonlycmd(char **);
-// static int setcmd(char **);
-static int truecmd(char **);
-static int unaliascmd(char **);
-static int unsetcmd(char **);
 
 /* the array of builtin commands */ /* clang-format off */
 const char *builtins[] = {
@@ -61,7 +40,7 @@ const char *builtins[] = {
   "local",
   "pwd",
   "readonly",
-  // "set",
+  "set",
   "true",
   "unalias",
   "unset",
@@ -81,7 +60,7 @@ int (* const builtin_funcs[])(char **) = {
   &localcmd,
   &pwdcmd,
   &readonlycmd,
-  // &setcmd,
+  &setcmd,
   &truecmd,
   &unaliascmd,
   &unsetcmd,
@@ -89,6 +68,25 @@ int (* const builtin_funcs[])(char **) = {
 int builtinnum(void) {
   return sizeof(builtins) / sizeof(char *);
 } /* clang-format on */
+
+/**  initialize builtin hash table  */
+void
+init_builtins(void)
+{
+  size_t i, n;
+  size_t idx;
+
+  n = builtinnum();
+  for (i = 0; i < BUILTIN_BUCKETS; i++)
+    builtin_tab[i] = -1;
+
+  for (i = 0; i < n; i++) {
+    idx = hash(builtins[i], BUILTIN_BUCKETS);
+    while (builtin_tab[idx] >= 0)
+      idx = (idx + 1) % BUILTIN_BUCKETS;
+    builtin_tab[idx] = i;
+  }
+}
 
 /**  normalize path to set PWD variable with logical path  */
 static char *
@@ -148,92 +146,7 @@ pwdpath(char *path) {
   return path;
 }
 
-static int
-aliascmd(char **args)
-{
-  int i;
-  alias *e;
-  char *delem, *n, *v;
-
-  if (!args[1]) {
-    for (i = 0; i < ENV_BUCKETS; i++) {
-      if (alias_tab[i]) {
-        e = alias_tab[i];
-        while (e) {
-          printf("alias %s=%s\n", e->name, e->value);
-          e = e->next;
-        }
-      }
-    }
-    return 0;
-  }
-
-  if (!(delem = strchr(args[1], '='))) {
-    if (!(e = findalias(args[1])))
-      return 1;
-    else
-      printf("alias %s=%s\n", e->name, e->value);
-  } else {
-    n = strndup_(args[1], strlen(args[1]) - strlen(delem));
-    v = strdup_(delem + 1);
-    setalias(n, v);
-    free(n);
-    free(v);
-  }
-
-  return 0;
-}
-
-static int
-bgcmd(char **argv)
-{
-  size_t argc;
-
-  // TODO: check interative mode or not
-  argc = array_len(argv);
-  if (argc < 2) {
-    shwarnx(argv[0], "job id required");
-    return 1;
-  } else {
-    job *cur, *sec;
-    char c;
-
-    cur = findjob(NULL);
-    sec = findjob("%-");
-    for (size_t i = 1; i < argc; i++) {
-      job *j;
-
-      j = findjob(argv[i]);
-      if (!j) {
-        shwarn_arg(argv[0], argv[i], "no such job");
-        return 1;
-      }
-      if (j->state != JSTP) {
-        shwarn_arg(argv[0], argv[i], "job not stopped");
-        return 1;
-      }
-
-      sigset_t sigold;
-      jobsig_blk(&sigold);
-      if (kill(-j->pgid, SIGCONT) < 0) {
-        jobsig_unblk(&sigold);
-        err(1, "kill");
-      }
-      j->state = JRUN;
-      jobsig_unblk(&sigold);
-      if (cur == j)
-        c = '+';
-      else if (sec == j)
-        c = '-';
-      else
-        c = ' ';
-      printf("[%d]%c %s &\n", j->num, c, j->cmd);
-    }
-  }
-  return 0;
-}
-
-static int
+int
 cdcmd(char **argv)
 {
   unsigned int argc, prnt;
@@ -259,7 +172,7 @@ cdcmd(char **argv)
   }
   ARGEND;
   if (argc > 1) {
-    shwarnx(bargv0, "Too many arguements");
+    shwarnx(bargv0, "Too many arguements"); /*NOLINT*/
     return 1;
   }
 
@@ -293,7 +206,7 @@ cdcmd(char **argv)
     dest = home;
   } else if (*dir == '-' && dir[1] == '\0') {
     if (!oldpwd) {
-      shwarnx(bargv0, "OLDPWD not set");
+      shwarnx(bargv0, "OLDPWD not set"); /*NOLINT*/
       return 1;
     } else {
       dest = shvar_val(oldpwd);
@@ -316,7 +229,8 @@ cdcmd(char **argv)
         printf("%s\n", respath);
       }
     }
-    getcwd(respath, PATH_MAX);
+    if (getcwd(respath, PATH_MAX))
+      return 1;
   } else {
     size_t plen, dlen;
     if (chdir(dest) < 0) {
@@ -329,6 +243,8 @@ cdcmd(char **argv)
       memcpy(respath, dest, dlen);
       respath[dlen] = '\0';
     } else {
+      if (!pwdval)
+        return 1;
       plen = strlen(pwdval);
       end = mempcpy_(respath, pwdval, plen);
       *end++ = '/';
@@ -336,7 +252,7 @@ cdcmd(char **argv)
       *end = '\0';
     }
     if (!pwdpath(respath)) {
-      shwarnx(bargv0, "path normalization failure");
+      shwarnx(bargv0, "path normalization failure"); /*NOLINT*/
       return 1;
     }
   }
@@ -346,7 +262,7 @@ cdcmd(char **argv)
 }
 
 
-static int
+int
 echocmd(char *argv[])
 {
   int nf = 0;
@@ -377,10 +293,11 @@ echocmd(char *argv[])
   }
   if (!(nf & FLAG_N))
     fputc('\n', stdout);
+  fflush(stdout);
   return 0;
 }
 
-static int
+int
 execcmd(char **argv)
 {
   if (!argv[1])
@@ -389,7 +306,7 @@ execcmd(char **argv)
   char **env = build_env(NULL);
 
   if (!env)
-    shwarnx(argv[0], "failed to get environ");
+    shwarnx(argv[0], "failed to get environ"); /*NOLINT*/
 
   fullpath = getpath(argv[1]);
   if (!fullpath)
@@ -407,7 +324,7 @@ fail:
   return 1;
 }
 
-static int
+int
 exitcmd(char **argv)
 {
   size_t argc;
@@ -416,7 +333,7 @@ exitcmd(char **argv)
   exnum = 0;
   argc = array_len(argv);
   if (argc > 2) {
-    shwarnx(argv[0], "too many arguements");
+    shwarnx(argv[0], "too many arguements"); /*NOLINT*/
     // fprintf(stderr, "%s: %s: \n", sh_argv0 ,argv[0]);
     return 1;
   } else if (argc == 2) {
@@ -432,121 +349,14 @@ exitcmd(char **argv)
   exit(exnum);
 }
 
-static int
-exportcmd(char **args)
-{
-  size_t argc;
-  argc = array_len(args);
-
-  /* nvar = s_strndup(args[i], nvarlen + 1); */ 
-  if (argc > 1) {
-    for (size_t i = 1; i < argc; i++) {
-      char *eq;
-      char *name, *val;
-      shvar *v;
-
-      eq = strchrnul_(args[i], '=');
-      if (*eq == '\0') {
-        v = findvar(args[i]);
-        if (v)
-          v->flags |= VEXPRT;
-        else
-          setvar(args[i], NULL, VEXPRT);
-      } else {
-        read_assn(args[i], &name, &val);
-        setvar(name, val, VEXPRT);
-        free(name);
-        free(val);
-      }
-    }
-  }
-
-  return 0;
-}
-
-static int
+int
 falsecmd(char **args)
 {
   (void)args;
   return 1;
 }
 
-static int
-fgcmd(char **argv)
-{
-  size_t argc;
-  job *j;
-  job *cur, *sec;
-  char c;
-  int status;
-
-  argc = array_len(argv);
-  if (argc < 2) {
-    j = findjob(NULL);
-    if (!j) {
-      shwarnx(argv[0], "no current job");
-      return 1;
-    }
-  } else {
-    j = findjob(argv[argc - 1]);
-    if (!j) {
-      shwarn_arg(argv[0], argv[argc - 1], "no such job");
-      return 1;
-    }
-  }
-
-  if (j->state == JDONE) {
-    shwarn_arg(argv[0], argv[argc-1], "job already completed");
-    return 1;
-  }
-
-  cur = findjob(NULL);
-  sec = findjob("%-");
-  if (startjob(j->pgid) < 0)
-    return 1;
-  sigset_t sigold;
-  jobsig_blk(&sigold);
-  if (j->state == JSTP) {
-    if (kill(-j->pgid, SIGCONT)) {
-      endjob();
-      jobsig_unblk(&sigold);
-      err(1, "kill");
-    }
-  }
-
-  int wstatus;
-  status = 0;
-  if (waitpid(-j->pgid, &wstatus, WUNTRACED) < 0) {
-    endjob();
-    jobsig_unblk(&sigold);
-    err(1, "waitpid");
-  }
-  if (WIFEXITED(wstatus)) {
-    status = WEXITSTATUS(wstatus);
-  } else if (WIFSIGNALED(wstatus)) {
-    status = 128 + WTERMSIG(wstatus);
-  } else if (WIFSTOPPED(wstatus)) {
-    j->state = JSTP;
-    if (cur == j)
-      c = '+';
-    else if (sec == j)
-      c = '-';
-    else
-      c = ' ';
-    printf("[%d]%c Stopped\t\t\t\t\t\t\t\t\t\t\t\t%s\n",j->num, c, j->cmd);
-    status = 128 + WSTOPSIG(wstatus);
-  }
-
-  endjob();
-  jobsig_unblk(&sigold);
-  if (j->state == JDONE) {
-    rmjob(j);
-  }
-
-  return status;
-}
-
-static int
+int
 helpcmd(char **args)
 {
   (void)args;
@@ -563,90 +373,7 @@ helpcmd(char **args)
   return 0;
 }
 
-
-static int
-jobscmd(char **argv)
-{
-  job *j;
-  job *cur, *sec;
-  size_t argc;
-  const char *status;
-  char c;
-
-  j = job_list;
-  argc = array_len(argv);
-  status = 0;
-
-  cur = findjob(NULL);
-  sec = findjob("%-");
-  if (argc < 2) {
-    for (job *t = j; t;) {
-      if (cur == t)
-        c = '+';
-      else if (sec == t)
-        c = '-';
-      else
-        c = ' ';
-      status = jstates[t->state];
-      printf("[%d]%c %-8s\t\t\t\t\t\t\t\t\t\t\t\t%s\n", t->num, c, status, t->cmd);
-      if (t->state == JDONE)
-        t = rmjob(t);
-      else
-        t = t->next;
-    }
-  } else {
-    for (size_t i = 1; i < argc; i++) {
-      job *t;
-      if ((t = findjob(argv[i]))) {
-        if (cur == t)
-          c = '+';
-        else if (sec == t)
-          c = '-';
-        else
-          c = ' ';
-        status = jstates[t->state];
-        printf("[%d]%c %s\t%s\n", t->num, c, status, t->cmd);
-        if (t->state == JDONE)
-          rmjob(t);
-      } else {
-        shwarn_arg(argv[0], argv[i], "no such job");
-      }
-    }
-  }
-
-  return 0;
-}
-
-static int localcmd(char **argv)
-{
-  size_t argc;
-
-  argc = array_len(argv);
-
-  if (func_depth == 0) {
-    fprintf(stderr, "simpsh: local: can only be used in a function\n");
-    return 1;
-  }
-  if (argc > 1) {
-    for (size_t i = 1; i < argc; i++) {
-      char *name, *val;
-
-      st_read_assn(argv[i], &name, &val);
-      localvars[localsp++] = grabvar(name);
-      if (localsp >= LOCAL_MAX)
-        err(1, "local variables exceeded max");
-      if (val) {
-        setvar(name, val, 0);
-      } else {
-        val = localvars[localsp - 1].val ? localvars[localsp - 1].val : "";
-        setvar(name, val, 0);
-      }
-    }
-  }
-  return 0;
-}
-
-static int
+int
 pwdcmd(char **argv)
 {
   int argc = 0;
@@ -699,123 +426,10 @@ physical:
   }
 }
 
-static int
-readonlycmd(char **argv)
-{
-  int argc, i;
-  argc = array_len(argv);
-
-  /* nvar = s_strndup(args[i], nvarlen + 1); */ 
-  if (argc > 1) {
-    for (i = 1; i < argc; i++) {
-      char *eq;
-      char *name, *val;
-      shvar *v;
-
-      eq = strchrnul_(argv[i], '=');
-      if (*eq == '\0') {
-        v = findvar(argv[i]);
-        if (v)
-          v->flags |= VREADONLY;
-        else
-          setvar(argv[i], NULL, VEXPRT);
-      } else {
-        read_assn(argv[i], &name, &val);
-        setvar(name, val, VREADONLY);
-        free(name);
-        free(val);
-      }
-    }
-  }
-
-  return 0;
-}
-
-// static int
-// setcmd(char **argv)
-// {
-//   (void)argv;
-//   return 0;
-// }
-
-static int
+int
 truecmd(char **args)
 {
   (void)args;
   return 0;
 }
 
-static int
-unaliascmd(char **argv)
-{
-  alias *e;
-  /* int i;
-   char *n, *v; */
-
-  e = findalias(argv[1]);
-  if (e) {
-    rmalias(argv[1]);
-  } else {
-    shwarnx(argv[0], "alias not found");
-    return 1;
-  }
-
-  return 0;
-}
-
-static int
-unsetcmd(char **argv)
-{
-  shvar *v;
-  size_t argc, c;
-  unsigned int err;
-  char *bargv0;
-  argc = array_len(argv);
-  enum {
-    VARS,
-    FUNC,
-  } flag;
-
-  flag = 0;
-  bargv0 = argv[0];
-  ARGBEGIN
-  {
-    case 'v':
-      flag = VARS;
-      break;
-    case 'f':
-      flag = FUNC;
-      break;
-    default:
-      bad_opt(sh_argv0, argv0, ARGC());
-      return 1;
-  }
-  ARGEND
-
-  err = 0;
-  c = 0;
-  if (argc < 1) {
-    return 0;
-
-  } else {
-    for (; c < argc; c++) {
-      if (flag == FUNC) {
-        rmfunc(argv[c]);
-      } else {
-        v = findvar(argv[c]);
-        if (v) {
-          if (v->flags & VREADONLY) {
-            shwarn_arg(bargv0, argv[c], "cannot unset: readonly variable");
-            err = 1;
-          } else {
-            rmvar(argv[c]);
-          }
-        }
-      }
-      if (err)
-        return 1;
-    }
-  }
-
-  return 0;
-}

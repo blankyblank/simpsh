@@ -7,8 +7,6 @@
 #include "main.h"
 #include <sys/mman.h>
 
-#define defpath "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
 /* functions for shell */
 extern char *lineread(char *);
 extern void getbuildinfo(void);

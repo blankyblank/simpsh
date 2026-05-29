@@ -5,6 +5,17 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include "lex.h"
+#include "opts.h"
+
+typedef struct strpush strpush;
+struct strpush {
+    strpush *prev;
+    char *saved_nchar;
+    size_t saved_nleft;
+    int saved_unget;
+    char saved_ungetbuf[4];
+    int alias;
+};
 
 /** holds unified input stream data */
 typedef struct shinput shinput;
@@ -78,9 +89,10 @@ shreadbuf(void)
 
   if (cur_shinpt->fd < 0)
     return 0;
-  readbc = read(cur_shinpt->fd, cur_shinpt->buf, BUFSIZ);
-  if (readbc <= 0)
+  if ((readbc = read(cur_shinpt->fd, cur_shinpt->buf, BUFSIZ)) <= 0)
     return 0;
+  if (vflag)
+    write(STDERR_FILENO, cur_shinpt->buf, readbc);
   cur_shinpt->nchar = cur_shinpt->buf;
   cur_shinpt->nleft = readbc;
   return readbc;

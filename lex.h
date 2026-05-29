@@ -1,8 +1,7 @@
-/* lex.h - tokenizer and parser functions and declarations */
+/* lex.h - tokenizer functions and declarations */
 #ifndef LEX_H
 #define LEX_H
 
-#define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
 #include <stddef.h>
 #include "utils.h"
@@ -74,67 +73,6 @@ typedef struct {
   int sub;
 } sh_tok;
 
-typedef struct strpush strpush;
-struct strpush {
-    strpush *prev;
-    char *saved_nchar;
-    size_t saved_nleft;
-    int saved_unget;
-    char saved_ungetbuf[4];
-    int alias;
-};
-
-typedef struct redir redir;
-struct redir {
-  redir *next;
-  int fd;
-  int type;
-  wf *name;
-  char *heredoc;
-  redir *heredoc_next;
-};
-
-/*
- * AST node for commands
- * @field node left
- * @field node right
- * @field enum node type
- * @field union of ast structs
- * @field enum node type
- * @field word fragment array args
- * @field int flags (bg, negate)
- */
-typedef struct cmd_tree cmd_tree;
-struct cmd_tree {
-  cmd_tree *left;
-  cmd_tree *right;
-  enum {
-    CMD,
-    OP,
-    FUNC,
-    SUBSHELL,
-    REDIR,
-  } type;
-  union {
-    struct { wf **args; char **sh_vars; } cmd;
-    struct { token op_t; } op;
-    struct { redir *redirs;} redir;
-    struct { wf *name; } func;
-  } t;
-  int flags;
-};
-
-
-#define NEG (1 << 1)
-
-#define CARGS(n)  ((n)->t.cmd.args)
-#define CVARS(n)  ((n)->t.cmd.sh_vars)
-#define COPP(n)   ((n)->t.op.op_t)
-#define CREDR(n)    ((n)->t.redir.redirs)
-#define CFUNC(n) ((n)->t.func.name)
-// #define CBG(n)        ((n)->flags & BG) /* check if bg set */
-#define CNEG(n)       ((n)->flags & NEG) /* check if NEGATE set */
-
 extern int alias_depth;
 extern int func_depth;
 extern int notclosed;
@@ -157,17 +95,10 @@ extern int chkwd;
 #define RDHERE 8
 #define RDHERE_D 9
 
-/** Get word fragment */
-wf *get_wf(int);
-/** create sh_toks out of line */
-sh_tok tokenize(void);
-void pushstring(char *, size_t, int);
-void popstring(void);
-char *join_wf(wf *wordf);
-
-/** build ast tree */
-cmd_tree *parse_list(token s);
-cmd_tree *parse_cmd(void);
+extern sh_tok tokenize(void);
+extern void pushstring(char *, size_t, int);
+extern void popstring(void);
+extern char *join_wf(wf *wordf);
 
 static inline wf *
 wfdup(wf *s)

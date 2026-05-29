@@ -1,8 +1,6 @@
 /*  env.c - functions surrounding various parts of the shell environment  */
-#include "malloc.h"
 #define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
-#include <ctype.h>
 #include <limits.h>
 #include <linux/limits.h>
 #include <stddef.h>
@@ -14,368 +12,8 @@
 #include "utils.h"
 
 alias *alias_tab[ENV_BUCKETS];
-shvar *var_tab[ENV_BUCKETS];
 shfunc *func_tab[ENV_BUCKETS];
-static char *var_n(const char *, size_t, size_t *);
-static char *varbrace_n(const char *, size_t, size_t *);
-static char *lookupvar(const char *, size_t);
 static cmd_tree *tree_dup(cmd_tree *);
-
-/** get the variable for the return status of last command */
-static inline char *
-varstatus(void)
-{
-  size_t n, i, e;
-  char *buf, t;
-
-  i = 0;
-  n = lstatus;
-  buf = st_alloc(4);
-  do {
-    buf[i++] = (n % 10) + '0';
-    n /= 10;
-  } while (n);
-  e = i - 1;
-  for (size_t s = 0; s < e; s++) {
-    t = buf[s];
-    buf[s] = buf[e];
-    buf[e] = t;
-    e--;
-  }
-  buf[i] = '\0';
-  return buf;
-}
-
-/** get the pid shell variable */
-#define varpid() (st_strdup(sh_pid_s))
-#define varargc() \
-  char *buf; \
-  buf = st_alloc(16); \
-  snprintf(buf, 16, "%d", sh_argc); \
-  return buf;
-
-/** get positional parameters */
-static inline char *
-get_posparam(int n)
-{
-  if (n == 0)
-    return sh_argv0 ? sh_argv0 : "";
-
-  if (n < 0 || n > sh_argc)
-    return "";
-  return sh_argv[n - 1] ? sh_argv[n - 1] : "";
-}
-
-/** find if variable is positional parameter */
-static inline int
-is_posparam(const char *var, size_t var_l)
-{
-  size_t i;
-  if (!var || !*var)
-    return 0;
-  for (i = 0; i < var_l; i++) {
-    if (!isdigit_(var[i]))
-      return 0;
-  }
-  return 1;
-}
-
-/** expand $var style variables */
-char *
-var_n(const char *args, size_t i, size_t *end)
-{
-  const char *env_var;
-  char *var;
-  size_t j, vt_l;
-
-  for (j = i + 1;; j++) {
-    if ((isalnum_(args[j]) == 0 && args[j] != '_') || args[j] == '\0') {
-      vt_l = j - (i + 1);
-
-      if (vt_l == 0) {
-        env_var = NULL;
-        break;
-      } else {
-        env_var = lookupvar(&args[i + 1], vt_l);
-        break;
-      }
-    }
-  }
-
-  *end = j;
-  if (!env_var)
-    return NULL;
-  var = st_strdup(env_var);
-  return var;
-}
-
-/** expand ${var} style variables */
-char *
-varbrace_n(const char *args, size_t i, size_t *end)
-{
-  char *var, *env_var;
-  size_t j, vt_l;
-
-  if (strchr(args, '}') == NULL)
-    return NULL;
-
-  for (j = i + 1;; j++) {
-    if (args[j] == '}') {
-      vt_l = j - (i + 2);
-      if (vt_l == 0)
-        return NULL;
-      else {
-        env_var = lookupvar(&args[i + 2], vt_l);
-        break;
-      }
-    }
-  }
-
-  *end = j;
-  var = st_strdup(env_var);
-  return var;
-}
-
-/** find variable by name */
-__attribute__((hot)) shvar *
-findvar(const char *name)
-{
-  unsigned int i;
-  shvar *v;
-  size_t nlen;
-
-  nlen = strlen(name);
-  i = hash_n(name, nlen, ENV_BUCKETS);
-  v = var_tab[i];
-  while (v) {
-    if (v->var[0] == name[0])
-      if (strncmp(v->var, name, nlen) == 0)
-        return v;
-    v = v->next;
-  }
-  return NULL;
-}
-
-/** set variable value */
-void
-setvar(char *name, char *val, shvar_flags flags)
-{
-  shvar *v;
-  char *nvar;
-  size_t vlen, nlen, i;
-
-  nlen = strlen(name);
-  if (!val) {
-    nvar = strndup_(name, nlen + 2);
-    nvar[nlen] = '=';
-    nvar[nlen + 1] = '\0';
-  } else {
-    vlen = strlen(val);
-    if (!(nvar = malloc(nlen + 1 + vlen + 1)))
-      return;
-    memcpy(nvar, name, nlen);
-    nvar[nlen] = '=';
-    memcpy(nvar + nlen + 1, val, vlen + 1);
-  }
-
-  i = hash_n(name, nlen, ENV_BUCKETS);
-  v = var_tab[i];
-  while (v) {
-    if (v->var[0] == name[0])
-      if (strncmp(v->var, name, nlen) == 0 && v->var[nlen] == '=') {
-        if (v->flags & VREADONLY) {
-          free(nvar);
-          return;
-        }
-        free(v->var);
-        v->var = nvar;
-        v->flags = flags;
-        return;
-      }
-    v = v->next;
-  }
-  if (!(v = malloc(sizeof(shvar))))
-    return;
-  v->var = nvar;
-  v->flags = flags;
-  v->func = NULL;
-  v->next = var_tab[i];
-  var_tab[i] = v;
-}
-
-/** unset variable */
-void
-rmvar(const char *name)
-{
-  unsigned int i;
-  shvar **prev;
-  shvar *v;
-  size_t nlen;
-
-  nlen = strlen(name);
-  i = hash_n(name, nlen, ENV_BUCKETS);
-  prev = &var_tab[i];
-  v = var_tab[i];
-
-  while (v) {
-    if (v->var[0] == name[0])
-      if (strncmp(v->var, name, nlen) == 0) {
-        *prev = v->next;
-        free(v->var);
-        free(v);
-        return;
-      }
-    prev = &v->next;
-    v = v->next;
-  }
-}
-
-tmp_var
-grabvar(char *name)
-{
-  tmp_var tmp;
-  shvar *v;
-
-  v = findvar(name);
-  if (v) {
-    tmp.set = 1;
-    tmp.name = st_strdup(name);
-    tmp.val = st_strdup(shvar_val(v));
-    tmp.oldflags = v->flags;
-  } else {
-    tmp.set = 0;
-    tmp.name = st_strdup(name);
-    tmp.val = NULL;
-  }
-  return tmp;
-}
-
-/** lookup variable by name */
-char *
-lookupvar(const char *vt, size_t vlen)
-{
-  char *var;
-  shvar *v;
-  int n;
-  size_t i;
-
-  n = 0;
-  if (is_posparam(vt, vlen)) {
-    for (size_t j = 0;j < vlen; j++)
-      n = n * 10 + (vt[j] - '0');
-    var = get_posparam(n);
-  } else {
-    i = hash_n(vt, vlen, ENV_BUCKETS);
-    v = var_tab[i];
-    while (v) {
-      if (memcmp(v->var, vt, vlen) == 0)
-        break;
-      v = v->next;
-    }
-    if (v)
-      var = shvar_val(v);
-    else
-      var = NULL;
-  }
-
-  return var;
-}
-
-char *
-homedir(char *user)
-{
-  char e[PATH_MAX];
-  FILE *pw;
-  size_t i;
-
-  if (!user)
-    return NULL;
-  if (!(pw = fopen("/etc/passwd", "r")))
-    return NULL;
-  while (fgets(e, PATH_MAX, pw)) {
-    char *s, *end;
-    size_t ulen;
-
-    if (e[0] == '#' || e[0] == '\n')
-      continue;
-    s = e;
-    end = strchr(s, ':');
-    if (!end) 
-      continue;
-    ulen = end - s;
-    if (strncmp(s, user, ulen) == 0 && s[ulen] == ':') {
-      s += ulen + 1;
-      for (i = 0; i < 4; i++) {
-        s = strchr(s, ':');
-        if (!end)
-          break;
-        s++;
-      }
-      if (i != 4)
-        continue;
-      end = strchr(s, ':');
-      if (end)
-        *end = '\0';
-      if (!*s)
-        continue;
-      fclose(pw);
-      return st_strdup(s);
-    } 
-  }
-  return NULL;
-}
-
-char *
-exp_tilde(char *word, size_t s, size_t *e)
-{
-  char *hm, strt;
-  size_t end;
-
-  if (word[s] != '~')
-    return NULL;
-  if (s == 0 && (word[s + 1] == '\0' || word[s + 1] == '/')) {
-    if (!(hm = getvar("HOME")))
-      return NULL;
-    *e = s + 1;
-    return st_strdup(hm);
-  } else {
-    end = s + 1;
-    while (word[end] && word[end] != '/')
-      end++;
-    strt = word[end];
-    word[end] = '\0';
-    hm = homedir(word + s + 1);
-    word[end] = strt;
-    if (hm) {
-      *e = end;
-      return hm;
-    }
-  }
-  return NULL;
-}
-
-/** expand variables in word */
-char *
-exp_var(char *word, size_t s, size_t *e)
-{
-  if (word[s] != '$')
-    return NULL;
-
-  if (word[s + 1] == '$') {
-    *e = s + 2;
-    return varpid();
-  } else if (word[s + 1] == '?') {
-    *e = s + 2;
-    return varstatus();
-  } else if (word[s + 1] == '#') {
-    *e = s + 2;
-    varargc();
-  } else if (word[s + 1] == '{') {
-    return varbrace_n(word, s, e);
-  } else {
-    return var_n(word, s, e);
-  }
-}
 
 static inline redir *
 redirdup(redir *s)
@@ -578,120 +216,57 @@ rmalias(const char *name)
   }
 }
 
-/** build environment array for exec */
-char **
-build_env(char **sh_env)
+int
+aliascmd(char **args)
 {
-  /* way too complicated way of trying to copy strings into
-   * an array of strings. for performance reasons... I guess.*/
+  int i;
+  alias *e;
+  char *delem, *n, *v;
 
-  size_t c, sh_c, j, len, var_len, arrsize;
-  size_t namelen, lenarr[MAX_ENV], tmplen[MAX_ENV], skipc;
-  char *eq, *buf, *tmpname[MAX_ENV], *shadowed[MAX_ENV];
-  char **arr, **cmd_env, **mem;
-  shvar *var;
-  int skip;
-
-  cmd_env = NULL;
-  c = 0;
-  j = 0;
-  len = 0;
-  sh_c = 0;
-  skipc = 0;
-
-  if (sh_env) {
-    sh_c = array_len(sh_env);
-    for (size_t i = 0; i < sh_c; i++) {
-      lenarr[c] = strlen(sh_env[i]) + 1;
-      eq = strchrnul_(sh_env[i], '=');
-      tmpname[i] = sh_env[i];
-      tmplen[i] = eq - sh_env[i];
-      len += lenarr[c++];
-    }
-  }
-  for (size_t i = 0; i < ENV_BUCKETS; i++) {
-    var = var_tab[i];
-    while (var) {
-      if (var->flags & VEXPRT) {
-        namelen = strchrnul_(var->var, '=') - var->var;
-        skip = 0;
-        for (size_t s = 0; s < sh_c; s++) {
-          if (namelen == tmplen[s] &&
-              (memcmp(var->var, tmpname[s], namelen)) == 0) {
-            shadowed[skipc++] = var->var;
-            skip = 1;
-            break;
-          }
-        }
-        if (!skip) {
-          lenarr[c] = strlen(var->var) + 1;
-          len += lenarr[c++];
+  if (!args[1]) {
+    for (i = 0; i < ENV_BUCKETS; i++) {
+      if (alias_tab[i]) {
+        e = alias_tab[i];
+        while (e) {
+          printf("alias %s=%s\n", e->name, e->value);
+          e = e->next;
         }
       }
-      var = var->next;
     }
+    return 0;
   }
 
-  arrsize = (c + 1) * sizeof(char *);
-  if (!(mem = malloc(arrsize + (len + 1))))
-    return NULL;
-  cmd_env = (char **)mem;
-  buf = (char *)mem + arrsize;
-  arr = cmd_env;
+  if (!(delem = strchr(args[1], '='))) {
+    if (!(e = findalias(args[1])))
+      return 1;
+    else
+      printf("alias %s=%s\n", e->name, e->value);
+  } else {
+    n = strndup_(args[1], strlen(args[1]) - strlen(delem));
+    v = strdup_(delem + 1);
+    setalias(n, v);
+    free(n);
+    free(v);
+  }
 
-  if (sh_env) {
-    for (size_t i = 0; i < sh_c; i++) {
-      *arr++ = buf;
-      memcpy(buf, sh_env[i], lenarr[j]);
-      buf += lenarr[j++];
-    }
-  }
-  for (size_t i = 0; i < ENV_BUCKETS; i++) {
-    var = var_tab[i];
-    while (var) {
-      if (var->flags & VEXPRT) {
-        skip = 0;
-        for (size_t s = 0; s < skipc; s++) {
-          if (var->var == shadowed[s]) {
-            skip = 1;
-            break;
-          }
-        }
-        if (!skip) {
-          *arr++ = buf;
-          var_len = lenarr[j++];
-          memcpy(buf, var->var, var_len);
-          buf += var_len;
-        }
-      }
-      var = var->next;
-    }
-  }
-  *arr = NULL;
-  return cmd_env;
+  return 0;
 }
 
-/** initialize environment from environ */
-void
-init_env(void)
+int
+unaliascmd(char **argv)
 {
-  size_t i, env_c;
+  alias *e;
+  /* int i;
+   char *n, *v; */
 
-  env_c = array_len(environ);
-  for (i = 0; i < env_c; i++) {
-    char *name, *val;
-    read_assn(environ[i], &name, &val);
-    setvar(name, val, VEXPRT);
-    free(name);
-    free(val);
+  e = findalias(argv[1]);
+  if (e) {
+    rmalias(argv[1]);
+  } else {
+    shwarnx(argv[0], "alias not found");
+    return 1;
   }
 
-  sh_argv0 = "simpsh";
-  sh_pid_s = malloc(16);
-  sh_pid = getpid();
-  sh_argc = 0;
-  sh_argv = NULL;
-  snprintf(sh_pid_s, 16, "%d", sh_pid);
-  home = getenv("HOME");
+  return 0;
 }
 
