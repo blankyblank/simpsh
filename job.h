@@ -1,63 +1,69 @@
 #ifndef JOB_H
 #define JOB_H
-
 #define _POSIX_C_SOURCE 200809L
-#include <signal.h>
-#include <unistd.h>
 
-extern pid_t sh_pgid;
-extern pid_t job_pgid;
+#include <signal.h>
+#include <sys/wait.h>
+#include <termios.h>
+#include <unistd.h>
+#include "sig.h"
 
 typedef struct job job;
 struct job {
   job *next;
-  pid_t pgid;
-  int state;
-  int num;
-  char *cmd;
+  pid_t pgid;              /* process group */
+  int state;               /* JRUN, JSTP, JDONE */
+  int num;                 /* job number */
+  char *cmd;               /* command string */
+  int flags;               /* JCHANGED, JFG, JSAVEDTTY, JSAVEDTTYPGRP */
+  int age;                 /* monotonic counter for current-job selection */
+  struct termios ttystate; /* saved on stop (valid when JSAVEDTTY) */
+  pid_t saved_ttypgrp;     /* saved on stop (valid when JSAVEDTTYPGRP) */
+  pid_t status_pid;        /* which pid's exit determines job exit status */
+  int wstatus;             /* wait status of status_pid */
+  int lwstatus;            /* wait status of for chld on left (pipefail needs this) */
+  int nlive;               /* # of processes still running (not yet exited) */
 };
 
 #define JRUN 0
 #define JSTP 1
 #define JDONE 2
+#define JCHANGED 0x01      /* state changed since last notification */
+#define JFG 0x02           /* currently in foreground (has terminal) */
+#define JSAVEDTTY 0x04     /* j->ttystate is valid */
+#define JSAVEDTTYPGRP 0x08 /* j->saved_ttypgrp is valid */
 
-
+extern pid_t sh_pgid;
 extern job *job_list;
+extern struct termios sh_termios;
 
-#define init_job() sh_pgid = getpgrp()
-extern int startjob(pid_t);
-extern void killjob(void);
-extern void chld_setpgid(pid_t);
 extern job *newjob(pid_t, const char *);
 extern job *rmjob(job *j);
-extern job *updatejobs(job *);
-extern void notify_done(void);
-extern job *findjob(const char *);
-/*
- * unblock job signal
- */
-#define jobsig_unblk(old) sigprocmask(SIG_SETMASK, old, NULL)
+extern void killjob(void);
+extern void jobnotify(void);
+extern void jobmsg(job *j);
+extern void child_setup_fg(pid_t);
+extern void child_setup_bg(void);
+extern int startjob(pid_t);
 
-/*
- * block job signal
- */
-static inline int
-jobsig_blk(sigset_t *old)
-{
-  sigset_t set;
-  sigemptyset(&set);
-  sigaddset(&set, SIGINT);
-  return sigprocmask(SIG_BLOCK, &set, old);
-}
+extern int bgcmd(char **);
+extern int fgcmd(char **);
+extern int jobscmd(char **);
+
+/* lock job signal */
+#define job_lock(old) sigprocmask(SIG_BLOCK, &sigchldmask, old)
+/* unblock job signal */
+#define job_unlock(old) sigprocmask(SIG_SETMASK, old, NULL)
+#define init_pgrp() sh_pgid = getpgrp()
 
 /*
  * return term back to shell
  */
 static inline void
-endjob(void)
+ttyrestore(void)
 {
   tcsetpgrp(STDIN_FILENO, sh_pgid);
-  job_pgid = 0;
+  tcsetattr(STDIN_FILENO, TCSADRAIN, &sh_termios);
 }
 
 #endif /* JOB_H */

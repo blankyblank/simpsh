@@ -1,21 +1,28 @@
 #define _POSIX_C_SOURCE 200809L
-#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <err.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "exec.h"
 #include "job.h"
-#include "malloc.h"
+#include "main.h"
+#include "opts.h"
+#include "sig.h"
 #include "utils.h"
 
 pid_t sh_pgid;
-pid_t job_pgid;
 job *job_list;
-/* next job num */
-static int njn = 1;
+struct termios sh_termios;
+static int njn = 1; /* next job num */
 
+/* string for printing job status */
+static const char * const jstates[] = { "Running", "Stopped", "Done" };
+
+static job *findjob(const char *);
 
 job *
 newjob(pid_t pgid, const char *cmd)
@@ -27,7 +34,14 @@ newjob(pid_t pgid, const char *cmd)
   nj->pgid = pgid;
   nj->num = njn++;
   nj->state = JRUN;
+  nj->flags = 0;
   nj->cmd = strdup_(cmd);
+  nj->nlive = 1;
+  nj->status_pid = pgid;
+  nj->wstatus = 0;
+  nj->lwstatus = 0;
+  nj->ttystate = (struct termios){0};
+  nj->saved_ttypgrp = -1;
   nj->next = job_list;
   job_list = nj;
   return nj;
@@ -50,91 +64,89 @@ rmjob(job *j)
   return n;
 }
 
+void
+killjob(void)
+{
+  job *j;
+  int wstatus;
+  pid_t pid;
+  sigset_t old;
+
+  sigprocmask(SIG_BLOCK, &sigchldmask, &old);
+
+  for (j = job_list; j; j = j->next) {
+    if (j->state != JRUN)
+      continue;
+    while ((pid = waitpid(-j->pgid, &wstatus, WNOHANG | WUNTRACED)) > 0) {
+      if (pid == j->status_pid)
+        j->wstatus = wstatus;
+      else if (pipeflag)
+        j->lwstatus = wstatus;
+      if (WIFSTOPPED(wstatus))
+        j->state = JSTP;
+      else
+        j->nlive--;
+    }
+    if (pipeflag && j->nlive <= 0 && j->state == JRUN) {
+      int rstatus, cmb;
+      rstatus = WIFEXITED(j->wstatus) ? WEXITSTATUS(j->wstatus) : 1;
+      cmb = rstatus ? rstatus : (WIFEXITED(j->lwstatus) ? WEXITSTATUS(j->lwstatus) : 1);
+      j->wstatus = cmb << 8;
+    }
+    if (j->nlive <= 0 && j->state == JRUN)
+      j->state = JDONE;
+    if (j->state != JRUN)
+      j->flags |= JCHANGED;
+  }
+  sigprocmask(SIG_SETMASK, &old, NULL);
+}
+
 int
 startjob(pid_t pgid)
 {
-  job_pgid = pgid;
   if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
     err(-1, "tcset");
   return 0;
 }
 
 void
-killjob(void)
+jobmsg(job *j)
 {
-  if (job_pgid > 0) {
-    kill(-job_pgid, SIGCONT);
-    kill(-job_pgid, SIGTERM);
-    job_pgid = 0;
-  }
-}
-
-job *
-updatejobs(job *c)
-{
-  int wstatus;
-  pid_t pid;
-
-  if (!c)
-    return NULL;
-
-  if (c->state == JRUN) {
-    pid = waitpid(-c->pgid, &wstatus, WNOHANG);
-    switch (pid) {
-      case -1:
-        if (errno == ECHILD)
-          c->state = JDONE;
-        break;
-      case 0:
-        break;
-      default:
-        while ((pid = waitpid(-c->pgid, &wstatus, WNOHANG)) > 0)
-          ;
-        if (pid == -1 && errno == ECHILD)
-          c->state = JDONE;
-        break;
-    }
-  }
-  c->next = updatejobs(c->next);
-  return c;
-}
-
-void
-notify_done(void)
-{
-  job *j, *cur, *sec;
-  j = job_list;
+  job *cur, *sec;
   char c;
   cur = findjob(NULL);
   sec = findjob("%-");
-
-  while (j) {
     if (cur == j)
       c = '+';
     else if (sec == j)
       c = '-';
     else
       c = ' ';
-    if (j->state == JDONE) {
-      printf("[%d]%c Done\t\t\t\t\t\t\t\t\t\t\t\t%s\n", j->num, c, j->cmd);
-      j = rmjob(j);
-    } else
-    j = j->next;
-  }
+
+  printf("[%d]%c %-8s\t\t\t\t\t\t\t\t\t\t\t\t%s\n", j->num, c, jstates[j->state], j->cmd);
 }
 
-// void
-// cleanjobs(void)
-// {
-//   job *j;
-//   j = job_list;
-//   
-//   while (j) {
-//     if (j->state == JDONE)
-//     else
-//       j = j->next;
-//   }
-// }
+void
+jobnotify(void)
+{
+job *j;
+  sigset_t old;
+  job_lock(&old);
+  killjob();
+  for (j = job_list; j; ) {
+    if ((j->flags & JCHANGED) && !(j->flags & JFG)) {
+      jobmsg(j);
+      j->flags &= ~JCHANGED;
+      if (j->state == JDONE)
+        j = rmjob(j);
+      else
+        j = j->next;
+    } else {
+      j = j->next;
+    }
+  }
+  job_unlock(&old);
+}
 
 job *
 findjob(const char *s)
@@ -164,14 +176,172 @@ findjob(const char *s)
 }
 
 void
-chld_setpgid(pid_t pgid)
+child_setup_fg(pid_t pgid)
 {
+  signal(SIGINT, SIG_DFL);
+  signal(SIGQUIT, SIG_DFL);
+  signal(SIGTSTP, SIG_DFL);
+  signal(SIGTTIN, SIG_DFL);
+  signal(SIGTTOU, SIG_DFL);
+  if (mflag)
+    if (setpgid(0, pgid) < 0)
+      warn("simpsh: setpgid");
   sigset_t set;
-
-  if (setpgid(0, pgid) < 0 ) {
-    warn("simpsh: setpgid");
-  }
   sigemptyset(&set);
   sigaddset(&set, SIGINT);
   sigprocmask(SIG_UNBLOCK, &set, NULL);
 }
+
+void
+child_setup_bg(void)
+{
+  signal(SIGINT, SIG_IGN);
+  signal(SIGQUIT, SIG_IGN);
+  signal(SIGTSTP, SIG_DFL);
+  signal(SIGTTIN, SIG_DFL);
+  signal(SIGTTOU, SIG_DFL);
+  if (mflag)
+    if (setpgid(0, 0) < 0)
+      warn("simpsh: setpgid");
+  close(0);
+  open("/dev/null", O_RDONLY);
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGINT);
+  sigprocmask(SIG_UNBLOCK, &set, NULL);
+}
+
+
+// TODO: check interative mode or not
+int
+bgcmd(char **argv)
+{
+  size_t argc;
+  job *j;
+  sigset_t old;
+
+  argc = array_len(argv);
+  if (argc < 2) {
+    job_lock(&old);
+    j = findjob(NULL);
+    if (!j) {
+      shwarnx(argv[0], "no current job"); /*NOLINT*/
+      return 1;
+    }
+    if (kill(-j->pgid, SIGCONT) < 0) {
+      job_unlock(&old);
+      err(1, "kill");
+    }
+    j->state = JRUN;
+    j->flags |= JCHANGED;
+    job_unlock(&old);
+    jobmsg(j);
+    return 0;
+  } else {
+    for (size_t i = 1; i < argc; i++) {
+      job_lock(&old);
+      j = findjob(argv[i]);
+      if (!j) {
+        shwarn_arg(argv[0], argv[i], "no such job"); /*NOLINT*/
+        return 1;
+      }
+      if (j->state != JSTP) {
+        shwarn_arg(argv[0], argv[i], "job not stopped"); /*NOLINT*/
+        return 1;
+      }
+      if (kill(-j->pgid, SIGCONT) < 0) {
+        job_unlock(&old);
+        err(1, "kill");
+      }
+      j->state = JRUN;
+      j->flags |= JCHANGED;
+      job_unlock(&old);
+      jobmsg(j);
+    }
+  }
+  return 0;
+}
+
+int
+fgcmd(char **argv)
+{
+  size_t argc;
+  job *j;
+  sigset_t old;
+
+  argc = array_len(argv);
+  if (argc < 2) {
+    job_lock(&old);
+    j = findjob(NULL);
+    if (!j) {
+      shwarnx(argv[0], "no current job"); /*NOLINT*/
+      job_unlock(&old);
+      return 1;
+    }
+  } else {
+    job_lock(&old);
+    j = findjob(argv[argc - 1]);
+    if (!j) {
+      shwarn_arg(argv[0], argv[argc - 1], "no such job"); /*NOLINT*/
+      job_unlock(&old);
+      return 1;
+    }
+  }
+
+  if (j->state == JDONE) {
+    shwarn_arg(argv[0], argv[argc - 1], "job already completed"); /*NOLINT*/
+    job_unlock(&old);
+    return 1;
+  }
+
+  if (j->state == JSTP) {
+    if (kill(-j->pgid, SIGCONT) != 0) {
+      job_unlock(&old);
+      err(1, "kill");
+    }
+    j->state = JRUN;
+  }
+  j->flags |= JFG;
+  if (j->flags & JSAVEDTTY)
+    tcsetattr(STDIN_FILENO, TCSADRAIN, &j->ttystate);
+  startjob(j->pgid);
+  job_unlock(&old);
+  return fgwait(j);
+}
+
+int
+jobscmd(char **argv)
+{
+  job *j;
+  size_t argc;
+  sigset_t old;
+
+  j = job_list;
+  argc = array_len(argv);
+
+  job_lock(&old);
+  if (argc < 2) {
+    for (job *t = j; t;) {
+      jobmsg(t);
+      if (t->state == JDONE)
+        t = rmjob(t);
+      else
+        t = t->next;
+    }
+  } else {
+    for (size_t i = 1; i < argc; i++) {
+      job *t;
+      if ((t = findjob(argv[i]))) {
+        jobmsg(t);
+        if (t->state == JDONE)
+          rmjob(t);
+      } else {
+        shwarn_arg(argv[0], argv[i], "no such job"); /*NOLINT*/
+      }
+    }
+  }
+
+  job_unlock(&old);
+  return 0;
+}
+

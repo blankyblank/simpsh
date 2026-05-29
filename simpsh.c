@@ -1,5 +1,7 @@
 /* simpsh.c - functions for running the shell */
+
 #define _POSIX_C_SOURCE 200809L
+#include <err.h>
 #include <linux/limits.h>
 #include <setjmp.h>
 #include <stdio.h>
@@ -10,24 +12,47 @@
 #ifdef READLINE
 #include <readline/history.h>
 #include <readline/readline.h>
+#else
+#include <errno.h>
 #endif /* ifdef READLINE */
 
-#include "env.h"
+#include "parse.h"
 #include "exec.h"
-#include "input.h"
+#include "expand.h"
 #include "job.h"
-#include "lex.h"
 #include "main.h"
-#include "malloc.h"
-#include "sig.h"
 #include "simpsh.h"
+#include "var.h"
 
-
+static int inp;
 #ifdef READLINE
-/** make directory path */
-static int pmkdir(char *path);
+#define DIRPERMS S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH
+static int pmkdir(char *);
+static inline void handle_interrupt(stmark);
+static int bg_notify(void);
 #endif /* ifdef READLINE */
-static char *expand_ps1(char *);
+
+
+
+static inline void
+handle_interrupt(stmark base)
+{
+  if (intsig)
+    intsig = 0;
+#ifdef READLINE
+  rl_free_line_state();
+  rl_cleanup_after_signal();
+  rl_set_signals();
+#endif /* ifdef READLINE */
+  killjob();
+  tcsetpgrp(STDIN_FILENO, sh_pgid);
+  if (inp) {
+    inp = 0;
+    popinput();
+  }
+  stack_restore(base);
+  putchar('\n');
+}
 
 void
 getbuildinfo(void) {
@@ -37,70 +62,6 @@ getbuildinfo(void) {
          sh_argv0, __DATE__, __TIME__, __STDC_ISO_10646__);
 }
 
-/** take in ps1 char * to do variable expansion for prompt */
-static char *
-expand_ps1(char *p)
-{
-  size_t i, end, varlen, cbrace, flen;
-  char *s, *expanded;
-  char f[4096], vcpy[256];
-
-  if (!p)
-    return NULL;
-
-  varlen = 0;
-  flen = 0;
-  i = 0;
-  while (p[i]) {
-    if (p[i] == '$') {
-      if (p[i + 1] == '$' || p[i + 1] == '?') {
-        varlen = 2;
-        vcpy[0] = p[i];
-        vcpy[1] = p[i + 1];
-        vcpy[2] = '\0';
-      } else if (p[i + 1] == '{') {
-        cbrace = i + 2;
-        while (p[cbrace] && p[cbrace] == '}') {
-          cbrace++;
-          if (!p[cbrace]) {
-            f[flen++] = p[i++];
-            continue;
-          }
-          varlen = cbrace - i + 1;
-          memcpy(vcpy, p + i, varlen);
-          vcpy[varlen] = '\0';
-        }
-      } else if (isalnum_(p[i + 1])) {
-        varlen = i + 1;
-        while (isalnum_(p[varlen]))
-          varlen++;
-        varlen -= i;
-        memcpy(vcpy, p + i, varlen);
-        vcpy[varlen] = '\0';
-      } else {
-        if (p[i + 1] == ' ' || p[i + 1] == '\t' || p[i + 1] == '\0') {
-          f[flen++] = lstatus == 0 ? '$' : 'X';
-          i++;
-          continue;
-        }
-        f[flen++] = p[i++];
-        continue;
-      }
-      if ((expanded = exp_var(vcpy, 0, &end))) {
-        for (s = expanded; *s; s++)
-          f[flen++] = *s;
-      }
-      i += varlen;
-    } else {
-      f[flen++] = p[i++];
-    }
-  }
-  f[flen] = '\0';
-  s = st_alloc(flen + 1);
-  memcpy(s, f, flen + 1);
-  return s;
-}
-
 void
 simpsh_run(void)
 {
@@ -108,7 +69,7 @@ simpsh_run(void)
     cmd_tree *c;
     stmark mark;
 
-    if (last_tok.type == TNL)   // ← NEW: consume trailing newline
+    if (last_tok.type == TNL)
       last_tok = SHTOK(TNONE);  // from previous command
     
     mark = stack_mark();
@@ -118,106 +79,166 @@ simpsh_run(void)
       stack_restore(mark);
       break;
     }
-    run_commands(c);
+    if (!nflag)
+      run_commands(c);
     stack_restore(mark);
+    if (neednotify) {
+      neednotify = 0;
+      jobnotify();
+    }
   }
+}
+
+/* Check if accumulated input needs continuation
+ * Returns: 1 = needs more, 0 = complete, -1 = error (unclosed quotes) */
+static int
+need_more(char *lines, size_t lineslen)
+{
+  sh_tok tmp, lastt;
+  stmark m;
+  int needs_more = 0;
+  size_t i;
+  
+  notclosed = 0;
+  setinputstrn(lines, (int)lineslen);
+  {
+    tmp = SHTOK(TNONE);
+    m = stack_mark();
+    do {
+      lastt = tmp;
+      chkwd |= CHKNL;
+      tmp = tokenize();
+    } while (tmp.type != TEOF);
+    
+    if (!notclosed && (lastt.type == TAND || lastt.type == TOR || lastt.type == TPIPE))
+      needs_more = 1;
+    else if (notclosed)
+      needs_more = 1;
+      
+    stack_restore(m);
+  }
+  popinput();
+  
+  /* Check for trailing backslash (e.g., "echo hello \") */
+  if (!needs_more && lineslen >= 2) {
+    i = lineslen - 2;  /* Position of character before \n we added */
+    /* Skip trailing whitespace */
+    while (i > 0 && (lines[i] == ' ' || lines[i] == '\t'))
+      i--;
+    /* Check for backslash that's not escaped (not preceded by another backslash) */
+    if (i > 0 && lines[i] == '\\' && lines[i-1] != '\\')
+      needs_more = 1;
+  }
+  
+  return needs_more;
+}
+
+/* Read complete command from user, including continuations
+ * Returns: 1 = got command (*cmd set), 0 = EOF, -1 = error (continuation EOF) */
+static int
+read_cmd(char **cmd, size_t *len)
+{
+  char *line, *lines, *new, *ps1;
+  size_t n, lineslen;
+  stmark mark;
+  
+  ps1 = expand_ps1(getvar("PS1"));
+  line = lineread(ps1 ? ps1 : " $ ");
+  if (!line)
+    return 0;
+  if (vflag) {
+    fputs(line, stderr);
+    fputc('\n', stderr);
+  }
+
+  n = strlen(line);
+  lines = st_alloc(n + 2);
+  memcpy(lines, line, n);
+  lines[n] = '\n';
+  lines[n + 1] = '\0';
+  lineslen = n + 1;
+  free(line);
+  
+  mark = stack_mark();
+  while (need_more(lines, lineslen)) {
+    stack_restore(mark);
+    
+    line = lineread("> ");
+    if (!line)
+      return -1;
+    if (vflag) {
+      fputs(line, stderr);
+      fputc('\n', stderr);
+    }
+
+    n = strlen(line);
+    new = st_alloc(lineslen + n + 2);
+    memcpy(new, lines, lineslen);
+    memcpy(new + lineslen, line, n);
+    new[lineslen + n] = '\n';
+    new[lineslen + n + 1] = '\0';
+    free(line);
+    lines = new;
+    lineslen += n + 1;
+    if (!lines)
+      return -1;
+  }
+  
+  *cmd = lines;
+  *len = lineslen;
+  return 1;
 }
 
 int
 sh_interactive(void)
 {
+  char *lines;
+  stmark mark, base;
+  size_t lineslen;
+  int r;
+
 #ifdef READLINE
   init_history();
   FILE *tty = fopen("/dev/tty", "w+");
   if (tty) {
-    setbuf(tty, NULL);  // unbuffered for immediate echo
+    setbuf(tty, NULL); /* unbuffered */
     rl_outstream = tty;
+    rl_event_hook = bg_notify;
   }
-#endif            /* ifdef READLINE */
-
-  char *line, *acc, *new;
-  stmark mark, accend, m, base;
-  size_t n, acclen;
-  int inp;
-  sh_tok tmp, lastt;
-
-  /* set up signal handler to handle ctrl-c */
-  inp = 0;
-  init_sig();
-  init_job();
+#endif /* ifdef READLINE */
 
   for (;;) {
     base = stack_mark();
-    if (sigsetjmp(shenv, 1)) {
-      killjob();
-      tcsetpgrp(STDIN_FILENO, sh_pgid);
-      if (inp) {
-        inp = 0;
-        popinput();
-      }
-      stack_restore(base);
-      putchar('\n');
+    if (sigsetjmp(linejmp, 1)) {
+      handle_interrupt(base);
+      continue;
     }
-    updatejobs(job_list);
-    notify_done();
-    shps1 = expand_ps1(getvar("PS1"));
+    ttyrestore();
+    if (neednotify || !bflag)
+      jobnotify();
+    neednotify = 0;
     mark = stack_mark();
-    line = lineread(shps1 ? shps1 : " $ ");
-    if (!line) {
+    
+    r = read_cmd(&lines, &lineslen);
+    if (r == 0) {
+      if (feof(stdin)) {
+        if (Iflag && iflag) {
+          clearerr(stdin);
+          if ((write(STDOUT_FILENO, "\nUse \"exit\" to leave the shell \n", 33)) < 0)
+            err(1, "write");
+          continue;
+        }
+        break;
+      }
+      clearerr(stdin);
       stack_restore(mark);
-      break;
+      continue;
+    } else if (r < 0) {
+      stack_restore(mark);
+      return 1;
     }
-    n = strlen(line);
-    acc = st_alloc(n + 2);
-    memcpy(acc, line, n);
-    acc[n] = '\n';
-    acc[n + 1] = '\0';
-    acclen = n + 1;
-    free(line);
 
-    for (;;) {
-      accend = stack_mark(); /* bookmark after acc content */
-      notclosed = 0;
-      setinputstrn(acc, (int)acclen);
-      {
-        tmp = SHTOK(TNONE);
-        m = stack_mark();
-        do {
-          lastt = tmp;
-          if (lastt.type == TAND || lastt.type == TOR || lastt.type == TPIPE) {
-          }
-          chkwd |= CHKNL;
-          tmp = tokenize();
-        } while (tmp.type != TEOF);
-        if (!notclosed &&
-            (lastt.type == TAND || lastt.type == TOR || lastt.type == TPIPE))
-          notclosed = 1;
-        stack_restore(m);
-      }
-      popinput();
-      if (!notclosed)
-        break;
-
-      stack_restore(accend); /* stnext is now right at end of acc content */
-      line = lineread("> ");
-      if (!line) {
-        stack_restore(mark);
-        //check if this is the right place to return error
-        return 1;
-      }
-      n = strlen(line); /* append: new larger buffer, copy old + new */
-      new = st_alloc(acclen + n + 2);
-      memcpy(new, acc, acclen);
-      memcpy(new + acclen, line, n);
-      new[acclen + n] = '\n';
-      new[acclen + n + 1] = '\0';
-      free(line);
-      acc = new;
-      acclen += n + 1;
-      if (!acc)
-        break;
-    }
-    setinputstrn(acc, (int)acclen);
+    setinputstrn(lines, (int)lineslen);
     inp = 1;
     simpsh_run();
     inp = 0;
@@ -227,16 +248,31 @@ sh_interactive(void)
     popinput();
     stack_restore(mark);
   }
-  //check if this is the right place to return lstatus
   return lstatus;
 }
 
 #ifdef READLINE
-static void
-readline_cleanup(void)
+static int
+bg_notify(void)
 {
-  clear_history();
-  rl_free_line_state();
+  if (neednotify) {
+    neednotify = 0;
+    jobnotify();
+    rl_on_new_line_with_prompt();
+    rl_redisplay();
+  }
+  return 0;
+}
+
+/** read line from interactive shell */
+char *
+lineread(char *prompt)
+{
+    char *line;
+    line = readline(prompt);
+    if (line && *line)
+        add_history(line);
+    return line;
 }
 
 /** initialize history */
@@ -259,53 +295,55 @@ init_history(void)
     if (read_history_range(histfile, 0, -1) != 0)
       perror("Failed to read .simpsh_history");
   }
-  atexit(readline_cleanup);
-}
-
-/** read line from interactive shell */
-char *
-lineread(char *prompt)
-{
-  char *line = readline(prompt);
-  if (line && *line)
-    add_history(line);
-
-  return line;
 }
 
 /**  created directories and their parents if they don't exist  */
 static int
 pmkdir(char *path)
 {
-  char *dir; /* clang-format off */
+  char *dir;
 
-  dir = strchr(path +1, '/');
+  dir = strchr(path + 1, '/');
   while (dir) {
     *dir = 0;
-    if (access(path, F_OK) < 0 && mkdir(path, S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH) < 0)
+    if (access(path, F_OK) < 0 && mkdir(path, DIRPERMS) < 0)
       return 0;
     *dir = '/';
-    dir = strchr(dir+1, '/');
+    dir = strchr(dir + 1, '/');
   }
-  if (mkdir(path, S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH) < 0)
+  if (mkdir(path, DIRPERMS) < 0)
     return 0;
   return 1;
-  /* clang-format on */
 }
-
 #else
+
 /** lineread with no readline, for testing */
 char *
 lineread(char *prompt)
 {
   char buf[4096];
   fputs(prompt, stdout);
-  if (!fgets(buf, sizeof(buf), stdin))
-    return NULL;
+  fflush(stdout);
+  for (;;) {
+    if (!fgets(buf, sizeof(buf), stdin)) {
+      if (errno == EINTR) {
+        clearerr(stdin);
+        if (neednotify) {
+          neednotify = 0;
+          jobnotify();
+          fputs(prompt, stdout);
+          fflush(stdout);
+        }
+        continue;
+      }
+      return NULL;
+    }
+    break;
+  }
   size_t len = strlen(buf);
   if (len > 0 && buf[len - 1] == '\n')
     buf[len - 1] = '\0';
-  return s_strdup(buf);
+  return strdup_(buf);
 }
 #endif /* ifdef READLINE */
 
