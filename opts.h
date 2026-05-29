@@ -2,6 +2,7 @@
 #define OPTS_H
 
 #define OPTC 19
+extern int nounseterr;
 
 #define aflag shopts[0]
 #define bflag shopts[1]
@@ -18,11 +19,19 @@
 #define vflag shopts[12]
 #define Vflag shopts[13]
 #define xflag shopts[14]
+#define pipeflag shopts[17]
 
 extern char shopts[OPTC];
 extern const char shoptch[OPTC];
 extern const char *shoptname[OPTC];
+
 extern void init_opts(void);
+extern void freeshargv(void);
+extern int checkopt(char *);
+extern int setcmd(char **);
+
+#define UFLAGMSG(v) fprintf(stderr, "%s: %s: unbound variable\n", sh_argv0, v)
+#define bad_opt(a,b,c) (fprintf(stderr, "%s: %s: bad option %c\n", a,b,c)/*NOLINT*/)
 
 #endif /* OPTS_H */
 
