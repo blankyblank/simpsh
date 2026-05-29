@@ -10,6 +10,7 @@ notes.txt
 simsh.geany
 .gdb_history
 .dir-locals.el
+.zed
 *vterm*
 *.ede
 *.seer
