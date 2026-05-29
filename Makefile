@@ -1,6 +1,6 @@
 CC := gcc
 # cc | gcc | clang
-BUILD       ?= debug
+BUILD       ?= sanitize
 # debug | release | sanitize | valgrind | profile
 BUILD_LINK  ?= dynamic
 # dynamic | static
@@ -8,16 +8,17 @@ READLINE    := y
 # set to anything to enable, unset to disable
 
 # Compiler flags
-CFLAGS  := -D_FORTIFY_SOURCE=3 --std=c99 -I. -Wall -Wextra -pedantic -pipe
+CFLAGS  := --std=c99 -I. -Wall -Wextra -pedantic -pipe
 LDFLAGS :=
 LDLIBS  :=
 
 # Build mode presets
 ifeq ($(BUILD),release)
 	CFLAGS += -march=native -Os -flto
+# -D_FORTIFY_SOURCE=3
 endif
 ifeq ($(BUILD),debug)
-	CFLAGS += -Og -g3
+	CFLAGS += -D_FORTIFY_SOURCE=3 -Og -g3
   ifeq ($(CC),gcc)
   		CFLAGS +=  -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
   		LDFLAGS += -ggdb
