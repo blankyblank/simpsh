@@ -214,6 +214,40 @@ hash_n(const char *s, size_t n, unsigned int buckets) {
   return h % buckets;
 }
 
+/* quote string handling shell escaping */
+static inline char *
+quotestrn(const char *s)
+{
+  size_t c;
+  char *buf, *p;
+
+  c = 3;
+  for (size_t i = 0; s[i]; i++) {
+    if (s[i] == '\'')
+      c += 5;
+    else
+      c++;
+  }
+  buf = st_alloc(c);
+
+  p = buf;
+  *p++ = '\'';
+  for (size_t i = 0; s[i]; i++) {
+    if (s[i] == '\'') {
+      *p++ = '\'';
+      *p++ = '"';
+      *p++ = '\'';
+      *p++ = '"';
+      *p++ = '\'';
+    } else {
+      *p++ = s[i];
+    }
+  }
+  *p++ = '\'';
+  *p++ = '\0';
+  return buf;
+}
+
 /**  free char* array  */
 static inline void
 freeptr(char **args)

@@ -1,12 +1,16 @@
 #define _POSIX_C_SOURCE 200809L
-#include <unistd.h>
-#include <stdlib.h>
-#include <strings.h>
+#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <unistd.h>
 
 #include "main.h"
+#include "malloc.h"
 #include "opts.h"
 #include "utils.h"
+#include "var.h"
 
 int nounseterr = 0;
 
@@ -51,7 +55,8 @@ const char shoptch[OPTC] = {
   'x',
 };
 
-static int setopts(char *arg, int n, char *argv0);
+static int setopts(char *, int, char *);
+static int cmpname(const void *, const void *);
 
 static int
 setopts(char *arg, int n, char *argv0)
@@ -126,6 +131,24 @@ checkopt(char *argv)
 }
 
 void
+listopts(int m)
+{
+  const char *onoff[] = { "off", "on" };
+  if (m) {
+    puts("Current Shell Option Settings");
+    for (size_t i = 0; i < OPTC; i++) {
+      printf("%-12s\t\t\t\t%s\n",shoptname[i], onoff[(int)shopts[i]]);
+    }
+  } else {
+    for (size_t i = 0; i < OPTC; i++) {
+      char s;
+      s = (shopts[i]) ? '-' : '+';
+      printf("set %co %s\n", s, shoptname[i]);
+    }
+  }
+}
+
+void
 init_opts(void)
 {
   for (int i = 0; i < OPTC; i++)
@@ -148,6 +171,26 @@ freeshargv(void)
   alloc_sh_argv = 0;
 }
 
+static int
+cmpname(const void *va, const void *vb)
+{
+  const char *a, *b;
+  a = *(const char **)va;
+  b = *(const char **)vb;
+  while (*a && *a != '=' && *b && *b != '=') {
+    if (*a != *b)
+      return (unsigned char)*a - (unsigned char)*b;
+    ++a;
+    ++b;
+  }
+  if (*a == '\0' || *a == '=') {
+    if (*b == '\0' || *b == '=')
+      return 0;
+    return -1;
+  }
+  return 1;
+}
+
 int
 setcmd(char **argv)
 {
@@ -155,7 +198,37 @@ setcmd(char **argv)
   argc = array_len(argv);
 
   if (argc < 2) {
-    /* XXX: print all variables */
+    char **enva;
+    shvar *var;
+    size_t c, f;
+
+    c = 0;
+    for (size_t i = 0; i < VAR_BUCKETS; i++) {
+      var = var_tab[i];
+      while (var) {
+        c++;
+        var = var->next;
+      }
+    }
+    if (c == 0)
+      return 0;
+    enva = st_alloc((c + 1) * sizeof(char *));
+    f = 0;
+    for (size_t i = 0; i < VAR_BUCKETS; i++) {
+      var = var_tab[i];
+      while (var) {
+        enva[f++] = var->var;
+        var = var->next;
+      }
+    }
+    enva[c] = NULL;
+    qsort(enva, c, sizeof(char *), cmpname);
+
+    for (size_t i = 0; i < c; i++) {
+      char *n, *v;
+      st_read_assn(enva[i], &n, &v);
+      printf("%s=%s\n", n, quotestrn(v));
+    }
     return 0;
   }
   char *argv0, **pos;
@@ -201,8 +274,10 @@ setcmd(char **argv)
         o = arg + 2;
       else if (++i < argc)
         o = argv[i];
-      else
+      else {
+        listopts(minus);
         continue;
+      }
       idx = checkopt(o);
       if (idx < 0)
         return 1;
