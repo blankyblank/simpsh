@@ -94,7 +94,7 @@ OBJ 	 	   := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
 TARGET		   := simpsh
 CFLAGS		   := $(CFLAGS)
 
-.PHONY: all clean test install uninstall
+.PHONY: all clean test install uninstall analyze
 
 all: $(TARGET)
 
@@ -118,5 +118,7 @@ clean:
 	rm -f simpsh obj/*.o
 analyze:
 	scan-build --use-cc=$(CC) -enable-checker core -enable-checker unix -enable-checker security -analyze-headers -o reports make clean all
+# examine:
+# 	gcc -O2 -g -fdump-tree-optimized $(SRC)
 test:
 	cd tests && ./runtests.sh
