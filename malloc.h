@@ -1,8 +1,6 @@
 #ifndef MALLOC_H
 #define MALLOC_H
 
-#define _POSIX_C_SOURCE 200809L
-
 #include <stddef.h>
 #include <string.h>
 

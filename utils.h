@@ -179,12 +179,14 @@ st_read_assn(const char *assn, char **name, char **value)
   size_t l;
   eq = (char *)strchr(assn, '=');
   if (!eq) {
-    *name = st_strdup(assn);
+    /* st_strdup expanded */
+    *name = st_strndup(assn, strlen(assn));
     *value = NULL;
   } else {
     l = eq - assn;
     *name = st_strndup(assn, l);
-    *value = st_strdup(eq + 1);
+    /* st_strdup expanded */
+    *value = st_strndup(eq + 1, strlen(eq + 1));
   }
 }
 

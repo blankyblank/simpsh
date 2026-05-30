@@ -2,10 +2,12 @@
 #define _POSIX_C_SOURCE 200809L
 #include <string.h>
 
+#include "malloc.h"
 #include "parse.h"
 #include "input.h"
 #include "lex.h"
 #include "opts.h"
+#include "utils.h"
 
 static redir *heredoc_head;
 static redir **heredoc_tail = &heredoc_head;

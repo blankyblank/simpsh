@@ -6,6 +6,7 @@
 
 #include "arg.h"
 #include "env.h"
+#include "exec.h"
 #include "path.h"
 #include "main.h"
 #include "malloc.h"

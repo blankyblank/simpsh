@@ -75,27 +75,37 @@ killjob(void)
   sigprocmask(SIG_BLOCK, &sigchldmask, &old);
 
   for (j = job_list; j; j = j->next) {
-    if (j->state != JRUN)
+    int oldstate;
+
+    if (j->state == JDONE)
       continue;
-    while ((pid = waitpid(-j->pgid, &wstatus, WNOHANG | WUNTRACED)) > 0) {
+    oldstate = j->state;
+    while ((pid = waitpid(-j->pgid, &wstatus, WNOHANG | WUNTRACED | WCONTINUED)) > 0) {
       if (pid == j->status_pid)
         j->wstatus = wstatus;
       else if (pipeflag)
         j->lwstatus = wstatus;
-      if (WIFSTOPPED(wstatus))
+
+      if (WIFSTOPPED(wstatus)) {
         j->state = JSTP;
-      else
+      } else if (WIFCONTINUED(wstatus)) {
+        if (j->state == JSTP)
+          j->state = JRUN;
+      } else {
         j->nlive--;
+      }
     }
+
     if (pipeflag && j->nlive <= 0 && j->state == JRUN) {
       int rstatus, cmb;
       rstatus = WIFEXITED(j->wstatus) ? WEXITSTATUS(j->wstatus) : 1;
       cmb = rstatus ? rstatus : (WIFEXITED(j->lwstatus) ? WEXITSTATUS(j->lwstatus) : 1);
       j->wstatus = cmb << 8;
     }
+
     if (j->nlive <= 0 && j->state == JRUN)
       j->state = JDONE;
-    if (j->state != JRUN)
+    if (j->state != oldstate)
       j->flags |= JCHANGED;
   }
   sigprocmask(SIG_SETMASK, &old, NULL);
@@ -175,6 +185,7 @@ findjob(const char *s)
   return NULL;
 }
 
+/* set up signal handlers for foreground command */
 void
 child_setup_fg(pid_t pgid)
 {

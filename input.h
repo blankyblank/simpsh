@@ -2,6 +2,7 @@
 #define INPUT_H
 
 #include <stddef.h>
+#include <stdio.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include "lex.h"

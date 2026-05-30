@@ -14,6 +14,86 @@
 alias *alias_tab[ENV_BUCKETS];
 shfunc *func_tab[ENV_BUCKETS];
 static cmd_tree *tree_dup(cmd_tree *);
+static wf * wfdup(wf *s);
+
+static void
+free_wf(wf *f)
+{
+  if (!f)
+    return;
+  free(f->word);
+  free_wf(f->next);
+  free(f);
+}
+
+static inline void
+free_redir(redir *r)
+{
+  while (r) {
+    redir *tmp;
+    tmp = r;
+    r = r->next;
+    free_wf(tmp->name);
+    free(tmp);
+  }
+  return;
+}
+
+static inline void
+free_tree(cmd_tree *n)
+{
+  if (!n)
+    return;
+
+  switch (n->type) {
+    case OP:
+      free_tree(n->left);
+      free_tree(n->right);
+      free(n);
+      break;
+    case SUBSHELL:
+      free_tree(n->left);
+      free(n);
+      break;
+    case FUNC:
+      free_wf(CARGS(n)[0]);
+      free(CARGS(n));
+      free_tree(n->left);
+      free(n);
+      break;
+    case REDIR:
+      free_redir(CREDR(n));
+      free_tree(n->left);
+      free(n);
+      break;
+    case CMD:
+      for (size_t i = 0; CARGS(n)[i]; i++)
+        free_wf(CARGS(n)[i]);
+      free(CARGS(n));
+      if (CVARS(n)) {
+        for (size_t i = 0; CVARS(n)[i]; i++)
+          free(CVARS(n)[i]);
+        free(CVARS(n));
+      }
+      free(n);
+      break;
+  }
+}
+
+static wf *
+wfdup(wf *s)
+{
+  wf *n;
+
+  if (!s)
+    return NULL;
+  n = malloc(sizeof(wf));
+  n->word = strndup_(s->word, s->len);
+  n->len = s->len;
+  n->qs = s->qs;
+  n->next = wfdup(s->next);
+  return n;
+}
 
 static inline redir *
 redirdup(redir *s)
@@ -269,4 +349,3 @@ unaliascmd(char **argv)
 
   return 0;
 }
-
