@@ -1,3 +1,4 @@
+#include <stddef.h>
 #define _POSIX_C_SOURCE 200809L
 #include <string.h>
 #include <stdlib.h>
@@ -5,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "arg.h"
 #include "expand.h"
 #include "path.h"
 #include "main.h"
@@ -156,4 +158,49 @@ getpath(char *file)
   return fullpath;
 }
 
+int
+hashcmd(char **argv)
+{
+  size_t argc;
+  int flags;
+  char *bargv0;
+
+  argc = array_len(argv);
+  bargv0 = argv[0];
+  flags = 0;
+
+  ARGBEGIN
+  {
+    case 'r':
+      flags |= FLAG_r;
+      break;
+    default:
+      bad_opt(sh_argv0, argv0, ARGC());
+      return 1;
+  }
+  ARGEND
+
+  if (flags & FLAG_r) {
+    rmchash(NULL);
+    return 0;
+  } else if (!argc) {
+    for (size_t i = 0; i < chashn; i++)
+      puts(chash[i].path);
+    return 0;
+  } else {
+    char *path, *fpath;
+    if (!(path = getvar("PATH")))
+      path = defpath;
+    for (size_t i = 0; i < argc; i++) {
+      if (!(fpath = chkpath(path, argv[i], 0))) {
+        shwarn_arg(bargv0, argv[i], "not found");
+        return 1;
+      }
+      setchash(argv[i], fpath);
+    }
+    return 0;
+  }
+
+  return 1;
+}
 

@@ -156,6 +156,7 @@ init_opts(void)
 
   iflag = isatty(STDIN_FILENO);
   mflag = iflag;
+  hflag = iflag;
 }
 
 void

@@ -22,6 +22,7 @@
 #define FLAG_L (1 << 3)
 #define FLAG_P (1 << 4)
 #define FLAG_V (1 << 5)
+#define FLAG_r (1 << 6)
 
 #define usage() fprintf(stderr, "Usage: simpsh [-abCefhiImnosvVx] [-o longopt] [-c 'cmd']\n")
 
