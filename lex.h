@@ -4,7 +4,6 @@
 
 #include <stdlib.h>
 #include <stddef.h>
-#include "utils.h"
 
 enum chars {
   C_WORD,
@@ -25,6 +24,7 @@ enum chars {
   C_RB,
   C_LT,
   C_GT,
+  C_BTICK,
 };
 
 typedef enum {
@@ -43,12 +43,15 @@ typedef enum {
   TRB,
   TBKGRND,
   TREDIR,
+  TCMDSUB,
 } token;
 
 typedef enum {
   QNONE,
   QDOUBLE,
   QSINGLE,
+  QCMDSUB,
+  QCMDSUB_DQ,
 } quoted;
 
 /**
@@ -74,7 +77,6 @@ typedef struct {
 } sh_tok;
 
 extern int alias_depth;
-extern int func_depth;
 extern int notclosed;
 extern sh_tok last_tok;
 extern int chkwd;
@@ -85,34 +87,19 @@ extern int chkwd;
 #define CHKALIAS (1 << 0)
 #define CHKNL (1 << 1)
 
-#define RDIN 1
-#define RDOUT 2
-#define RDAPP 3
-#define RDDUPO 4
-#define RDDUPI 5
-#define RDRW 6
-#define RDCLOB 7
-#define RDHERE 8
-#define RDHERE_D 9
+#define RDIN (1 << 0)
+#define RDOUT (1 << 1)
+#define RDAPP (1 << 2)
+#define RDDUPO (1 << 3)
+#define RDDUPI (1 << 4)
+#define RDRW (1 << 5)
+#define RDCLOB (1 << 6)
+#define RDHERE (1 << 7)
+#define RDHERE_D (1 << 8)
 
 extern sh_tok tokenize(void);
 extern void pushstring(char *, size_t, int);
 extern void popstring(void);
 extern char *join_wf(wf *wordf);
-
-static inline wf *
-wfdup(wf *s)
-{
-  wf *n;
-
-  if (!s)
-    return NULL;
-  n = malloc(sizeof(wf));
-  n->word = strndup_(s->word, s->len);
-  n->len = s->len;
-  n->qs = s->qs;
-  n->next = wfdup(s->next);
-  return n;
-}
 
 #endif /* LEX_H */

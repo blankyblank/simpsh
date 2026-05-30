@@ -1,19 +1,31 @@
 /* exec.c - functions surrounding running external programs or builtins */
 #define _POSIX_C_SOURCE 200809L
 #include <err.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "builtins.h"
 #include "env.h"
 #include "exec.h"
 #include "expand.h"
-#include "path.h"
+#include "job.h"
 #include "main.h"
+#include "malloc.h"
+#include "parse.h"
+#include "path.h"
 #include "sig.h"
+#include "utils.h"
 #include "var.h"
 
 #define MAX_TMP_VARS 40
 #define builtin_launch(i, a) ((*builtin_funcs[i])(a))
+
+int func_depth = 0;
 
 typedef struct fdlist {
   int orig;
@@ -37,10 +49,18 @@ static int run_cmd(const cmd_tree *);
 static inline int
 restore_fd(fdlist *sfd, size_t sfdc)
 {
-  for (size_t i = sfdc; i-- > 0;)
-    DUPFD(sfd[i].saved, sfd[i].orig)
-  for (size_t i = sfdc; i-- > 0;)
-    CLOSEFD(sfd[i].saved)
+  for (size_t i = sfdc; i-- > 0;) {
+    if (dup2(sfd[i].saved, sfd[i].orig) < 0) {
+      perror("dup2");
+      return 1;
+    }
+  }
+  for (size_t i = sfdc; i-- > 0;) {
+    if (close(sfd[i].saved) < 0) {
+      perror("close");
+      return 1;
+    }
+  }
   return 0;
 }
 
@@ -287,6 +307,106 @@ run_subsh(const cmd_tree *n)
         exit(status);
       return status;
   }
+}
+
+char *
+run_cmdsub(const cmd_tree *n)
+{
+  int wstatus, status, pipefd[2];
+  pid_t pid;
+  sigset_t old;
+  char *buf, *ret;
+  size_t buflen;
+
+  if (!n)
+    return NULL;
+  job_lock(&old);
+  ret = NULL;
+  buf = NULL;
+  pipefd[0] = pipefd[1] = -1;
+  if (pipe(pipefd) < 0) {
+    perror("pipe");
+    job_unlock(&old);
+    goto cleanup;
+  }
+
+  pid = fork();
+  switch (pid) {
+    case -1:
+      job_unlock(&old);
+      warn("fork");
+      goto cleanup;
+    case 0:
+      job_unlock(&old);
+      if (close(pipefd[0]) < 0)
+        perror("close");
+      if (dup2(pipefd[1], STDOUT_FILENO) < 0)
+        warn("dup");
+      if (close(pipefd[1]) < 0)
+        warn("close");
+      child_setup_fg(0);
+      status = run_commands(n);
+      fflush(NULL);
+      _exit(status);
+    default:
+      {
+        size_t cap;
+        int n;
+
+        job_unlock(&old);
+        if (close(pipefd[1]) < 0) {
+          perror("close");
+          goto cleanup;
+        }
+
+        buflen = 0;
+        cap = MINSTACK_S;
+        if (!(buf = malloc(cap)))
+          goto cleanup;
+        for (;;) {
+          if (buflen >= cap) {
+            char *t;
+            if (!(t = realloc(buf, (cap * 2)))) {
+              perror("realloc");
+              goto cleanup;
+            }
+            buf = t;
+            cap *= 2;
+          }
+          n = read(pipefd[0], buf + buflen, cap - buflen);
+          if (n > 0) {
+            buflen += n;
+            continue;
+          } else if (n == 0) {
+            break;
+          } else if (n == -1 && errno == EINTR) {
+            continue;
+          } else if (n == -1 && errno != EINTR) {
+            goto cleanup;
+          }
+        }
+        buf[buflen] = '\0';
+
+        while (buflen > 0 && buf[buflen - 1] == '\n')
+          buflen--;
+        buf[buflen] = '\0';
+
+        if (waitpid(pid, &wstatus, 0) > 0)
+          lstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+        else
+          lstatus = 1;
+        ret = st_strndup(buf, buflen);
+      }
+  }
+
+cleanup:
+  if (buf)
+    free(buf);
+  if (pipefd[0] >= 0)
+    close(pipefd[0]);
+  if (pipefd[1] >= 0)
+    close(pipefd[1]);
+  return ret;
 }
 
 static int

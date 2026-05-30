@@ -2,13 +2,19 @@
 #ifndef EXEC_H
 #define EXEC_H
 
+#define _POSIX_C_SOURCE 200809L
+#include <stdio.h>
+#include <sys/wait.h>
+
 #include "job.h"
 #include "parse.h"
 #include "opts.h"
 #include "sig.h"
-#include <sys/wait.h>
+
+extern int func_depth;
 
 extern int run_commands(const cmd_tree *);
+extern char *run_cmdsub(const cmd_tree *);
 
 #define DUPFD(s, d) \
   if (dup2(s, d) < 0) { \

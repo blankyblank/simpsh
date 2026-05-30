@@ -8,6 +8,7 @@
 #include "malloc.h"
 #include "input.h"
 
+/* clang-format off */
 static const unsigned char nchars[256] = {
   [' '] = C_SPACE,
   ['\t'] = C_SPACE,
@@ -16,6 +17,7 @@ static const unsigned char nchars[256] = {
   ['\''] = C_SQUOTE,
   ['"'] = C_DQUOTE,
   ['\\'] = C_BSLASH,
+  ['$'] = C_DOLLAR,
   ['!'] = C_EXCL,
   ['&'] = C_AMP,
   ['|'] = C_PIPE,
@@ -26,11 +28,13 @@ static const unsigned char nchars[256] = {
   ['}'] = C_RB,
   ['<'] = C_LT,
   ['>'] = C_GT,
-  /* everything else is 0 = C_WORD */
+  /* everything else is 0 = C_WORD */ /* clang-format on */
 };
 
 static const unsigned char dqchars[256] = {
-  ['"'] = C_DQUOTE, ['\\'] = C_BSLASH,
+  ['"'] = C_DQUOTE,
+  ['\\'] = C_BSLASH,
+  ['$'] = C_DOLLAR,
 };
 
 static const unsigned char sqchars[256] = {
@@ -38,7 +42,6 @@ static const unsigned char sqchars[256] = {
 };
 
 int alias_depth = 0;
-int func_depth = 0;
 int notclosed = 0;
 sh_tok last_tok = { .type = TNONE };
 int chkwd = 0;
@@ -118,13 +121,13 @@ get_wf(int c)
 
   wf *head;
   wf *tail;
-  // quoted state;
   char n, *w;
-  size_t len;
+  size_t len, cmdsubd;
   const unsigned char *state;
 
   head = NULL;
   tail = NULL;
+  cmdsubd = 0;
   state = nchars;
   len = 0;
   for (;;) {
@@ -158,7 +161,7 @@ get_wf(int c)
             st_putc(n);
             len++;
           } else {
-            st_putc(c);
+            st_putc(n);
             len++;
             shungetc(n);
           }
@@ -175,6 +178,120 @@ get_wf(int c)
           len++;
           break;
         }
+      case C_DOLLAR:
+        n = eatbnl();
+        if (n == '(') {
+          enum {
+            insq = (1 << 0),
+            indq = (1 << 1),
+            esc = (1 << 2),
+          };
+
+          int cstate;
+          size_t cmdlen;
+
+          cmdsubd = 1;
+          cstate = 0;
+          cmdlen = 0;
+          if (len > 0) {
+            w = grab_str(len); /* save frag if nonempty */
+            append_wf(&head, &tail, w, len, state == dqchars ? QDOUBLE : QNONE);
+            len = 0;
+          }
+
+          for (char ch = shgetchar();; ch = shgetchar()) {
+            if (ch == SHEOF) {
+              notclosed = 1;
+              goto done;
+            }
+            switch (cstate) {
+              case insq:
+                if (ch == '\'') {
+                  cstate &= ~insq;
+                  st_putc(ch);
+                  cmdlen++;
+                  continue;
+                } else {
+                  st_putc(ch);
+                  cmdlen++;
+                  continue;
+                }
+              case esc:
+                st_putc(ch);
+                cmdlen++;
+                cstate &= ~esc;
+                continue;
+              case indq:
+                if (ch == '"') {
+                  cstate &= ~indq;
+                  st_putc(ch);
+                  cmdlen++;
+                  continue;
+                } else if (ch == '\\') {
+                  st_putc(ch);
+                  cmdlen++;
+                  cstate |= esc;
+                  continue;
+                } else {
+                  st_putc(ch);
+                  cmdlen++;
+                  continue;
+                }
+            }
+
+            switch (ch) {
+              case '\'':
+                cstate |= insq;
+                st_putc(ch);
+                cmdlen++;
+                break;
+              case '"':
+                st_putc(ch);
+                cmdlen++;
+                cstate |= indq;
+                break;
+              case '\\':
+                cstate |= esc;
+                st_putc(ch);
+                cmdlen++;
+                break;
+              case '(':
+                st_putc(ch);
+                cmdlen++;
+                cmdsubd++;
+                break;
+              case ')':
+                cmdsubd--;
+                if (!cmdsubd) {
+                  goto cmdend;
+                }
+                st_putc(ch);
+                cmdlen++;
+                break;
+              default:
+                st_putc(ch);
+                cmdlen++;
+                break;
+            }
+          }
+cmdend:
+          w = grab_str(cmdlen);
+          append_wf(&head, &tail, w, cmdlen,
+                    (state == dqchars) ? QCMDSUB_DQ : QCMDSUB);
+          c = eatbnl();
+          if (c == SHEOF) {
+            if (state != nchars)
+              notclosed = 1;
+            goto done;
+          }
+          shungetc(c);
+        } else {
+          st_putc(c);
+          len++;
+          shungetc(n);
+        }
+        break;
+
       case C_AMP:
       case C_PIPE:
       case C_SEMI:
@@ -211,8 +328,7 @@ done:
   if (len) {
     w = grab_str(len);
     append_wf(&head, &tail, w, len,
-              state == sqchars ? QSINGLE :
-              state == dqchars ? QDOUBLE : QNONE);
+              state == sqchars ? QSINGLE : state == dqchars ? QDOUBLE : QNONE);
   }
   return head;
 }
@@ -244,6 +360,7 @@ tokenize(void)
         if (c == '\n')
           shungetc(c);
         continue;
+
       case C_NL:
         if (wd & CHKNL)
           continue;
@@ -254,6 +371,7 @@ tokenize(void)
           shungetc(c);
         t = SHTOK(TNL);
         return t;
+
       case C_EXCL:
         return t = SHTOK(TNOT);
       case C_AMP:
@@ -280,6 +398,7 @@ tokenize(void)
         return SHTOK(TLB);
       case C_RB:
         return SHTOK(TRB);
+
       case C_LT:
         n = eatbnl();
         if (n == '<') {
@@ -295,6 +414,7 @@ tokenize(void)
           shungetc(n);
           return SHREDIR(RDIN);
         }
+
       case C_GT:
         n = eatbnl();
         if (n == '>') {
@@ -307,6 +427,7 @@ tokenize(void)
           shungetc(n);
           return SHREDIR(RDOUT);
         }
+
       case C_BSLASH:
         if ((n = shgetchar()) == '\n') {
           cur_shinpt->linenum++;
@@ -315,6 +436,7 @@ tokenize(void)
         if (c != SHEOF)
           shungetc(n);
         break;
+
       default:
         f = get_wf(c);
         if (!f)
@@ -334,8 +456,8 @@ tokenize(void)
           }
         }
         return SHWORD(f);
+
     }
   }
   return SHTOK(TEOF);
 }
-

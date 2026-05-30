@@ -1,14 +1,18 @@
 /* expand.c - variable/string expandsion logic */
+#include "exec.h"
+#include <stddef.h>
 #define _POSIX_C_SOURCE 200809L
 #include <string.h>
 #include <limits.h>
 #include <stdio.h>
 
+#include "expand.h"
+#include "lex.h"
 #include "main.h"
 #include "malloc.h"
 #include "opts.h"
+#include "parse.h"
 #include "var.h"
-#include "expand.h"
 
 static char *var_n(const char *, size_t, size_t *);
 static char *varbrace_n(const char *, size_t, size_t *);
@@ -443,6 +447,32 @@ exp_word(wf *wordf)
           }
         }
         break;
+      case QCMDSUB:
+      case QCMDSUB_DQ:
+        {
+          cmd_tree *cmdsub;
+          char *res;
+
+          pushstring(f->word, f->len, 0);
+          last_tok = SHTOK(TNONE);
+          chkwd = 0;
+          notclosed = 0; // XXX: I really feel like this is wrong
+          cmdsub = parse_list(TEOF);
+          if (!cmdsub)
+            fprintf(stderr, "cmdsub was null\n");
+
+          if ((res = run_cmdsub(cmdsub))) {
+            size_t reslen;
+            reslen = strlen(res);
+            if (reslen >= stleft)
+              grow_stack(reslen);
+            memcpy(stnext, res, reslen);
+            stnext += reslen;
+            stleft -= reslen;
+            len += reslen;
+          }
+          break;
+        }
     }
   }
 

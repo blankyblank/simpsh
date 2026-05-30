@@ -56,7 +56,7 @@ struct cmd_tree {
 };
 
 /** build ast tree */
-cmd_tree *parse_list(token s);
+extern cmd_tree *parse_list(token s);
 
 #endif /* PARSE_H */
 
