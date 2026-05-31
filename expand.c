@@ -451,30 +451,29 @@ exp_word(wf *wordf)
       case QCMDSUB_DQ:
         {
           cmd_tree *cmdsub;
-          char *res;
+          int sublen;
+          char *cmdsubpos;
+          size_t savesl;
 
+          savesl = stleft;
+          cmdsubpos = stnext;
           pushstring(f->word, f->len, 0);
           last_tok = SHTOK(TNONE);
           chkwd = 0;
-          notclosed = 0; // XXX: I really feel like this is wrong
+          notclosed = 0;
           cmdsub = parse_list(TEOF);
-          if (!cmdsub)
-            fprintf(stderr, "cmdsub was null\n");
 
-          if ((res = run_cmdsub(cmdsub))) {
-            size_t reslen;
-            reslen = strlen(res);
-            if (reslen >= stleft)
-              grow_stack(reslen);
-            memcpy(stnext, res, reslen);
-            stnext += reslen;
-            stleft -= reslen;
-            len += reslen;
+          stnext = cmdsubpos;
+          stleft = savesl;
+          // len += ((sublen = run_cmdsub(cmdsub)) < 0) ? 0 : sublen;
+          if ((sublen = run_cmdsub(cmdsub)) < 0)
+            return NULL;
+          else {
+            len += sublen;
           }
           break;
         }
     }
   }
-
   return grab_str(len);
 }

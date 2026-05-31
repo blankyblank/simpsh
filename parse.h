@@ -19,6 +19,7 @@ struct redir {
 
 #define CARGS(n)  ((n)->t.cmd.args)
 #define CVARS(n)  ((n)->t.cmd.sh_vars)
+#define CVARC(n)  ((n)->t.cmd.vc)
 #define COPP(n)   ((n)->t.op.op_t)
 #define CREDR(n)    ((n)->t.redir.redirs)
 #define CFUNC(n) ((n)->t.func.name)
@@ -47,7 +48,7 @@ struct cmd_tree {
     REDIR,
   } type;
   union {
-    struct { wf **args; char **sh_vars; } cmd;
+    struct { wf **args; size_t vc; wf **sh_vars; } cmd;
     struct { token op_t; } op;
     struct { redir *redirs;} redir;
     struct { wf *name; } func;

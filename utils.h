@@ -120,6 +120,26 @@ array_len(char **arr)
   return n;
 }
 
+/**  get length of generic array  */
+static inline size_t
+genarray_len(void *arr, size_t type)
+{
+  size_t n = 0;
+  char *cur;
+  cur = (char *)arr;
+
+  for (;;) {
+    void *p;
+    for (size_t i = 0; i < type; i++)
+      ((char *)&p)[i] = cur[i];
+    if (p == NULL)
+      break;
+    n++;
+    current += type;
+  }
+  return n;
+}
+
 /** join char** array into single string */
 static inline char *
 join_strn(char **arr, size_t t)

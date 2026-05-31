@@ -14,7 +14,7 @@ static redir **heredoc_tail = &heredoc_head;
 
 static void parse_heredoc(void);
 static int is_assn(wf *);
-static wf **get_assn(wf **, char ***);
+static int get_assn(wf **, wf ***);
 static cmd_tree *parse_andor(void);
 static cmd_tree *parse_pipe(void);
 static cmd_tree *parse_group(void);
@@ -22,7 +22,7 @@ static cmd_tree *parse_func(void);
 static cmd_tree *parse_cmd(void);
 
 static inline cmd_tree *
-newcmdnode(wf **args, int flags, char **sh_vars)
+newcmdnode(wf **args, int flags, wf **sh_vars, size_t vc)
 {
   cmd_tree *n = st_alloc(sizeof(cmd_tree));
   if (!n)
@@ -30,6 +30,7 @@ newcmdnode(wf **args, int flags, char **sh_vars)
   n->type = CMD;
   CARGS(n) = args;
   CVARS(n) = sh_vars;
+  CVARC(n) = vc;
   n->flags = flags;
   /* cmd tree has no children, and doesn't have an operator in it */
   return n;
@@ -127,37 +128,37 @@ is_assn(wf *cmd)
 }
 
 /** get name and value from NAME=value pair */
-static wf **
-get_assn(wf **args, char ***sh_vars)
+static int
+get_assn(wf **args, wf ***sh_vars)
 {
-  int i, j, k, a_c;
+  int i, j, k, ac;
   *sh_vars = NULL;
 
   if (!args)
-    return NULL;
+    return 0;
 
   for (i = 0; args[i]; i++)
     if (!is_assn(args[i]))
       break;
 
-  a_c = i;
-  if (!a_c) {
+  ac = i;
+  if (!ac) {
     *sh_vars = NULL;
-    return args;
+    return ac;
   }
-  *sh_vars = st_alloc((a_c + 1) * sizeof(char *));
+  *sh_vars = st_alloc((ac + 1) * sizeof(wf *));
   if (!*sh_vars)
-    return NULL;
+    return 0;
 
-  for (j = 0; j < a_c; j++)
-    (*sh_vars)[j] = join_wf(args[j]);
-  (*sh_vars)[a_c] = NULL;
+  for (j = 0; j < ac; j++)
+    (*sh_vars)[j] = args[j];
+  (*sh_vars)[ac] = NULL;
 
-  for (k = a_c; args[k]; k++)
-    args[k - a_c] = args[k];
-  args[k - a_c] = NULL;
+  for (k = ac; args[k]; k++)
+    args[k - ac] = args[k];
+  args[k - ac] = NULL;
 
-  return args;
+  return ac;
 }
 
 __attribute__((hot)) cmd_tree *
@@ -365,8 +366,8 @@ parse_heredoc(void)
 __attribute__((hot)) cmd_tree *
 parse_cmd(void)
 {
-  size_t neg, wc, cap;
-  char **sh_vars;
+  size_t vc, neg, wc, cap;
+  wf **sh_vars;
   cmd_tree *sub, *body, *l;
   redir *redirs, **tail;
   sh_tok t, close;
@@ -472,7 +473,7 @@ parse_cmd(void)
 
   args[wc] = NULL;
   if (!wc && redirs) {
-    l = newcmdnode(NULL, (neg & 1) ? NEG : 0, NULL);
+    l = newcmdnode(NULL, (neg & 1) ? NEG : 0, NULL, 0);
     return newredirnode(l, redirs);
   }
   if (!wc && redirs == NULL)
@@ -491,8 +492,8 @@ parse_cmd(void)
     return NULL;
   }
 
-  args = get_assn(args, &sh_vars);
-  l = newcmdnode(args, (neg & 1) ? NEG : 0, sh_vars);
+  vc = get_assn(args, &sh_vars);
+  l = newcmdnode(args, (neg & 1) ? NEG : 0, sh_vars, vc);
   if (redirs)
     return newredirnode(l, redirs);
   return l;

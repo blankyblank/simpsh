@@ -309,24 +309,25 @@ run_subsh(const cmd_tree *n)
   }
 }
 
-char *
+int
 run_cmdsub(const cmd_tree *n)
 {
-  int wstatus, status, pipefd[2];
+  int wstatus, ret, pipefd[2];
   pid_t pid;
   sigset_t old;
-  char *buf, *ret;
-  size_t buflen;
+  char buf[MINSTACK_S];
+  size_t len;
+
+  ret = 0;
 
   if (!n)
-    return NULL;
+    return -1;
   job_lock(&old);
-  ret = NULL;
-  buf = NULL;
   pipefd[0] = pipefd[1] = -1;
   if (pipe(pipefd) < 0) {
     perror("pipe");
     job_unlock(&old);
+    ret = -1;
     goto cleanup;
   }
 
@@ -335,6 +336,7 @@ run_cmdsub(const cmd_tree *n)
     case -1:
       job_unlock(&old);
       warn("fork");
+      ret = -1;
       goto cleanup;
     case 0:
       job_unlock(&old);
@@ -345,63 +347,56 @@ run_cmdsub(const cmd_tree *n)
       if (close(pipefd[1]) < 0)
         warn("close");
       child_setup_fg(0);
-      status = run_commands(n);
+      lstatus = run_commands(n);
       fflush(NULL);
-      _exit(status);
+      _exit(lstatus);
     default:
       {
-        size_t cap;
         int n;
+        n = len = 0;
 
         job_unlock(&old);
         if (close(pipefd[1]) < 0) {
           perror("close");
+          ret = -1;
           goto cleanup;
         }
 
-        buflen = 0;
-        cap = MINSTACK_S;
-        if (!(buf = malloc(cap)))
-          goto cleanup;
-        for (;;) {
-          if (buflen >= cap) {
-            char *t;
-            if (!(t = realloc(buf, (cap * 2)))) {
-              perror("realloc");
-              goto cleanup;
-            }
-            buf = t;
-            cap *= 2;
-          }
-          n = read(pipefd[0], buf + buflen, cap - buflen);
+        while ((n = read(pipefd[0], buf, sizeof(buf)))) {
           if (n > 0) {
-            buflen += n;
+            if (stleft <= (size_t)n)
+              grow_stack(2048);
+            memcpy(stnext, buf, n);
+            len += n;
+            stnext += n;
+            stleft -= n;
             continue;
           } else if (n == 0) {
             break;
           } else if (n == -1 && errno == EINTR) {
             continue;
           } else if (n == -1 && errno != EINTR) {
+            ret = -1;
             goto cleanup;
           }
         }
-        buf[buflen] = '\0';
 
-        while (buflen > 0 && buf[buflen - 1] == '\n')
-          buflen--;
-        buf[buflen] = '\0';
+        while (len > 0 && *(stnext - 1) == '\n') {
+          stleft++;
+          stnext--;
+          len--;
+        }
+        *stnext = '\0';
+        ret = len;
 
         if (waitpid(pid, &wstatus, 0) > 0)
           lstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
         else
           lstatus = 1;
-        ret = st_strndup(buf, buflen);
       }
   }
 
 cleanup:
-  if (buf)
-    free(buf);
   if (pipefd[0] >= 0)
     close(pipefd[0]);
   if (pipefd[1] >= 0)
@@ -541,12 +536,15 @@ run_cmd(const cmd_tree *n)
     xline = join_strn(final, len);
     printf("%s %s\n", shps4, xline);
   }
+
   if (!final || !final[0]) {
     if (CVARS(n) && CVARS(n)[0]) { /*  if no command only name=value  */
       for (i = 0; CVARS(n)[i]; i++) {
-        char *name, *val;
+        char *name, *val /*, *evar*/;
         shvar_flags flags;
-        st_read_assn(CVARS(n)[i], &name, &val);
+        char *evar;
+        evar = exp_word(CVARS(n)[i]); // XXX:
+        st_read_assn(evar, &name, &val);
         v = findvar(name);
         if (v)
           flags = v->flags;
@@ -565,7 +563,7 @@ run_cmd(const cmd_tree *n)
       tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; CVARS(n)[i]; i++) {
         char *name, *val;
-        st_read_assn(CVARS(n)[i], &name, &val);
+        st_read_assn(exp_word(CVARS(n)[i]), &name, &val);
         tmp[i] = grabvar(name);
         vc++;
         setvar(name, val, 0);
@@ -575,12 +573,13 @@ run_cmd(const cmd_tree *n)
     } else {
       status = run_func(f->body, final);
     }
+
   } else if ((b = getbuiltin(*final)) >= 0) { /* if this is a builtin */
     if (CVARS(n) && CVARS(n)[0]) { /*  handle name=value cmd  */
       tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; CVARS(n)[i]; i++) {
         char *name, *val;
-        st_read_assn(CVARS(n)[i], &name, &val);
+        st_read_assn(exp_word(CVARS(n)[i]), &name, &val);
         tmp[i] = grabvar(name);
         vc++;
         setvar(name, val, 0);
@@ -590,8 +589,19 @@ run_cmd(const cmd_tree *n)
     } else {
       status = builtin_launch(b, final);
     }
+
   } else { /* if this is a external command */
-    env = build_env(CVARS(n));
+    char **evars;
+    if ((vc = CVARC(n))) {
+      evars = st_alloc((vc + 1) * sizeof(char *));
+      for (i = 0; i < vc; i++) {
+        evars[i] = exp_word(CVARS(n)[i]);
+        evars[vc] = NULL;
+      }
+    } else {
+      evars = NULL;
+    }
+    env = build_env(evars);
     if (!env) {
       perror("idk your shit's all fucked up i guess");
       return 1;

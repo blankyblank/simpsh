@@ -72,7 +72,7 @@ free_tree(cmd_tree *n)
       free(CARGS(n));
       if (CVARS(n)) {
         for (size_t i = 0; CVARS(n)[i]; i++)
-          free(CVARS(n)[i]);
+          free_wf(CVARS(n)[i]);
         free(CVARS(n));
       }
       free(n);
@@ -157,7 +157,7 @@ tree_dup(cmd_tree *s)
           cnt++;
         CVARS(n) = malloc((cnt + 1) * sizeof(char *));
         for (size_t i = 0; i < cnt; i++)
-          CVARS(n)[i] = strdup_(CVARS(s)[i]);
+          CVARS(n)[i] = wfdup(CVARS(s)[i]);
         CVARS(n)[cnt] = NULL;
       } else {
         CVARS(n) = NULL;

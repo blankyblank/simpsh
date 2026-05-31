@@ -14,7 +14,7 @@
 extern int func_depth;
 
 extern int run_commands(const cmd_tree *);
-extern char *run_cmdsub(const cmd_tree *);
+extern int run_cmdsub(const cmd_tree *);
 
 #define DUPFD(s, d) \
   if (dup2(s, d) < 0) { \
