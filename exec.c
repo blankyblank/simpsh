@@ -318,8 +318,6 @@ run_cmdsub(const cmd_tree *n)
   char buf[MINSTACK_S];
   size_t len;
 
-  ret = 0;
-
   if (!n)
     return -1;
   job_lock(&old);
@@ -353,7 +351,7 @@ run_cmdsub(const cmd_tree *n)
     default:
       {
         int n;
-        n = len = 0;
+        len = 0;
 
         job_unlock(&old);
         if (close(pipefd[1]) < 0) {
@@ -543,7 +541,7 @@ run_cmd(const cmd_tree *n)
         char *name, *val /*, *evar*/;
         shvar_flags flags;
         char *evar;
-        evar = exp_word(CVARS(n)[i]); // XXX:
+        evar = exp_word(CVARS(n)[i], NULL, NULL);
         st_read_assn(evar, &name, &val);
         v = findvar(name);
         if (v)
@@ -563,7 +561,7 @@ run_cmd(const cmd_tree *n)
       tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; CVARS(n)[i]; i++) {
         char *name, *val;
-        st_read_assn(exp_word(CVARS(n)[i]), &name, &val);
+        st_read_assn(exp_word(CVARS(n)[i], NULL, NULL), &name, &val);
         tmp[i] = grabvar(name);
         vc++;
         setvar(name, val, 0);
@@ -579,7 +577,7 @@ run_cmd(const cmd_tree *n)
       tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; CVARS(n)[i]; i++) {
         char *name, *val;
-        st_read_assn(exp_word(CVARS(n)[i]), &name, &val);
+        st_read_assn(exp_word(CVARS(n)[i], NULL, NULL), &name, &val);
         tmp[i] = grabvar(name);
         vc++;
         setvar(name, val, 0);
@@ -595,7 +593,7 @@ run_cmd(const cmd_tree *n)
     if ((vc = CVARC(n))) {
       evars = st_alloc((vc + 1) * sizeof(char *));
       for (i = 0; i < vc; i++) {
-        evars[i] = exp_word(CVARS(n)[i]);
+        evars[i] = exp_word(CVARS(n)[i], NULL, NULL);
         evars[vc] = NULL;
       }
     } else {
@@ -631,7 +629,7 @@ run_redir(const cmd_tree *n)
   while (r) {
     char *name;
     int fd;
-    if (!(name = exp_word(r->name)))
+    if (!(name = exp_word(r->name, NULL, NULL)))
       return 1;
     switch (r->type) {
       case RDIN:
@@ -702,7 +700,7 @@ dupfall:
             b.len = strlen(r->heredoc);
             b.qs = QDOUBLE;
             b.next = NULL;
-            body = exp_word(&b);
+            body = exp_word(&b, NULL, NULL);
             blen = strlen(body);
           }
           if (pipe(p) < 0)

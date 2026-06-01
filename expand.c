@@ -13,13 +13,16 @@
 #include "opts.h"
 #include "parse.h"
 #include "var.h"
+#include "utils.h"
 
 static char *var_n(const char *, size_t, size_t *);
 static char *varbrace_n(const char *, size_t, size_t *);
 static char *lookupvar(const char *, size_t);
+static char **splitword(char *, size_t, ifssect *, size_t *);
 
 /** get the pid shell variable */
 #define varpid() (st_strdup(sh_pid_s))
+#define varbgpid() (st_strdup(sh_bgpid_s))
 #define varargc() \
   char *buf; \
   buf = st_alloc(16); \
@@ -185,22 +188,27 @@ lookupvar(const char *vt, size_t vlen)
 char *
 exp_var(char *word, size_t s, size_t *e)
 {
+  // XXX: look into path to get here, and if a left garbage value matters since it should fail anyway
   if (word[s] != '$')
     return NULL;
 
-  if (word[s + 1] == '$') {
-    *e = s + 2;
-    return varpid();
-  } else if (word[s + 1] == '?') {
-    *e = s + 2;
-    return varstatus();
-  } else if (word[s + 1] == '#') {
-    *e = s + 2;
-    varargc();
-  } else if (word[s + 1] == '{') {
-    return varbrace_n(word, s, e);
-  } else {
-    return var_n(word, s, e);
+  switch (word[s + 1]) {
+    case '$':
+      *e = s + 2;
+      return varpid();
+    case '!':
+      *e = s + 2;
+      return varbgpid();
+    case '?':
+      *e = s + 2;
+      return varstatus();
+    case '#':
+      *e = s + 2;
+      varargc();
+    case '{':
+      return varbrace_n(word, s, e);
+    default:
+      return var_n(word, s, e);
   }
 }
 
@@ -245,7 +253,6 @@ homedir(char *user)
       return st_strdup(s);
     } 
   }
-  // XXX: double check this
   fclose(pw);
   return NULL;
 }
@@ -347,34 +354,65 @@ expand_ps1(char *p)
 char **
 expand_argv(wf **args, size_t *t)
 {
-  size_t i, argc = 0;
-  while (args[argc])
-    argc++;
+  ifssect *ifsexp;
+  size_t ifsn, cap, fargc, tlen;
+  size_t i, argc;
+  char **fargv, **argv;
 
   *t = 0;
-  char **argv = st_alloc((argc + 1) * sizeof(char *));
+  cap = 0;
+  fargc = 0;
+  argc = 0;
+  fargv = NULL;
+
+  while (args[argc])
+    argc++;
+  for (size_t i = 0; i < argc; i++)
+    cap += args[i]->len;
+  argv = st_alloc((cap + 1) * sizeof(char *));
+
   for (i = 0; i < argc; i++) {
-    argv[i] = exp_word(args[i]);
-    *t += args[i]->len;
-    if (!argv[i])
+    char *expanded;
+    expanded = exp_word(args[i], &ifsn, &ifsexp);
+    if (!expanded)
       return NULL;
+    fargv = splitword(expanded, ifsn, ifsexp, &tlen);
+    *t += tlen;
+    for (int j = 0; fargv[j]; j++)
+      argv[fargc++] = fargv[j];
   }
-  argv[argc] = NULL;
+  argv[fargc] = NULL;
   return argv;
 }
 
 /** expand word with variable substitution */
 __attribute__((hot)) char *
-exp_word(wf *wordf)
+exp_word(wf *wordf, size_t *n, ifssect **ifssects)
 {
-  size_t end, i;
-  size_t len;
+  size_t end, i, len;
+  size_t nsplits, sectstart, si;
+  ifssect *sects;
   wf *f;
   // char *s;
   char *expanded;
 
-  len = 0;
+  nsplits = 0;
   for (f = wordf; f; f = f->next) {
+    if (f->qs == QNONE || f->qs == QCMDSUB)
+      nsplits++;
+  }
+  if (nsplits > 0 && ifssects) {
+    sects = st_alloc(nsplits * sizeof(ifssect));
+    si = 0;
+  } else {
+    sects = NULL;
+  }
+
+  len = 0;
+  end = 0;
+  si = 0;
+  for (f = wordf; f; f = f->next) {
+    sectstart = len;
     switch (f->qs) {
       case QSINGLE:
         if (f->len >= stleft)
@@ -446,6 +484,11 @@ exp_word(wf *wordf)
             }
           }
         }
+        if (f->qs == QNONE && sects)
+          sects[si++] = (ifssect) {
+            sectstart,
+            len - sectstart,
+          };
         break;
       case QCMDSUB:
       case QCMDSUB_DQ:
@@ -471,9 +514,118 @@ exp_word(wf *wordf)
           else {
             len += sublen;
           }
+          if (f->qs == QCMDSUB && sects)
+            sects[si++] = (ifssect) {
+              sectstart,
+              len - sectstart,
+            };
           break;
         }
     }
   }
+  if (n)
+    *n = si;
+  if (ifssects)
+    *ifssects = sects;
   return grab_str(len);
 }
+
+static char **
+splitword(char *str, size_t nsect, ifssect *sects, size_t *tlen)
+{
+  enum {
+    M_IMMUNE,
+    M_IFSWS,
+    M_IFSN,
+    M_NORMAL
+  };
+
+  char *ifs;
+  char **fargv;        // don't like fields as a name either
+  size_t slen, fargc;  // nfields only makes sense if i go with fields
+  int mode;
+
+  ifs = getvar("IFS");
+  if (!ifs)
+    ifs = " \t\n";
+  if (tlen)
+    *tlen = 0;
+
+  if (!strlen(ifs) || !nsect) {
+    fargv = st_alloc(2 * sizeof(char *));
+    fargv[0] = str;
+    fargv[1] = NULL;
+    return fargv;
+  }
+  slen = strlen(str);
+  fargv = st_alloc((slen + 1) * sizeof(char *));
+
+  fprintf(stderr, "splitword: slen=%zu nsect=%zu str='%.*s'\n", slen, nsect, (int)slen, str);
+  size_t sidx, pos;
+  char *field;
+
+  fargc = 0;
+  sidx = 0;
+  pos = 0;
+  field = NULL;
+
+  while (pos < slen) {
+    int insect;
+
+    while (sidx < nsect && pos >= sects[sidx].start + sects[sidx].len)
+      sidx++;
+    insect = (sidx < nsect && pos >= sects[sidx].start);
+    if (!insect)
+      mode = M_IMMUNE;
+    else if (is_ws(str[pos]))
+      mode = M_IFSWS;
+    else if (is_ifs_nws(str[pos], ifs))
+      mode = M_IFSN;
+    else
+      mode = M_NORMAL;
+
+    switch (mode) {
+      case M_IMMUNE:
+        if (!field)
+          field = str + pos++;
+        continue;
+      case M_IFSWS:
+        if (field) {
+          str[pos++] = '\0';
+          if (tlen)
+            *tlen += (str + pos) - field;
+          fargv[fargc++] = field;
+          field = NULL;
+        } else {
+          pos++;
+        }
+        continue;
+      case M_IFSN:
+        str[pos] = '\0';
+        if (field) {
+          if (tlen)
+            *tlen += (str + pos) - field;
+          fargv[fargc++] = field;
+        } else
+          fargv[fargc++] = str + pos;
+        pos++;
+        field = NULL;
+        continue;
+      case M_NORMAL:
+      if (!field) {
+          field = str + pos;
+      }
+      pos++;
+      continue;
+    }
+  }
+
+  if (field) {
+    if (tlen)
+      *tlen += slen - (field - str);
+    fargv[fargc++] = field;
+  }
+  fargv[fargc] = NULL;
+  return fargv;
+}
+
