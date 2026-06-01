@@ -1,4 +1,5 @@
 /* lex.c - tokenizer functions */
+#include <stdio.h>
 #define _POSIX_C_SOURCE 200809L
 #include <string.h>
 
@@ -28,18 +29,23 @@ static const unsigned char nchars[256] = {
   ['}'] = C_RB,
   ['<'] = C_LT,
   ['>'] = C_GT,
+  ['`'] = C_BTICK,
   /* everything else is 0 = C_WORD */ /* clang-format on */
 };
+#define NCHR(c) (nchars[(unsigned char)c])
 
 static const unsigned char dqchars[256] = {
   ['"'] = C_DQUOTE,
   ['\\'] = C_BSLASH,
   ['$'] = C_DOLLAR,
+  ['`'] = C_BTICK,
 };
+#define DCHR(c) (dqchars[(unsigned char)c])
 
 static const unsigned char sqchars[256] = {
   ['\''] = C_SQUOTE,
 };
+#define SCHR(c) (sqchars[(unsigned char)c])
 
 int alias_depth = 0;
 int notclosed = 0;
@@ -48,6 +54,40 @@ int chkwd = 0;
 
 static void append_wf(wf **, wf **, char *, size_t len, int);
 static wf *get_wf(int);
+
+#define qescape(c) \
+  case insq: \
+    if (c == '\'') { \
+      cstate &= ~insq; \
+      st_putc(c); \
+      cmdlen++; \
+      continue; \
+    } else { \
+      st_putc(c); \
+      cmdlen++; \
+      continue; \
+    } \
+  case esc: \
+    st_putc(c); \
+    cmdlen++; \
+    cstate &= ~esc; \
+    continue; \
+  case indq: \
+    if (c == '"') { \
+      cstate &= ~indq; \
+      st_putc(c); \
+      cmdlen++; \
+      continue; \
+    } else if (c == '\\') { \
+      st_putc(c); \
+      cmdlen++; \
+      cstate |= esc; \
+      continue; \
+    } else { \
+      st_putc(c); \
+      cmdlen++; \
+      continue; \
+    }
 
 static inline int
 eatbnl(void)
@@ -119,15 +159,20 @@ get_wf(int c)
    * XXX: verify description is still accurate
    */
 
+  enum {
+    insq = (1 << 0),
+    indq = (1 << 1),
+    esc = (1 << 2),
+  };
+
   wf *head;
   wf *tail;
   char n, *w;
-  size_t len, cmdsubd;
+  size_t len, cmdsubd, cmdlen;
   const unsigned char *state;
 
   head = NULL;
   tail = NULL;
-  cmdsubd = 0;
   state = nchars;
   len = 0;
   for (;;) {
@@ -149,46 +194,33 @@ get_wf(int c)
         state = (state == dqchars) ? nchars : dqchars;
         break;
       case C_BSLASH:
-        if (state == dqchars) {
-          n = shgetchar();
-          if (n == '\n') {
-            cur_shinpt->linenum++;
-            break;
-          }
-          if (n == SHEOF)
-            goto done;
-          if (n == '$' || n == '"' || n == '\\') {
-            st_putc(n);
-            len++;
-          } else {
-            st_putc(n);
-            len++;
-            shungetc(n);
-          }
-          break;
-        } else {
-          n = shgetchar();
-          if (n == '\n') {
-            cur_shinpt->linenum++;
-            break;
-          }
-          if (n == SHEOF)
-            goto done;
-          st_putc(n);
-          len++;
+        n = shgetchar();
+        if (n == '\n') {
+          cur_shinpt->linenum++;
           break;
         }
+        if (n == SHEOF)
+          goto done;
+
+        if (len > 0) {
+          w = grab_str(len); /* save frag if nonempty */
+          append_wf(&head, &tail, w, len, state == dqchars ? QDOUBLE : QNONE);
+          len = 0;
+        }
+        if (state == dqchars && n != '$' && n != '"' && n != '\\' && n != '`') {
+          st_putc(c);
+          len++;
+        }
+        st_putc(n);
+        len++;
+        w = grab_str(len);
+        append_wf(&head, &tail, w, len, QSINGLE);
+        len = 0;
+        break;
       case C_DOLLAR:
         n = eatbnl();
         if (n == '(') {
-          enum {
-            insq = (1 << 0),
-            indq = (1 << 1),
-            esc = (1 << 2),
-          };
-
           int cstate;
-          size_t cmdlen;
 
           cmdsubd = 1;
           cstate = 0;
@@ -205,38 +237,7 @@ get_wf(int c)
               goto done;
             }
             switch (cstate) {
-              case insq:
-                if (ch == '\'') {
-                  cstate &= ~insq;
-                  st_putc(ch);
-                  cmdlen++;
-                  continue;
-                } else {
-                  st_putc(ch);
-                  cmdlen++;
-                  continue;
-                }
-              case esc:
-                st_putc(ch);
-                cmdlen++;
-                cstate &= ~esc;
-                continue;
-              case indq:
-                if (ch == '"') {
-                  cstate &= ~indq;
-                  st_putc(ch);
-                  cmdlen++;
-                  continue;
-                } else if (ch == '\\') {
-                  st_putc(ch);
-                  cmdlen++;
-                  cstate |= esc;
-                  continue;
-                } else {
-                  st_putc(ch);
-                  cmdlen++;
-                  continue;
-                }
+              qescape(ch)
             }
 
             switch (ch) {
@@ -263,7 +264,7 @@ get_wf(int c)
               case ')':
                 cmdsubd--;
                 if (!cmdsubd) {
-                  goto cmdend;
+                  goto cmdsubend;
                 }
                 st_putc(ch);
                 cmdlen++;
@@ -274,7 +275,59 @@ get_wf(int c)
                 break;
             }
           }
-cmdend:
+        } else {
+          st_putc(c);
+          len++;
+          shungetc(n);
+        }
+        break;
+
+      case C_BTICK:
+        {
+          int cstate;
+
+          cstate = 0;
+          cmdlen = 0;
+          if (len > 0) {
+            w = grab_str(len); /* save frag if nonempty */
+            append_wf(&head, &tail, w, len, state == dqchars ? QDOUBLE : QNONE);
+            len = 0;
+          }
+
+          for (char ch = shgetchar();; ch = shgetchar()) {
+            if (ch == SHEOF) {
+              notclosed = 1;
+              goto done;
+            }
+            switch (cstate) {
+              qescape(c)
+            }
+            switch (ch) {
+              case '\'':
+                cstate |= insq;
+                st_putc(ch);
+                cmdlen++;
+                break;
+              case '"':
+                st_putc(ch);
+                cmdlen++;
+                cstate |= indq;
+                break;
+              case '\\':
+                cstate |= esc;
+                st_putc(ch);
+                cmdlen++;
+                break;
+              case '`':
+                goto cmdsubend;
+              default:
+                st_putc(ch);
+                cmdlen++;
+                break;
+            }
+          }
+
+cmdsubend:
           w = grab_str(cmdlen);
           append_wf(&head, &tail, w, cmdlen,
                     (state == dqchars) ? QCMDSUB_DQ : QCMDSUB);
@@ -285,12 +338,8 @@ cmdend:
             goto done;
           }
           shungetc(c);
-        } else {
-          st_putc(c);
-          len++;
-          shungetc(n);
+          break;
         }
-        break;
 
       case C_AMP:
       case C_PIPE:
@@ -328,7 +377,9 @@ done:
   if (len) {
     w = grab_str(len);
     append_wf(&head, &tail, w, len,
-              state == sqchars ? QSINGLE : state == dqchars ? QDOUBLE : QNONE);
+              state == sqchars ? QSINGLE :
+              state == dqchars ? QDOUBLE :
+                                 QNONE);
   }
   return head;
 }
@@ -352,7 +403,7 @@ tokenize(void)
   chkwd = 0;
 
   while ((c = shgetchar()) != SHEOF) {
-    switch (nchars[(unsigned char)c]) {
+    switch (NCHR(c)) {
       case C_SPACE:
         continue;
       case C_COMMENT:
@@ -369,11 +420,10 @@ tokenize(void)
           cur_shinpt->linenum++;
         if (c != SHEOF)
           shungetc(c);
-        t = SHTOK(TNL);
-        return t;
+        return SHTOK(TNL);
 
       case C_EXCL:
-        return t = SHTOK(TNOT);
+        return SHTOK(TNOT);
       case C_AMP:
         n = eatbnl();
         if (n == '&')
@@ -435,8 +485,7 @@ tokenize(void)
         }
         if (c != SHEOF)
           shungetc(n);
-        break;
-
+      /* falls through */
       default:
         f = get_wf(c);
         if (!f)
@@ -456,7 +505,6 @@ tokenize(void)
           }
         }
         return SHWORD(f);
-
     }
   }
   return SHTOK(TEOF);
