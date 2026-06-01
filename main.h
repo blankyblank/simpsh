@@ -16,29 +16,33 @@
 #define MAX_ENV 256
 #define defpath "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-#define FLAG_c (1 << 0)
-#define FLAG_i (1 << 1)
-#define FLAG_N (1 << 2)
-#define FLAG_L (1 << 3)
-#define FLAG_P (1 << 4)
-#define FLAG_V (1 << 5)
-#define FLAG_r (1 << 6)
+enum {
+  FLAG_c = 1 << 0,
+  FLAG_i = 1 << 1,
+  FLAG_N = 1 << 2,
+  FLAG_L = 1 << 3,
+  FLAG_P = 1 << 4,
+  FLAG_V = 1 << 5,
+  FLAG_r = 1 << 6,
+};
 
 #define usage() fprintf(stderr, "Usage: simpsh [-abCefhiImnosvVx] [-o longopt] [-c 'cmd']\n")
 
 /* shell variables */
 extern char **environ;
-extern char *sh_argv0;
-extern char **sh_argv;
-extern int alloc_sh_argv;
-extern char *shps1;
-extern char *shps2;
+extern char *sh_argv0; /* the shells first arguement */
+extern char **sh_argv; /* shell arguement array */
+extern char *shps1; /* prompt string */
+extern char *shps2; /* continuation prompt string */
 // extern char *shps3;  // TODO: bring back when i implement select
 extern char *shps4;
-extern int sh_argc;
-extern int lstatus;
-extern pid_t sh_pid;
+extern int sh_argc; /* shell arg count */
+extern int lstatus; /* last exit status */
+extern pid_t sh_pid; /* the shell's pid */
+extern pid_t sh_bgpid; /* the last background processes pid */
 extern char *sh_pid_s;
+extern char *sh_bgpid_s;
+extern int alloc_sh_argv;
 extern char *home;
 
 extern char histfile[256];

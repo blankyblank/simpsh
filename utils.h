@@ -34,6 +34,10 @@
 
 #define isalnum_(c)  (isalpha_(c) || ((c) >= '0' && (c) <= '9'))
 
+#define is_ws(c) (c == ' ' || c == '\t' || c == '\n')
+
+#define is_ifs_nws(c, s) (!is_ws(c) && strchr(s, c))
+
 /**  check if char is operator  */
 #define is_operator(c) \
   (c == '&' || c == '|' || c == ';' || c == '(' || c == ')' || c == '{' || \
@@ -130,6 +134,7 @@ genarray_len(void *arr, size_t type)
 
   for (;;) {
     void *p;
+    p = NULL;
     for (size_t i = 0; i < type; i++)
       ((char *)&p)[i] = cur[i];
     if (p == NULL)

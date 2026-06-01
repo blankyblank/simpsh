@@ -218,8 +218,6 @@ cdcmd(char **argv)
     dest = (char *)dir;
   }
 
-      // warn("cd: %s", dest); // XXX: these were there before shwarn
-      // return 1;
   if (flag == FLAG_P) {
     if (!realpath(dest, respath)) {
       sherr(1, bargv0, dest);

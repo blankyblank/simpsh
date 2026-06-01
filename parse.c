@@ -108,7 +108,7 @@ static int
 is_assn(wf *cmd)
 {
   char *eq = memchr(cmd->word, '=', cmd->len);
-  const char *p = cmd->word;
+  const char *p;
 
   if (cmd->qs != QNONE)
     return 0;
@@ -318,7 +318,6 @@ parse_heredoc(void)
 
   while (heredoc_head) {
     bpos = NULL;
-    eofvlen = 0;
     r = heredoc_head;
     heredoc_head = heredoc_head->heredoc_next;
     eofv = join_wf(r->name);

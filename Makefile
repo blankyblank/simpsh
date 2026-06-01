@@ -1,4 +1,4 @@
-CC := gcc
+CC := clang
 # cc | gcc | clang
 BUILD       ?= sanitize
 # debug | release | sanitize | valgrind | profile
@@ -18,7 +18,7 @@ ifeq ($(BUILD),release)
 # -D_FORTIFY_SOURCE=3
 endif
 ifeq ($(BUILD),debug)
-	CFLAGS += -D_FORTIFY_SOURCE=3 -Og -g3
+	CFLAGS += -D_FORTIFY_SOURCE=3 -Og -g3 -fno-omit-frame-pointer
   ifeq ($(CC),gcc)
   		CFLAGS +=  -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
   		LDFLAGS += -ggdb
@@ -55,7 +55,7 @@ endif
 ifeq ($(BUILD),valgrind)
 	# just use gcc for valgrind
 	CC := gcc
-	CFLAGS += -Og -g3 -DDEBUG -DENABLE_VALGRIND
+	CFLAGS += -Og -g3 -ggdb -fno-omit-frame-pointer -DDEBUG -DENABLE_VALGRIND
 	# callgrind flags
   # CFLAGS += -g -O2 -DDEBUG -DENABLE_VALGRIND
 endif

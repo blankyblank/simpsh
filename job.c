@@ -44,6 +44,8 @@ newjob(pid_t pgid, const char *cmd)
   nj->saved_ttypgrp = -1;
   nj->next = job_list;
   job_list = nj;
+  sh_bgpid = pgid;
+  snprintf(sh_bgpid_s, 16, "%d", sh_bgpid);
   return nj;
 }
 
@@ -133,7 +135,7 @@ jobmsg(job *j)
     else
       c = ' ';
 
-  printf("[%d]%c %-8s\t\t\t\t\t\t\t\t\t\t\t\t%s\n", j->num, c, jstates[j->state], j->cmd);
+  printf("[%d]%c %-8s\t\t\t\t\t\t\t\t\t\t\t\t%s\n", j->num, c, jstates[j->state], j->cmd); //XXX: clang says potential buffer overflow (overflow index)
 }
 
 void

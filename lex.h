@@ -84,18 +84,22 @@ extern int chkwd;
 #define SHREDIR(s) ((sh_tok){ .type = TREDIR, .sub = (s) })
 #define SHWORD(w) ((sh_tok) { .type = TWORD, .cmd = w, .sub = 0 })
 
-#define CHKALIAS (1 << 0)
-#define CHKNL (1 << 1)
+enum {
+  CHKALIAS = 1 << 0,
+  CHKNL = 1 << 1,
+};
 
-#define RDIN (1 << 0)
-#define RDOUT (1 << 1)
-#define RDAPP (1 << 2)
-#define RDDUPO (1 << 3)
-#define RDDUPI (1 << 4)
-#define RDRW (1 << 5)
-#define RDCLOB (1 << 6)
-#define RDHERE (1 << 7)
-#define RDHERE_D (1 << 8)
+enum {
+  RDIN = 1 << 0,
+  RDOUT = 1 << 1,
+  RDAPP = 1 << 2,
+  RDDUPO = 1 << 3,
+  RDDUPI = 1 << 4,
+  RDRW = 1 << 5,
+  RDCLOB = 1 << 6,
+  RDHERE = 1 << 7,
+  RDHERE_D = 1 << 8,
+};
 
 extern sh_tok tokenize(void);
 extern void pushstring(char *, size_t, int);

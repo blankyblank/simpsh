@@ -29,6 +29,8 @@ int builtin_tab[BUILTIN_BUCKETS];
 int sh_argc;
 pid_t sh_pid;
 char *sh_pid_s = NULL;
+char *sh_bgpid_s = NULL;
+pid_t sh_bgpid;
 char *sh_argv0;
 char *shps1;
 char *shps2;

@@ -236,7 +236,6 @@ setcmd(char **argv)
   int minus, pparams, pcnt;
 
   argv0 = argv[0];
-  minus = 0;
   pos = NULL;
   pcnt = 0;
   pparams = 0;

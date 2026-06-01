@@ -20,9 +20,11 @@ typedef struct tmp_var {
   int set;
 } tmp_var;
 
-#define VEXPRT    (1 << 0)
-#define VREADONLY (1 << 1)
-#define VUNSET    (1 << 2)
+enum {
+  VEXPRT = 1 << 0,
+  VREADONLY = 1 << 1,
+  VUNSET = 1 << 2,
+};
 #define VAR_BUCKETS 64
 #define LOCAL_MAX 256
 

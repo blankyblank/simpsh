@@ -93,7 +93,8 @@ shreadbuf(void)
   if ((readbc = read(cur_shinpt->fd, cur_shinpt->buf, BUFSIZ)) <= 0)
     return 0;
   if (vflag)
-    write(STDERR_FILENO, cur_shinpt->buf, readbc);
+    if (write(STDERR_FILENO, cur_shinpt->buf, readbc) < 0)
+      perror("write");
   cur_shinpt->nchar = cur_shinpt->buf;
   cur_shinpt->nleft = readbc;
   return readbc;

@@ -251,9 +251,11 @@ init_env(void)
     p->func = rmchash;
   sh_argv0 = "simpsh";
   sh_pid_s = malloc(16);
+  sh_bgpid_s = malloc(16);
   sh_pid = getpid();
   sh_argc = 0;
   sh_argv = NULL;
+  sh_bgpid = 0;
   snprintf(sh_pid_s, 16, "%d", sh_pid);
   home = getenv("HOME");
 }

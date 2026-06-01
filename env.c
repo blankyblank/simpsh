@@ -155,7 +155,7 @@ tree_dup(cmd_tree *s)
         cnt = 0;
         for (size_t i = 0; CVARS(s)[i]; i++)
           cnt++;
-        CVARS(n) = malloc((cnt + 1) * sizeof(char *));
+        CVARS(n) = malloc((cnt + 1) * sizeof(wf *));
         for (size_t i = 0; i < cnt; i++)
           CVARS(n)[i] = wfdup(CVARS(s)[i]);
         CVARS(n)[cnt] = NULL;

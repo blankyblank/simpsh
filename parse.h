@@ -14,8 +14,10 @@ struct redir {
   redir *heredoc_next;
 };
 
-#define NEG (1 << 1)
-#define EFLAG_SAFE (1 << 2)
+enum {
+  NEG = 1 << 0,
+  EFLAG_SAFE = 1 << 1,
+};
 
 #define CARGS(n)  ((n)->t.cmd.args)
 #define CVARS(n)  ((n)->t.cmd.sh_vars)

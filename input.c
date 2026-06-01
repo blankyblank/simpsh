@@ -126,7 +126,8 @@ setinputf(int fd)
       new->strpush = NULL;
       cur_shinpt = new;
       if (vflag)
-        write(STDERR_FILENO, map, st.st_size);
+        if ( write(STDERR_FILENO, map, st.st_size)<0)
+          perror("write");
       return;
     }
   }
