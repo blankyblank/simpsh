@@ -201,17 +201,18 @@ static inline void
 st_read_assn(const char *assn, char **name, char **value)
 {
   char *eq;
-  size_t l;
+  size_t l, total;
   eq = (char *)strchr(assn, '=');
+  total = strlen(assn);
   if (!eq) {
     /* st_strdup expanded */
-    *name = st_strndup(assn, strlen(assn));
+    *name = st_strndup(assn, total);
     *value = NULL;
   } else {
     l = eq - assn;
     *name = st_strndup(assn, l);
     /* st_strdup expanded */
-    *value = st_strndup(eq + 1, strlen(eq + 1));
+    *value = st_strndup(eq + 1, total - l - 1);
   }
 }
 

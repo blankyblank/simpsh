@@ -37,7 +37,7 @@ extern void init_stack(void);
 extern void stunalloc(void *p);
 
 /** stack allocated strndup */
-static inline char *
+__attribute__((always_inline)) static inline char *
 st_strndup(const char *s, size_t len)
 {
   char *d;

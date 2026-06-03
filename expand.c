@@ -15,8 +15,8 @@
 #include "var.h"
 #include "utils.h"
 
-static char *var_n(const char *, size_t, size_t *);
-static char *varbrace_n(const char *, size_t, size_t *);
+static char *var_n(const char *, size_t, size_t *, size_t *);
+static char *varbrace_n(const char *, size_t, size_t *, size_t *);
 static char *lookupvar(const char *, size_t);
 static char **splitword(char *, size_t, ifssect *, size_t *);
 
@@ -26,12 +26,12 @@ static char **splitword(char *, size_t, ifssect *, size_t *);
 #define varargc() \
   char *buf; \
   buf = st_alloc(16); \
-  snprintf(buf, 16, "%d", sh_argc); \
+  *olen = snprintf(buf, 16, "%d", sh_argc); \
   return buf;
 
 /** get the variable for the return status of last command */
 static inline char *
-varstatus(void)
+varstatus(size_t *o)
 {
   size_t n, i, e;
   char *buf, t;
@@ -51,6 +51,7 @@ varstatus(void)
     e--;
   }
   buf[i] = '\0';
+  *o = i;
   return buf;
 }
 
@@ -82,7 +83,7 @@ is_posparam(const char *var, size_t var_l)
 
 /** expand $var style variables */
 char *
-var_n(const char *args, size_t i, size_t *end)
+var_n(const char *args, size_t i, size_t *end, size_t *olen)
 {
   const char *env_var;
   char *var;
@@ -113,13 +114,14 @@ var_n(const char *args, size_t i, size_t *end)
     }
       return NULL;
   }
-  var = st_strdup(env_var);
+  *olen = strlen(env_var);
+  var = st_strndup(env_var, *olen);
   return var;
 }
 
 /** expand ${var} style variables */
 char *
-varbrace_n(const char *args, size_t i, size_t *end)
+varbrace_n(const char *args, size_t i, size_t *end, size_t *olen)
 {
   char *var, *env_var;
   size_t j, vt_l;
@@ -143,13 +145,14 @@ varbrace_n(const char *args, size_t i, size_t *end)
   if (!env_var) {
     if (uflag && vt_l > 0) {
       char name[64];
-      nmemcpy(name, &args[i+2], vt_l);
+      nmemcpy(name, &args[i + 2], vt_l);
       UFLAGMSG(name);
       nounseterr = 1;
     }
-      return NULL;
+    return NULL;
   }
-  var = st_strdup(env_var);
+  *olen = strlen(env_var);
+  var = st_strndup(env_var, *olen);
   return var;
 }
 
@@ -186,29 +189,37 @@ lookupvar(const char *vt, size_t vlen)
 
 /** expand variables in word */
 char *
-exp_var(char *word, size_t s, size_t *e)
+exp_var(char *word, size_t s, size_t *e, size_t *olen)
 {
   // XXX: look into path to get here, and if a left garbage value matters since it should fail anyway
   if (word[s] != '$')
     return NULL;
+  char *var;
 
   switch (word[s + 1]) {
     case '$':
       *e = s + 2;
-      return varpid();
+      var = varpid();
+      *olen = strlen(var);
+      return var;
     case '!':
       *e = s + 2;
-      return varbgpid();
+      var = varbgpid();
+      *olen = strlen(var);
+      return var;
     case '?':
       *e = s + 2;
-      return varstatus();
+      var = varstatus(olen);
+      return var;
     case '#':
       *e = s + 2;
-      varargc();
+      varargc(); // NOTE: calls return within macro
     case '{':
-      return varbrace_n(word, s, e);
+      var = varbrace_n(word, s, e, olen);
+      return var;
     default:
-      return var_n(word, s, e);
+      var = var_n(word, s, e, olen);
+      return var;
   }
 }
 
@@ -258,7 +269,7 @@ homedir(char *user)
 }
 
 char *
-exp_tilde(char *word, size_t s, size_t *e)
+exp_tilde(char *word, size_t s, size_t *e, size_t *olen)
 {
   char *hm, strt;
   size_t end;
@@ -269,6 +280,7 @@ exp_tilde(char *word, size_t s, size_t *e)
     if (!(hm = getvar("HOME")))
       return NULL;
     *e = s + 1;
+    *olen = strlen(hm);
     return st_strdup(hm);
   } else {
     end = s + 1;
@@ -280,6 +292,7 @@ exp_tilde(char *word, size_t s, size_t *e)
     word[end] = strt;
     if (hm) {
       *e = end;
+      *olen = strlen(hm);
       return hm;
     }
   }
@@ -290,7 +303,7 @@ exp_tilde(char *word, size_t s, size_t *e)
 char *
 expand_ps1(char *p)
 {
-  size_t i, end, varlen, cbrace, flen;
+  size_t i, end, varlen, cbrace, flen, elen;
   char *s, *expanded;
   char f[4096], vcpy[256];
 
@@ -335,7 +348,7 @@ expand_ps1(char *p)
         f[flen++] = p[i++];
         continue;
       }
-      if ((expanded = exp_var(vcpy, 0, &end))) {
+      if ((expanded = exp_var(vcpy, 0, &end, &elen))) {
         for (s = expanded; *s; s++)
           f[flen++] = *s;
       }
@@ -364,6 +377,7 @@ expand_argv(wf **args, size_t *t)
   fargc = 0;
   argc = 0;
   fargv = NULL;
+  ifsexp = NULL;
 
   while (args[argc])
     argc++;
@@ -373,10 +387,12 @@ expand_argv(wf **args, size_t *t)
 
   for (i = 0; i < argc; i++) {
     char *expanded;
-    expanded = exp_word(args[i], &ifsn, &ifsexp);
-    if (!expanded)
+    if (!(expanded = exp_word(args[i], &ifsn, &ifsexp))) {
+      free(ifsexp);
       return NULL;
+    }
     fargv = splitword(expanded, ifsn, ifsexp, &tlen);
+    free(ifsexp);
     *t += tlen;
     for (int j = 0; fargv[j]; j++)
       argv[fargc++] = fargv[j];
@@ -402,11 +418,16 @@ exp_word(wf *wordf, size_t *n, ifssect **ifssects)
       nsplits++;
   }
   if (nsplits > 0 && ifssects) {
-    sects = st_alloc(nsplits * sizeof(ifssect));
+    if (!(sects = malloc(nsplits * sizeof(ifssect))))
+      return NULL;
+    *ifssects = sects;
     si = 0;
   } else {
     sects = NULL;
+    if (ifssects)
+      *ifssects = NULL;
   }
+
 
   len = 0;
   end = 0;
@@ -447,10 +468,9 @@ exp_word(wf *wordf, size_t *n, ifssect **ifssects)
           if (i>= f->len)
             continue;
           if (f->word[i] == '~' && f->qs == QNONE) {
-            expanded = exp_tilde(f->word, i, &end);
+            size_t elen = 0;
+            expanded = exp_tilde(f->word, i, &end, &elen);
             if (expanded) {
-              size_t elen;
-              elen = strlen(expanded);
               if (elen >= stleft)
                 grow_stack(elen);
               memcpy(stnext, expanded, elen);
@@ -468,10 +488,9 @@ exp_word(wf *wordf, size_t *n, ifssect **ifssects)
             len++;
             i++;
           } else {
-            expanded = exp_var(f->word, i, &end);
+            size_t vlen;
+            expanded = exp_var(f->word, i, &end, &vlen);
             if (expanded) {
-              size_t vlen;
-              vlen = strlen(expanded);
               if (vlen >= stleft)
                 grow_stack(vlen);
               memcpy(stnext, expanded, vlen);
@@ -525,8 +544,8 @@ exp_word(wf *wordf, size_t *n, ifssect **ifssects)
   }
   if (n)
     *n = si;
-  if (ifssects)
-    *ifssects = sects;
+  // if (ifssects)
+  //   *ifssects = sects;
   return grab_str(len);
 }
 
@@ -551,7 +570,7 @@ splitword(char *str, size_t nsect, ifssect *sects, size_t *tlen)
   if (tlen)
     *tlen = 0;
 
-  if (!strlen(ifs) || !nsect) {
+  if (!*ifs || !nsect) {
     fargv = st_alloc(2 * sizeof(char *));
     fargv[0] = str;
     fargv[1] = NULL;
@@ -560,7 +579,6 @@ splitword(char *str, size_t nsect, ifssect *sects, size_t *tlen)
   slen = strlen(str);
   fargv = st_alloc((slen + 1) * sizeof(char *));
 
-  fprintf(stderr, "splitword: slen=%zu nsect=%zu str='%.*s'\n", slen, nsect, (int)slen, str);
   size_t sidx, pos;
   char *field;
 
@@ -587,7 +605,8 @@ splitword(char *str, size_t nsect, ifssect *sects, size_t *tlen)
     switch (mode) {
       case M_IMMUNE:
         if (!field)
-          field = str + pos++;
+          field = str + pos;
+        pos++;
         continue;
       case M_IFSWS:
         if (field) {
