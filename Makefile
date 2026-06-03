@@ -1,6 +1,6 @@
-CC := clang
+CC := gcc
 # cc | gcc | clang
-BUILD       ?= sanitize
+BUILD       ?= debug
 # debug | release | sanitize | valgrind | profile
 BUILD_LINK  ?= dynamic
 # dynamic | static
@@ -14,7 +14,7 @@ LDLIBS  :=
 
 # Build mode presets
 ifeq ($(BUILD),release)
-	CFLAGS += -march=native -Os -flto
+	CFLAGS += -march=native -O2 -g -flto
 # -D_FORTIFY_SOURCE=3
 endif
 ifeq ($(BUILD),debug)
@@ -94,7 +94,7 @@ OBJ 	 	   := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
 TARGET		   := simpsh
 CFLAGS		   := $(CFLAGS)
 
-.PHONY: all clean test install uninstall analyze
+.PHONY: all clean test install uninstall analyze examine
 
 all: $(TARGET)
 
@@ -118,7 +118,8 @@ clean:
 	rm -f simpsh obj/*.o
 analyze:
 	scan-build --use-cc=$(CC) -enable-checker core -enable-checker unix -enable-checker security -analyze-headers -o reports make clean all
-# examine:
-# 	gcc -O2 -g -fdump-tree-optimized $(SRC)
+examine:
+	# gcc -O2 -g -fdump-tree-optimized $(SRC)
+	gcc -O2 -g -fopt-info-all=report.txt $(SRC)
 test:
 	cd tests && ./runtests.sh
