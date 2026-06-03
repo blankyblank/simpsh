@@ -21,3 +21,5 @@ tags
 tmp*.md
 tests/scripting-test
 reports
+*.optimized
+*.out
