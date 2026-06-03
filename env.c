@@ -9,6 +9,7 @@
 #include "env.h"
 #include "lex.h"
 #include "main.h"
+#include "parse.h"
 #include "utils.h"
 
 alias *alias_tab[ENV_BUCKETS];
@@ -66,6 +67,17 @@ free_tree(cmd_tree *n)
       free_tree(n->left);
       free(n);
       break;
+    case WHILE:
+      free_tree(n->left);
+      free_tree(n->right);
+      free(n);
+      break;
+    case IF:
+      free_tree(n->left);
+      free_tree(n->right);
+      free_tree(CELSE(n));
+      free(n);
+      break;
     case CMD:
       for (size_t i = 0; CARGS(n)[i]; i++)
         free_wf(CARGS(n)[i]);
@@ -77,6 +89,8 @@ free_tree(cmd_tree *n)
       }
       free(n);
       break;
+    default:
+      return;
   }
 }
 
@@ -142,7 +156,17 @@ tree_dup(cmd_tree *s)
       CREDR(n) = redirdup(CREDR(s));
       n->left = tree_dup(s->left);
       break;
-
+    case WHILE:
+      n->left = tree_dup(s->left);
+      n->right = tree_dup(s->right);
+      break;
+    case IF:
+      n->left = tree_dup(s->left);
+      n->right = tree_dup(s->right);
+      CELSE(n) = tree_dup(CELSE(s));
+      break;
+    default:
+    return NULL;
     case CMD:
       cnt = 0;
       for (size_t i = 0; CARGS(s)[i]; i++)

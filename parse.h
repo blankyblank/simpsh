@@ -14,20 +14,6 @@ struct redir {
   redir *heredoc_next;
 };
 
-enum {
-  NEG = 1 << 0,
-  EFLAG_SAFE = 1 << 1,
-};
-
-#define CARGS(n)  ((n)->t.cmd.args)
-#define CVARS(n)  ((n)->t.cmd.sh_vars)
-#define CVARC(n)  ((n)->t.cmd.vc)
-#define COPP(n)   ((n)->t.op.op_t)
-#define CREDR(n)    ((n)->t.redir.redirs)
-#define CFUNC(n) ((n)->t.func.name)
-#define CNEG(n)       ((n)->flags & NEG) /* check if NEGATE set */
-#define CSAFE(n)       ((n)->flags & EFLAG_SAFE) /* check if NEGATE set */
-
 /*
  * AST node for commands
  * @field node left
@@ -48,15 +34,37 @@ struct cmd_tree {
     FUNC,
     SUBSHELL,
     REDIR,
+    IF,
+    WHILE,
+    FOR,
   } type;
   union {
     struct { wf **args; size_t vc; wf **sh_vars; } cmd;
     struct { token op_t; } op;
     struct { redir *redirs;} redir;
     struct { wf *name; } func;
+    // struct { cmd_tree *cond; cmd_tree *then_; cmd_tree *else_; } if_;
+    struct { cmd_tree *else_; } if_;
+    struct { wf *name; wf **words; } for_;
   } t;
   int flags;
 };
+
+enum {
+  NEG = 1 << 0,
+  UNTIL = 1 << 1,
+  EFLAG_SAFE = 1 << 2,
+};
+
+#define CARGS(n) ((n)->t.cmd.args)
+#define CVARS(n) ((n)->t.cmd.sh_vars)
+#define CVARC(n) ((n)->t.cmd.vc)
+#define COPP(n) ((n)->t.op.op_t)
+#define CREDR(n) ((n)->t.redir.redirs)
+#define CFUNC(n) ((n)->t.func.name)
+#define CNEG(n) ((n)->flags & NEG)         /* check if NEGATE set */
+#define CSAFE(n) ((n)->flags & EFLAG_SAFE) /* check if NEGATE set */
+#define CELSE(n) ((n)->t.if_.else_)
 
 /** build ast tree */
 extern cmd_tree *parse_list(token s);

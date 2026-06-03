@@ -38,7 +38,9 @@ static void poptmpvars(tmp_var *, size_t);
 static void save_fd(redir *, fdlist *, size_t *);
 static char *bg_cmd(const cmd_tree *);
 static int shexec(char **, const cmd_tree *, char **);
-static int run_funcdef(const cmd_tree *);
+static int run_if(const cmd_tree *);
+static int run_while(const cmd_tree *);
+// static int run_funcdef(const cmd_tree *);
 static int run_func(const cmd_tree *, char **);
 static int run_pipe(const cmd_tree *);
 static int run_bg(const cmd_tree *);
@@ -167,6 +169,32 @@ shexec(char **args, const cmd_tree *n, char **env)
   }
 }
 
+static int
+run_if(const cmd_tree *n)
+{
+  int status;
+  status = run_commands(n->left);
+  if (status == 0)
+    return run_commands(n->right);
+  else if (CELSE(n))
+    return run_commands(CELSE(n));
+  else
+    return status;
+}
+
+static int
+run_while(const cmd_tree *n)
+{
+  int status;
+  for (;;) {
+    status = run_commands(n->left);
+    if ((n->flags & UNTIL) ? status == 0 : status != 0)
+      break;
+    status = run_commands(n->right);
+  }
+  return status;
+}
+
 static inline int
 run_funcdef(const cmd_tree *n)
 {
@@ -260,6 +288,7 @@ static int
 run_subsh(const cmd_tree *n)
 {
   int status;
+  int efl, ifl, mfl;
   pid_t pid;
   sigset_t old;
 
@@ -267,6 +296,10 @@ run_subsh(const cmd_tree *n)
     fprintf(stderr, "empty subshell\n");
     return 1;
   }
+
+  mfl = mflag;
+  efl = eflag;
+  ifl = iflag;
 
   job_lock(&old);
   pid = fork();
@@ -279,13 +312,13 @@ run_subsh(const cmd_tree *n)
       job_unlock(&old);
       child_setup_fg(0);
       status = run_commands(n->left);
-      if (eflag && status != 0 && !iflag)
+      if (efl && status != 0 && !ifl)
         exit(status);
       fflush(NULL);
       _exit(status);
     // XXX: might be able to clean this more idk
     default:
-      if (mflag && getpid() == sh_pgid) {
+      if (mfl && getpid() == sh_pgid) {
         job *j;
         setpgid(pid, pid);
         j = newjob(pid, bg_cmd(n));
@@ -295,7 +328,7 @@ run_subsh(const cmd_tree *n)
         status = fgwait(j);
         if (CNEG(n))
           status = !status;
-        if (eflag && status != 0 && !iflag)
+        if (efl && status != 0 && !ifl)
           exit(status);
         return status;
       }
@@ -303,7 +336,7 @@ run_subsh(const cmd_tree *n)
       status = _wait_(pid);
       if (CNEG(n))
         status = !status;
-      if (eflag && status != 0 && !iflag && !(n->flags & EFLAG_SAFE))
+      if (efl && status != 0 && !ifl && !(n->flags & EFLAG_SAFE))
         exit(status);
       return status;
   }
@@ -409,12 +442,14 @@ run_pipe(const cmd_tree *n)
   int lstatus, rstatus;
   int pipefd[2], outer;
   static int pipedepth;
+  int mfl;
   pid_t lpid, rpid;
   sigset_t old;
 
   pipedepth++;
   outer = (pipedepth == 1);
   job_lock(&old);
+  mfl = mflag;
 
   if (pipe(pipefd) < 0)
     err(1, "pipe");
@@ -435,7 +470,7 @@ run_pipe(const cmd_tree *n)
       fflush(NULL);
       _exit(_st);
     default:
-      if (mflag)
+      if (mfl)
         setpgid(lpid, lpid);
       break;
   }
@@ -458,7 +493,7 @@ run_pipe(const cmd_tree *n)
       fflush(NULL);
       _exit(_st);
     default:
-      if (mflag)
+      if (mfl)
         setpgid(rpid, lpid);
       break;
   }
@@ -466,7 +501,7 @@ run_pipe(const cmd_tree *n)
   CLOSEFD(pipefd[0]);
   CLOSEFD(pipefd[1]);
 
-  if (mflag && outer && getpid() == sh_pgid) {
+  if (mfl && outer && getpid() == sh_pgid) {
     job *j;
     j = newjob(lpid, bg_cmd(n));
     j->nlive = 2;
@@ -478,7 +513,7 @@ run_pipe(const cmd_tree *n)
   } else {
     int wstatus;
     job_unlock(&old);
-    if (!mflag) {
+    if (!mfl) {
       waitpid(rpid, &wstatus, 0);
       waitpid(lpid, &lwstatus, 0);
       rstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
@@ -512,17 +547,23 @@ __attribute__((hot)) static int
 run_cmd(const cmd_tree *n)
 {
   int status;
+  int ifl, efl;
   char **final = NULL;
   char **env = NULL;
+  wf **vars;
   shvar *v;
   shfunc *f;
   size_t i, vc, len;
   int b;
 
+  ifl = iflag;
+  efl = eflag;
+  vars = CVARS(n);
+
   final = expand_argv(CARGS(n), &len);
   if (nounseterr) {
     nounseterr = 0;
-    if (!iflag)
+    if (!ifl)
       exit(1);
     return 1;
   }
@@ -536,12 +577,12 @@ run_cmd(const cmd_tree *n)
   }
 
   if (!final || !final[0]) {
-    if (CVARS(n) && CVARS(n)[0]) { /*  if no command only name=value  */
-      for (i = 0; CVARS(n)[i]; i++) {
+    if (vars && vars[0]) { /*  if no command only name=value  */
+      for (i = 0; vars[i]; i++) {
         char *name, *val /*, *evar*/;
         shvar_flags flags;
         char *evar;
-        evar = exp_word(CVARS(n)[i], NULL, NULL);
+        evar = exp_word(vars[i], NULL, NULL);
         st_read_assn(evar, &name, &val);
         v = findvar(name);
         if (v)
@@ -557,11 +598,11 @@ run_cmd(const cmd_tree *n)
   }
 
   if ((f = findfunc(final[0]))) { /* if this is a shell function */
-    if (CVARS(n) && CVARS(n)[0]) {
+    if (vars && vars[0]) {
       tmp_var tmp[MAX_TMP_VARS];
-      for (vc = 0, i = 0; CVARS(n)[i]; i++) {
+      for (vc = 0, i = 0; vars[i]; i++) {
         char *name, *val;
-        st_read_assn(exp_word(CVARS(n)[i], NULL, NULL), &name, &val);
+        st_read_assn(exp_word(vars[i], NULL, NULL), &name, &val);
         tmp[i] = grabvar(name);
         vc++;
         setvar(name, val, 0);
@@ -573,11 +614,11 @@ run_cmd(const cmd_tree *n)
     }
 
   } else if ((b = getbuiltin(*final)) >= 0) { /* if this is a builtin */
-    if (CVARS(n) && CVARS(n)[0]) { /*  handle name=value cmd  */
+    if (vars && vars[0]) { /*  handle name=value cmd  */
       tmp_var tmp[MAX_TMP_VARS];
-      for (vc = 0, i = 0; CVARS(n)[i]; i++) {
+      for (vc = 0, i = 0; vars[i]; i++) {
         char *name, *val;
-        st_read_assn(exp_word(CVARS(n)[i], NULL, NULL), &name, &val);
+        st_read_assn(exp_word(vars[i], NULL, NULL), &name, &val);
         tmp[i] = grabvar(name);
         vc++;
         setvar(name, val, 0);
@@ -593,7 +634,7 @@ run_cmd(const cmd_tree *n)
     if ((vc = CVARC(n))) {
       evars = st_alloc((vc + 1) * sizeof(char *));
       for (i = 0; i < vc; i++) {
-        evars[i] = exp_word(CVARS(n)[i], NULL, NULL);
+        evars[i] = exp_word(vars[i], NULL, NULL);
         evars[vc] = NULL;
       }
     } else {
@@ -609,7 +650,7 @@ run_cmd(const cmd_tree *n)
   }
   if (CNEG(n))
     status = !status;
-  if (eflag && status != 0 && !iflag && !(n->flags & EFLAG_SAFE) && !CNEG(n))
+  if (efl && status != 0 && !ifl && !(n->flags & EFLAG_SAFE) && !CNEG(n))
     exit(status);
   return status;
 }
@@ -665,7 +706,7 @@ dupfall:
         break;
       case RDDUPO:
       case RDDUPI:
-        if (strcmp(name, "-") == 0) {
+        if (name[0] == 0 && name[1] == '\0') {
           CLOSEFD(r->fd)
         } else {
           char *p = name;
@@ -720,7 +761,9 @@ dupfall:
 
   if (!(n->left && n->left->type == CMD && CARGS(n->left) &&
         CARGS(n->left)[0] && !CARGS(n->left)[1] &&
-        !strcmp(CARGS(n->left)[0]->word, "exec"))) {
+        !(CARGS(n)[0]->word[0] == 'e' && CARGS(n)[0]->word[1] == 'x' &&
+          CARGS(n)[0]->word[2] == 'e' && CARGS(n)[0]->word[3] == 'c' &&
+          CARGS(n)[0]->word[4] == '\0'))) {
     fflush(NULL);
     restore_fd(sfd, sfdc);
   }
@@ -735,6 +778,9 @@ dupfall:
 __attribute__((hot)) int
 run_commands(const cmd_tree *n)
 {
+  int l_status;
+  l_status = lstatus; /// XXX: just added
+
   if (!n)
     return 0;
   switch (n->type) {
@@ -746,19 +792,23 @@ run_commands(const cmd_tree *n)
       return lstatus = run_funcdef(n);
     case REDIR:
       return lstatus = run_redir(n);
+    case WHILE:
+      return lstatus = run_while(n);
+    case IF:
+      return lstatus = run_if(n);
     case OP:
       if (COPP(n) != TPIPE && COPP(n) != TBKGRND)
-        lstatus = run_commands(n->left);
+        l_status = run_commands(n->left);
       switch (COPP(n)) {
         case TSEMI:
         case TNL:
           return lstatus = run_commands(n->right);
         case TAND:
-          if (lstatus != 0)
+          if (l_status != 0)
             return lstatus;
           return lstatus = run_commands(n->right);
         case TOR:
-          if (lstatus == 0)
+          if (l_status == 0)
             return lstatus;
           return lstatus = run_commands(n->right);
         case TPIPE:
@@ -771,6 +821,8 @@ run_commands(const cmd_tree *n)
           fprintf(stderr, "Unknown Operator\n"); /*NOLINT*/
           return 1;
       }
+    default:
+    return 1;
   }
   return 0;
 }

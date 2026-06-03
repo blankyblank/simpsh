@@ -1,4 +1,5 @@
 /* parse.c - parser functions */
+#include <stddef.h>
 #define _POSIX_C_SOURCE 200809L
 #include <string.h>
 
@@ -8,6 +9,18 @@
 #include "lex.h"
 #include "opts.h"
 #include "utils.h"
+
+static const char tokendlist[] = {
+  [TEOF]   = 1,
+  [TRP]    = 1,
+  [TRB]    = 1,
+  [TTHEN]  = 1,
+  [TELIF]  = 1,
+  [TELSE]  = 1,
+  [TFI]    = 1,
+  [TDO]    = 1,
+  [TDONE]  = 1,
+};
 
 static redir *heredoc_head;
 static redir **heredoc_tail = &heredoc_head;
@@ -20,6 +33,8 @@ static cmd_tree *parse_pipe(void);
 static cmd_tree *parse_group(void);
 static cmd_tree *parse_func(void);
 static cmd_tree *parse_cmd(void);
+static cmd_tree *parse_while(token);
+static cmd_tree *parse_if(void);
 
 static inline cmd_tree *
 newcmdnode(wf **args, int flags, wf **sh_vars, size_t vc)
@@ -89,6 +104,31 @@ newoppnode(token opp_t, cmd_tree *left, cmd_tree *right)
   n->right = right;
   n->flags = 0;
   /* opp tree doesn't have a command stored and doesn't use the ! opperator */
+  return n;
+}
+
+static inline cmd_tree *
+newwhilenode(cmd_tree *cond, cmd_tree *body, token untilt)
+{
+  cmd_tree *n;
+  n = st_alloc(sizeof(cmd_tree));
+  n->type = WHILE;
+  n->left = cond;
+  n->right = body;
+  n->flags = (untilt == TUNTIL) ? UNTIL : 0;
+  return n;
+}
+
+static inline cmd_tree *
+newifnode(cmd_tree *cond, cmd_tree *then, cmd_tree *else_)
+{
+  cmd_tree *n;
+  n = st_alloc(sizeof(cmd_tree));
+  n->type = IF;
+  n->left = cond;
+  n->right = then;
+  CELSE(n) = else_;
+  n->flags = 0;
   return n;
 }
 
@@ -167,8 +207,9 @@ parse_list(token s)
   sh_tok t;
   cmd_tree *l, *r;
 
+  chkwd |= CHKALIAS | CHKKWD | (s != TEOF ? CHKNL : 0);
   t = tokenize();
-  if (t.type == TEOF || t.type == TNL) {
+  if ((s != TEOF && tokendlist[t.type]) || t.type == TEOF || t.type == TNL) {
     if (t.type != TEOF && t.type != s)
       last_tok = t;
     return NULL;
@@ -180,22 +221,30 @@ parse_list(token s)
     return NULL;
 
   for (;;) {
+    chkwd |= CHKALIAS | CHKKWD;
     t = tokenize();
     if (t.type == TSEMI || (t.type == TNL && s != TEOF) || t.type == TBKGRND) {
-      chkwd |= CHKALIAS;
+      chkwd |= CHKALIAS | CHKKWD;
       if (heredoc_head)
         parse_heredoc();
+      sh_tok t2;
+      t2 = tokenize();
+      if (tokendlist[t2.type]) {
+        last_tok = t2;
+        break;
+      }
+      last_tok = t2;
       r = parse_cmd();
-      if (!r)
-        if (t.type == TBKGRND) {
+      if (!r) {
+        if (t.type == TBKGRND)
           l = newoppnode(TBKGRND, l, NULL);
-          break;
-        }
+        break;
+      }
       l = newoppnode(t.type, l, r);
     } else {
       if (heredoc_head)
         parse_heredoc();
-      if (t.type == TEOF || t.type == s) {
+      if (t.type == TEOF || t.type == s || tokendlist[t.type]) {
         if (t.type != TEOF)
           last_tok = t;
       } else {
@@ -219,9 +268,10 @@ parse_andor(void)
     return NULL;
 
   for (;;) {
+    chkwd |= CHKALIAS | CHKKWD;
     t = tokenize();
     if (t.type == TAND || t.type == TOR) {
-      chkwd |= CHKALIAS | CHKNL;
+      chkwd |= CHKALIAS | CHKNL | CHKKWD;
       r = parse_pipe();
       if (!r)
         return NULL;
@@ -253,7 +303,7 @@ parse_pipe(void)
   for (;;) {
     t = tokenize();
     if (t.type == TPIPE) {
-      chkwd |= CHKALIAS | CHKNL;
+      chkwd |= CHKALIAS | CHKNL | CHKKWD;
       r = parse_cmd();
       if (!r)
         return NULL;
@@ -277,7 +327,7 @@ parse_group(void)
     last_tok = t;
     return NULL;  // syntax error
   }
-  chkwd |= CHKALIAS;
+    chkwd |= CHKALIAS | CHKKWD;
   return body;
 }
 
@@ -294,7 +344,7 @@ parse_func(void)
     t = tokenize();
     if (t.type != TRP)
       return NULL;
-    chkwd |= CHKALIAS;
+    chkwd |= CHKALIAS | CHKKWD;
     return sub;
   }
   // Anything else is a syntax error
@@ -361,6 +411,61 @@ parse_heredoc(void)
   heredoc_tail = &heredoc_head;
 }
 
+cmd_tree *
+parse_while(token tok)
+{
+  cmd_tree *condition, *body, *n;
+  sh_tok t;
+
+  if (!(condition = parse_list(TDO)))
+    return NULL;
+  t = tokenize();
+  if (t.type != TDO)
+    return NULL;
+  if (!(body = parse_list(TDONE)))
+    return NULL;
+  t = tokenize();
+  if (t.type != TDONE)
+    return NULL;
+
+  n = newwhilenode(condition, body, tok);
+  chkwd |= CHKALIAS | CHKKWD;
+  return n;
+}
+
+static cmd_tree *
+parse_if(void)
+{
+  cmd_tree *cond, *then, *else_;
+  sh_tok t;
+
+  cond = parse_list(TTHEN);
+  t = tokenize();
+  // XXX: check if i should actually do this here.
+  if (t.type != TTHEN)
+    return NULL;
+  then = parse_list(TFI);
+  t = tokenize();
+
+  switch (t.type) {
+    case TELIF:
+      else_ = parse_if();
+      break;
+    case TELSE:
+      else_ = parse_list(TFI);
+      t = tokenize();
+      if (t.type != TFI)
+        return NULL;
+      break;
+    case TFI:
+      else_ = NULL;
+      break;
+    default:
+      return NULL;
+  }
+  return newifnode(cond, then, else_);
+}
+
 /**  recursive decent parser  */
 __attribute__((hot)) cmd_tree *
 parse_cmd(void)
@@ -384,18 +489,36 @@ parse_cmd(void)
       last_tok = t;
       break;
     }
-    chkwd |= CHKALIAS;
+    chkwd |= CHKALIAS | CHKKWD;
     neg++;
   }
 
   t = tokenize();
-  if (t.type == TLP) {
-    sub = parse_list(TRP);
-    t = tokenize();
-    if (t.type != TRP)
-      return NULL;
-    chkwd |= CHKALIAS;
-    return newsubsh(sub, (neg & 1) ? NEG : 0);
+
+  switch (t.type) {
+    case TIF:
+      return parse_if();
+    case TWHILE:
+    case TUNTIL:
+      return parse_while(t.type);
+    case TLP:
+      sub = parse_list(TRP);
+      t = tokenize();
+      if (t.type != TRP)
+        return NULL;
+      chkwd |= CHKALIAS | CHKKWD;
+      return newsubsh(sub, (neg & 1) ? NEG : 0);
+    case TTHEN:
+    case TELIF:
+    case TELSE:
+    case TFI:
+    case TDO:
+    case TDONE: // TODO: figure out where to print error message
+      t.type = TWORD;
+      break;
+    default:
+      // TODO: add  for loops
+      break;
   }
 
   last_tok = t;

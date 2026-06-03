@@ -1,6 +1,6 @@
 /* lex.c - tokenizer functions */
-#include <stdio.h>
 #define _POSIX_C_SOURCE 200809L
+#include <stdio.h>
 #include <string.h>
 
 #include "lex.h"
@@ -10,6 +10,7 @@
 #include "input.h"
 
 /* clang-format off */
+#define NCHR(c) (nchars[(unsigned char)c])
 static const unsigned char nchars[256] = {
   [' '] = C_SPACE,
   ['\t'] = C_SPACE,
@@ -32,20 +33,23 @@ static const unsigned char nchars[256] = {
   ['`'] = C_BTICK,
   /* everything else is 0 = C_WORD */ /* clang-format on */
 };
-#define NCHR(c) (nchars[(unsigned char)c])
 
+#define DCHR(c) (dqchars[(unsigned char)c])
 static const unsigned char dqchars[256] = {
   ['"'] = C_DQUOTE,
   ['\\'] = C_BSLASH,
   ['$'] = C_DOLLAR,
   ['`'] = C_BTICK,
 };
-#define DCHR(c) (dqchars[(unsigned char)c])
 
+#define SCHR(c) (sqchars[(unsigned char)c])
 static const unsigned char sqchars[256] = {
   ['\''] = C_SQUOTE,
 };
-#define SCHR(c) (sqchars[(unsigned char)c])
+
+#define KEYW(f, s, t) \
+  if (memcmp(s, f->word, f->len) == 0) \
+    return (sh_tok) { .type = t, .cmd = f }
 
 int alias_depth = 0;
 int notclosed = 0;
@@ -490,6 +494,54 @@ tokenize(void)
         f = get_wf(c);
         if (!f)
           return SHTOK(TEOF);
+        if (wd & CHKKWD && f->qs == QNONE && f->next == NULL) {
+          switch (f->len) {
+            case 2:
+              switch (f->word[0]) {
+                case 'd':
+                  KEYW(f, "do", TDO);
+                  break;
+                case 'i':
+                  KEYW(f, "if", TIF);
+                  break;
+                case 'f':
+                  KEYW(f, "fi", TFI);
+                  break;
+              }
+            break;
+            case 3:
+              switch (f->word[0]) {
+                case 'f':
+                  KEYW(f, "for", TFOR);
+                  break;
+              }
+            break;
+            case 4:
+              switch (f->word[0]) {
+                case 'e':
+                  KEYW(f, "else", TELSE);
+                  KEYW(f, "elif", TELIF);
+                  break;
+                case 't':
+                  KEYW(f, "then", TTHEN);
+                  break;
+                case 'd':
+                  KEYW(f, "done", TDONE);
+                  break;
+              }
+            break;
+            case 5:
+              switch (f->word[0]) {
+                case 'w':
+                  KEYW(f, "while", TWHILE);
+                  break;
+                case 'u':
+                  KEYW(f, "until", TUNTIL);
+                  break;
+              }
+            break;
+          }
+        }
         if ((wd & CHKALIAS) && f->qs == QNONE && f->next == NULL) {
           word = join_wf(f);
           a = findalias(word);

@@ -44,6 +44,16 @@ typedef enum {
   TBKGRND,
   TREDIR,
   TCMDSUB,
+  TIF,
+  TTHEN,
+  TELIF,
+  TELSE,
+  TFI,
+  TWHILE,
+  TUNTIL,
+  TFOR,
+  TDO,
+  TDONE,
 } token;
 
 typedef enum {
@@ -87,6 +97,7 @@ extern int chkwd;
 enum {
   CHKALIAS = 1 << 0,
   CHKNL = 1 << 1,
+  CHKKWD = 1 << 2,
 };
 
 enum {
