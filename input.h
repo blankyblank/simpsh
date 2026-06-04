@@ -100,5 +100,35 @@ shreadbuf(void)
   return readbc;
 }
 
+static inline size_t
+shpeek(const char **p)
+{
+  if (cur_shinpt->unget > 0)
+    return 0;
+  if (cur_shinpt->nleft > 0) {
+    *p = cur_shinpt->nchar;
+    return cur_shinpt->nleft;
+  }
+  if (cur_shinpt->strpush)
+    return 0;
+  // if (cur_shinpt->mapsize)
+  //   return 0;
+  if (shreadbuf()) {
+    *p = cur_shinpt->nchar;
+    return cur_shinpt->nleft;
+  }
+  return 0;
+}
+
+static inline void
+shadvance(size_t n)
+{
+  // XXX: move to simd_memchr_eq
+  for (size_t i = 0; i < n; i++)
+    if (cur_shinpt->nchar[i] == '\n')
+      cur_shinpt->linenum++;
+  cur_shinpt->nchar += n;
+  cur_shinpt->nleft -= n;
+}
 
 #endif  // INPUT_H
