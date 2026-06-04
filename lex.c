@@ -1,4 +1,5 @@
 /* lex.c - tokenizer functions */
+#include <stddef.h>
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <string.h>
@@ -8,9 +9,17 @@
 #include "utils.h"
 #include "malloc.h"
 #include "input.h"
+#include "simd.h"
+
+#define CTX_MAX 8
+#define NCHR(c) (nchars[(unsigned char)c])
+#define DCHR(c) (dqchars[(unsigned char)c])
+#define SCHR(c) (sqchars[(unsigned char)c])
+#define KEYW(f, s, t) \
+  if (memcmp(s, f->word, f->len) == 0) \
+    return (sh_tok) { .type = t, .cmd = f }
 
 /* clang-format off */
-#define NCHR(c) (nchars[(unsigned char)c])
 static const unsigned char nchars[256] = {
   [' '] = C_SPACE,
   ['\t'] = C_SPACE,
@@ -34,7 +43,6 @@ static const unsigned char nchars[256] = {
   /* everything else is 0 = C_WORD */ /* clang-format on */
 };
 
-#define DCHR(c) (dqchars[(unsigned char)c])
 static const unsigned char dqchars[256] = {
   ['"'] = C_DQUOTE,
   ['\\'] = C_BSLASH,
@@ -42,14 +50,17 @@ static const unsigned char dqchars[256] = {
   ['`'] = C_BTICK,
 };
 
-#define SCHR(c) (sqchars[(unsigned char)c])
 static const unsigned char sqchars[256] = {
   ['\''] = C_SQUOTE,
 };
 
-#define KEYW(f, s, t) \
-  if (memcmp(s, f->word, f->len) == 0) \
-    return (sh_tok) { .type = t, .cmd = f }
+typedef enum {
+  M_NORMAL,
+  M_DQUOTE,
+  M_SQUOTE
+} tokmode;
+static tokmode ctx_stack[CTX_MAX] = { M_NORMAL };
+static int ctx_depth;
 
 int alias_depth = 0;
 int notclosed = 0;
@@ -58,6 +69,28 @@ int chkwd = 0;
 
 static void append_wf(wf **, wf **, char *, size_t len, int);
 static wf *get_wf(int);
+
+static inline tokmode
+current_ctx(void)
+{
+  return ctx_stack[ctx_depth];
+}
+static inline void
+push_ctx(tokmode m)
+{
+  ctx_stack[++ctx_depth] = m;
+}
+static inline void
+pop_ctx(void)
+{
+  ctx_depth--;
+}
+
+static const unsigned char *ctx_tables[] = {
+  [M_NORMAL] = nchars,
+  [M_DQUOTE] = dqchars,
+  [M_SQUOTE] = sqchars,
+};
 
 #define qescape(c) \
   case insq: \
@@ -152,6 +185,8 @@ __attribute__((hot)) static wf *
 get_wf(int c)
 {
   /*
+   * damn that function long.
+   *
    * parses a line extracts a word, handles quoting, escaping.
    *
    * returns immediately if it's at the position of an
@@ -173,29 +208,56 @@ get_wf(int c)
   wf *tail;
   char n, *w;
   size_t len, cmdsubd, cmdlen;
-  const unsigned char *state;
 
   head = NULL;
   tail = NULL;
-  state = nchars;
   len = 0;
   for (;;) {
-    switch (state[(unsigned char)c]) {
+    if (current_ctx() == M_NORMAL && ctx_tables[current_ctx()][(unsigned char)c] == C_WORD) {
+      size_t avail;
+      const char *buf;
+      size_t pos;
+
+      if ((avail = shpeek(&buf)) >= 16) {
+        if ((pos = simd_scan_word(buf, avail)) > 0) {
+          if (stleft < pos)
+            grow_stack(pos);
+          st_putc(c);
+          len++;
+          memcpy(stnext, buf, pos);
+          stnext += pos;
+          stleft -= pos;
+          len += pos;
+          shadvance(pos);
+          c = eatbnl();
+          if (c == SHEOF)
+            goto done;
+          continue;
+        }
+      }
+    }
+    switch (ctx_tables[current_ctx()][(unsigned char)c]) {
       case C_SQUOTE:
         if (len > 0) {
           w = grab_str(len); /* save unquoted frag if nonempty */
-          append_wf(&head, &tail, w, len, state == sqchars ? QSINGLE : QNONE);
+          append_wf(&head, &tail, w, len, current_ctx() == M_SQUOTE ? QSINGLE : QNONE);
           len = 0;
         }
-        state = (state == sqchars) ? nchars : sqchars;
+        if (current_ctx() == M_SQUOTE)
+          pop_ctx();
+        else
+          push_ctx(M_SQUOTE);
         break;
       case C_DQUOTE:
         if (len > 0) {
           w = grab_str(len); /* save unquoted frag if nonempty */
-          append_wf(&head, &tail, w, len, state == dqchars ? QDOUBLE : QNONE);
+          append_wf(&head, &tail, w, len, current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
           len = 0;
         }
-        state = (state == dqchars) ? nchars : dqchars;
+        if (current_ctx() == M_DQUOTE)
+          pop_ctx();
+        else
+          push_ctx(M_DQUOTE);
         break;
       case C_BSLASH:
         n = shgetchar();
@@ -208,10 +270,10 @@ get_wf(int c)
 
         if (len > 0) {
           w = grab_str(len); /* save frag if nonempty */
-          append_wf(&head, &tail, w, len, state == dqchars ? QDOUBLE : QNONE);
+          append_wf(&head, &tail, w, len, current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
           len = 0;
         }
-        if (state == dqchars && n != '$' && n != '"' && n != '\\' && n != '`') {
+        if (current_ctx() == M_DQUOTE && n != '$' && n != '"' && n != '\\' && n != '`') {
           st_putc(c);
           len++;
         }
@@ -231,7 +293,7 @@ get_wf(int c)
           cmdlen = 0;
           if (len > 0) {
             w = grab_str(len); /* save frag if nonempty */
-            append_wf(&head, &tail, w, len, state == dqchars ? QDOUBLE : QNONE);
+            append_wf(&head, &tail, w, len, current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
             len = 0;
           }
 
@@ -243,7 +305,6 @@ get_wf(int c)
             switch (cstate) {
               qescape(ch)
             }
-
             switch (ch) {
               case '\'':
                 cstate |= insq;
@@ -294,7 +355,7 @@ get_wf(int c)
           cmdlen = 0;
           if (len > 0) {
             w = grab_str(len); /* save frag if nonempty */
-            append_wf(&head, &tail, w, len, state == dqchars ? QDOUBLE : QNONE);
+            append_wf(&head, &tail, w, len, current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
             len = 0;
           }
 
@@ -334,10 +395,10 @@ get_wf(int c)
 cmdsubend:
           w = grab_str(cmdlen);
           append_wf(&head, &tail, w, cmdlen,
-                    (state == dqchars) ? QCMDSUB_DQ : QCMDSUB);
+                    (current_ctx() == M_DQUOTE) ? QCMDSUB_DQ : QCMDSUB);
           c = eatbnl();
           if (c == SHEOF) {
-            if (state != nchars)
+            if (current_ctx() != M_NORMAL)
               notclosed = 1;
             goto done;
           }
@@ -356,7 +417,7 @@ cmdsubend:
       case C_GT:
       case C_SPACE:
       case C_NL:
-        if (state == nchars) {
+        if (current_ctx() == M_NORMAL) {
           shungetc(c);
           goto done;
         }
@@ -369,9 +430,9 @@ cmdsubend:
         break;
     }
 
-    c = (state == sqchars) ? shgetchar() : eatbnl();
+    c = (current_ctx() == M_SQUOTE) ? shgetchar() : eatbnl();
     if (c == SHEOF) {
-      if (state != nchars)
+      if (current_ctx() != M_NORMAL)
         notclosed = 1;
       goto done;
     }
@@ -381,9 +442,8 @@ done:
   if (len) {
     w = grab_str(len);
     append_wf(&head, &tail, w, len,
-              state == sqchars ? QSINGLE :
-              state == dqchars ? QDOUBLE :
-                                 QNONE);
+              current_ctx() == M_SQUOTE ? QSINGLE :
+              current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
   }
   return head;
 }
@@ -494,7 +554,23 @@ tokenize(void)
         f = get_wf(c);
         if (!f)
           return SHTOK(TEOF);
-        if (wd & CHKKWD && f->qs == QNONE && f->next == NULL) {
+
+        int allnum; // AHEAD OF TIME SCAN
+        f->flags = 0;
+        if (f->qs == QNONE && !f->next)
+          f->flags |= WFSINGLE;
+        allnum = 1;
+        for (wf *p = f; p; p = p->next) {
+          if (p->qs != QNONE)
+            f->flags |= WFDOUBLE;
+          for (size_t i = 0; i < p->len; i++)
+            if (p->word[i] < '0' || p->word[i] > '9')
+              allnum = 0;
+        }
+        if (allnum)
+          f->flags |= WFALLNUM;
+
+        if (wd & CHKKWD && (f->flags & WFSINGLE)) {
           switch (f->len) {
             case 2:
               switch (f->word[0]) {
@@ -542,7 +618,7 @@ tokenize(void)
             break;
           }
         }
-        if ((wd & CHKALIAS) && f->qs == QNONE && f->next == NULL) {
+        if ((wd & CHKALIAS) && (f->flags & WFSINGLE)) {
           word = join_wf(f);
           a = findalias(word);
           if (a) {

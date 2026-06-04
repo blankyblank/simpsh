@@ -558,7 +558,7 @@ parse_cmd(void)
       case TWORD:
         {
           sh_tok n = tokenize();
-          if (n.type == TREDIR && allnum(t.cmd)) {
+          if (n.type == TREDIR && (t.cmd->flags & WFALLNUM)) {
             sh_tok name = tokenize();
             if (name.type != TWORD)
               return NULL;

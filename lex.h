@@ -64,6 +64,12 @@ typedef enum {
   QCMDSUB_DQ,
 } quoted;
 
+typedef enum {
+  WFSINGLE = 1 << 0,
+  WFDOUBLE = 1 << 1,
+  WFALLNUM = 1 << 2,
+} wf_flags;
+
 /**
  * word fragment
  * @field wf pointer to next node
@@ -77,6 +83,7 @@ struct wf {
   char *word;
   quoted qs;
   size_t len;
+  int flags;
 };
 
 /** store tokens before building argv */
