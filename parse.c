@@ -1,6 +1,7 @@
 /* parse.c - parser functions */
-#include <stddef.h>
+#include "exec.h"
 #define _POSIX_C_SOURCE 200809L
+#include <stddef.h>
 #include <string.h>
 
 #include "malloc.h"
@@ -27,14 +28,13 @@ static redir **heredoc_tail = &heredoc_head;
 
 static void parse_heredoc(void);
 static int is_assn(wf *);
-static int get_assn(wf **, wf ***);
-static cmd_tree *parse_andor(void);
-static cmd_tree *parse_pipe(void);
+static int get_assn(wf **, wf *** restrict);
 static cmd_tree *parse_group(void);
 static cmd_tree *parse_func(void);
 static cmd_tree *parse_cmd(void);
 static cmd_tree *parse_while(token);
 static cmd_tree *parse_if(void);
+static cmd_tree *parse_simple_cmd(size_t);
 
 static inline cmd_tree *
 newcmdnode(wf **args, int flags, wf **sh_vars, size_t vc)
@@ -132,7 +132,7 @@ newifnode(cmd_tree *cond, cmd_tree *then, cmd_tree *else_)
   return n;
 }
 
-static inline int
+/* static inline int
 allnum(wf *w)
 {
   if (w->len == 0 || w->word[0] < '0' || w->word[0] > '9')
@@ -141,7 +141,7 @@ allnum(wf *w)
     if (w->word[i] < '0' || w->word[i] > '9')
       return 0;
   return 1;
-}
+} */
 
 /* check if word is name=value */
 static int
@@ -169,7 +169,7 @@ is_assn(wf *cmd)
 
 /** get name and value from NAME=value pair */
 static int
-get_assn(wf **args, wf ***sh_vars)
+get_assn(wf **args, wf ***restrict sh_vars)
 {
   int i, j, k, ac;
   *sh_vars = NULL;
@@ -216,7 +216,7 @@ parse_list(token s)
   }
   last_tok = t;
 
-  l = parse_andor();
+  l = parse_cmd();
   if (!l)
     return NULL;
 
@@ -250,66 +250,6 @@ parse_list(token s)
       } else {
         last_tok = t;
       }
-      break;
-    }
-  }
-  return l;
-}
-
-/**  parse and or, or lists  */
-static cmd_tree *
-parse_andor(void)
-{
-  cmd_tree *l, *r;
-  sh_tok t;
-
-  l = parse_pipe();
-  if (!l)
-    return NULL;
-
-  for (;;) {
-    chkwd |= CHKALIAS | CHKKWD;
-    t = tokenize();
-    if (t.type == TAND || t.type == TOR) {
-      chkwd |= CHKALIAS | CHKNL | CHKKWD;
-      r = parse_pipe();
-      if (!r)
-        return NULL;
-      if (eflag) {
-        l->flags |= EFLAG_SAFE;
-        if (l->right)
-          l->right->flags |= EFLAG_SAFE;
-      }
-      l = newoppnode(t.type, l, r);
-    } else {
-      last_tok = t;
-      break;
-    }
-  }
-  return l;
-}
-
-/**  parse pipelines  */
-static cmd_tree *
-parse_pipe(void)
-{
-  cmd_tree *l, *r;
-  sh_tok t;
-
-  l = parse_cmd();
-  if (!l)
-    return NULL;
-
-  for (;;) {
-    t = tokenize();
-    if (t.type == TPIPE) {
-      chkwd |= CHKALIAS | CHKNL | CHKKWD;
-      r = parse_cmd();
-      if (!r)
-        return NULL;
-      l = newoppnode(t.type, l, r);
-    } else {
-      last_tok = t;
       break;
     }
   }
@@ -441,7 +381,6 @@ parse_if(void)
 
   cond = parse_list(TTHEN);
   t = tokenize();
-  // XXX: check if i should actually do this here.
   if (t.type != TTHEN)
     return NULL;
   then = parse_list(TFI);
@@ -466,65 +405,21 @@ parse_if(void)
   return newifnode(cond, then, else_);
 }
 
-/**  recursive decent parser  */
-__attribute__((hot)) cmd_tree *
-parse_cmd(void)
+cmd_tree *
+parse_simple_cmd(size_t neg)
 {
-  size_t vc, neg, wc, cap;
-  wf **sh_vars;
-  cmd_tree *sub, *body, *l;
-  redir *redirs, **tail;
   sh_tok t, close;
-  wf **args;
+  wf **args, **sh_vars;
+  redir *redirs, **tail;
+  size_t vc, wc, cap;
+  cmd_tree *body, *l;
 
-  sh_vars = NULL;
-  l = NULL;
-  neg = 0;
-  wc = 0;
-  cap = 8;
 
-  for (;;) {
-    t = tokenize();
-    if (t.type != TNOT) {
-      last_tok = t;
-      break;
-    }
-    chkwd |= CHKALIAS | CHKKWD;
-    neg++;
-  }
-
-  t = tokenize();
-
-  switch (t.type) {
-    case TIF:
-      return parse_if();
-    case TWHILE:
-    case TUNTIL:
-      return parse_while(t.type);
-    case TLP:
-      sub = parse_list(TRP);
-      t = tokenize();
-      if (t.type != TRP)
-        return NULL;
-      chkwd |= CHKALIAS | CHKKWD;
-      return newsubsh(sub, (neg & 1) ? NEG : 0);
-    case TTHEN:
-    case TELIF:
-    case TELSE:
-    case TFI:
-    case TDO:
-    case TDONE: // TODO: figure out where to print error message
-      t.type = TWORD;
-      break;
-    default:
-      // TODO: add  for loops
-      break;
-  }
-
-  last_tok = t;
   args = st_alloc(8 * sizeof(wf *));
   redirs = NULL;
   tail = &redirs;
+  wc = 0;
+  cap = 8;
 
   for (;;) {
     int fd;
@@ -618,5 +513,114 @@ parse_cmd(void)
   l = newcmdnode(args, (neg & 1) ? NEG : 0, sh_vars, vc);
   if (redirs)
     return newredirnode(l, redirs);
+  return l;
+
+}
+
+
+/**  recursive decent parser  */
+__attribute__((hot)) cmd_tree *
+parse_cmd(void)
+{
+  size_t neg;
+  cmd_tree *sub, *l, *r, *r2;
+  sh_tok t, t2;
+
+  l = NULL;
+  neg = 0;
+
+  for (;;) {
+    t = tokenize();
+    if (t.type != TNOT) {
+      last_tok = t;
+      break;
+    }
+    chkwd |= CHKALIAS | CHKKWD;
+    neg++;
+  }
+
+  t = tokenize();
+
+  switch (t.type) {
+    case TIF:
+      return parse_if();
+    case TWHILE:
+    case TUNTIL:
+      return parse_while(t.type);
+    case TLP:
+      sub = parse_list(TRP);
+      t = tokenize();
+      if (t.type != TRP)
+        return NULL;
+      chkwd |= CHKALIAS | CHKKWD;
+      return newsubsh(sub, (neg & 1) ? NEG : 0);
+    case TTHEN:
+    case TELIF:
+    case TELSE:
+    case TFI:
+    case TDO:
+    case TDONE: // TODO: figure out where to print error message
+      t.type = TWORD;
+      break;
+    default:
+      // TODO: add  for loops
+      break;
+  }
+
+  last_tok = t;
+
+  if (!(l = parse_simple_cmd(neg)))
+    return NULL;
+
+  // parse_pipe
+  for (;;) {
+    t = tokenize();
+    if (t.type == TPIPE) {
+      chkwd |= CHKALIAS | CHKNL | CHKKWD;
+      r = parse_simple_cmd(0);
+      if (!r)
+        return NULL;
+      l = newoppnode(t.type, l, r);
+    } else {
+      last_tok = t;
+      break;
+    }
+  }
+
+  for (;;) {
+    chkwd |= CHKALIAS | CHKKWD;
+    t = tokenize();
+    if (t.type == TAND || t.type == TOR) {
+      chkwd |= CHKALIAS | CHKNL | CHKKWD;
+      if (!(r = parse_simple_cmd(0)))
+        return NULL;
+      for (;;) {
+        t2 = tokenize();
+        if (t2.type == TPIPE) {
+          chkwd |= CHKALIAS | CHKNL | CHKKWD;
+          if (!(r2 = parse_simple_cmd(0)))
+            return NULL;
+          r = newoppnode(TPIPE, r, r2);
+        } else {
+          last_tok = t2;
+          break;
+        }
+      }
+      if (eflag) {
+        l->flags |= EFLAG_SAFE;
+        if (l->right)
+          l->right->flags |= EFLAG_SAFE;
+      }
+      l = newoppnode(t.type, l, r);
+    } else {
+      last_tok = t;
+      break;
+    }
+  }
+
+    if (l->type == CMD) {
+      CSTATUS(l) = run_commands(l);
+      l->flags |= EXECED;
+    }
   return l;
 }

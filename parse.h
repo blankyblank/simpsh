@@ -39,7 +39,7 @@ struct cmd_tree {
     FOR,
   } type;
   union {
-    struct { wf **args; size_t vc; wf **sh_vars; } cmd;
+    struct { wf **args; size_t vc; wf **sh_vars; int status; } cmd;
     struct { token op_t; } op;
     struct { redir *redirs;} redir;
     struct { wf *name; } func;
@@ -54,11 +54,13 @@ enum {
   NEG = 1 << 0,
   UNTIL = 1 << 1,
   EFLAG_SAFE = 1 << 2,
+  EXECED = 1 << 3,
 };
 
 #define CARGS(n) ((n)->t.cmd.args)
 #define CVARS(n) ((n)->t.cmd.sh_vars)
 #define CVARC(n) ((n)->t.cmd.vc)
+#define CSTATUS(n) ((n)->t.cmd.status)
 #define COPP(n) ((n)->t.op.op_t)
 #define CREDR(n) ((n)->t.redir.redirs)
 #define CFUNC(n) ((n)->t.func.name)

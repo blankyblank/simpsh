@@ -35,7 +35,7 @@ typedef struct fdlist {
 static int getbuiltin(char *);
 static void poptmpvars(tmp_var *, size_t);
 // static int restore_fd(fdlist *, size_t);
-static void save_fd(redir *, fdlist *, size_t *);
+static void save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
 static int shexec(char **, const cmd_tree *, char **);
 static int run_if(const cmd_tree *);
@@ -91,7 +91,7 @@ poptmpvars(tmp_var *tmp, size_t vc)
 }
 
 static void
-save_fd(redir *r, fdlist *sfd, size_t *sfdc)
+save_fd(redir *r, fdlist *sfd, size_t * restrict sfdc)
 {
   redir *t;
   t = r;
@@ -779,12 +779,14 @@ __attribute__((hot)) int
 run_commands(const cmd_tree *n)
 {
   int l_status;
-  l_status = lstatus; /// XXX: just added
+  l_status = lstatus;
 
   if (!n)
     return 0;
   switch (n->type) {
     case CMD:
+      if (n->flags & EXECED)
+        return lstatus = CSTATUS(n);
       return lstatus = run_cmd(n);
     case SUBSHELL:
       return lstatus = run_subsh(n);
