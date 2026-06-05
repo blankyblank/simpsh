@@ -21,6 +21,7 @@
 #include "expand.h"
 #include "job.h"
 #include "main.h"
+#include "malloc.h"
 #include "simpsh.h"
 #include "var.h"
 

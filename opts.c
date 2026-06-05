@@ -200,27 +200,23 @@ setcmd(char **argv)
 
   if (argc < 2) {
     char **enva;
-    shvar *var;
+    shvar *v;
     size_t c, f;
 
     c = 0;
-    for (size_t i = 0; i < VAR_BUCKETS; i++) {
-      var = var_tab[i];
-      while (var) {
-        c++;
-        var = var->next;
-      }
+    for (size_t i = 0; i < var_tab_size; i++) {
+      v = &var_tab[i];
+      if (!v->var || v->var == TOMBSTONE)
+        continue;
+      c++;
     }
     if (c == 0)
       return 0;
     enva = st_alloc((c + 1) * sizeof(char *));
     f = 0;
-    for (size_t i = 0; i < VAR_BUCKETS; i++) {
-      var = var_tab[i];
-      while (var) {
-        enva[f++] = var->var;
-        var = var->next;
-      }
+    for (size_t i = 0; i < var_tab_size; i++) {
+      v = &var_tab[i];
+      enva[f++] = v->var;
     }
     enva[c] = NULL;
     qsort(enva, c, sizeof(char *), cmpname);

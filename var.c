@@ -1,91 +1,148 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include <stddef.h>
 #include <err.h>
 #include <limits.h>
+#include <stddef.h>
+#include <string.h>
 
 #include "arg.h"
 #include "env.h"
 #include "exec.h"
-#include "path.h"
 #include "main.h"
 #include "malloc.h"
 #include "opts.h"
+#include "path.h"
+#include "utils.h"
 #include "var.h"
 
-shvar *var_tab[VAR_BUCKETS];
+static shvar var_tab_init[VAR_BUCKETS_INIT];
+shvar *var_tab = var_tab_init;
+shvar *var_cache[VAR_CACHE_S];
+size_t var_tab_size = VAR_BUCKETS_INIT;
+size_t var_count;
 tmp_var localvars[LOCAL_MAX];
 size_t localsp;
+
+
+void
+resize_var_tab(void)
+{
+  size_t ns;
+  shvar *n;
+
+  ns = var_tab_size * 2;
+  if (!(n = calloc(ns, sizeof(shvar))))
+    return;
+
+  for (size_t i = 0; i < var_tab_size; i++) {
+    shvar *v;
+    size_t h;
+    v = &var_tab[i];
+    if (!v->var || v->var == TOMBSTONE)
+      continue;
+    h = hash_n(v->var, v->nlen, ns);
+    while (n[h].var)
+      h = (h + 1) % ns;
+    n[h] = *v;
+  }
+
+  if (var_tab != var_tab_init)
+    free(var_tab);
+  var_tab = n;
+  var_tab_size = ns;
+  memset(var_cache, 0, sizeof(var_cache));
+}
 
 /** find variable by name */
 __attribute__((hot)) shvar *
 findvar(const char *name)
 {
-  unsigned int i;
-  shvar *v;
+  unsigned int i, ci;
+  shvar *v, *cv;
   size_t nlen;
 
   nlen = strlen(name);
-  i = hash_n(name, nlen, VAR_BUCKETS);
-  v = var_tab[i];
-  while (v) {
-    if (v->var[0] == name[0])
-      if (strncmp(v->var, name, nlen) == 0)
-        return v;
-    v = v->next;
+
+  ci = hash_n(name, nlen, VAR_CACHE_S);
+  cv = var_cache[ci];
+  if (cv && cv->var && cv->var != TOMBSTONE && cv->nlen == nlen &&
+      memcmp(cv->var, name, nlen) == 0)
+    return cv;
+
+  i = hash_n(name, nlen, var_tab_size);
+  for (;;) {
+    v = &var_tab[i];
+    if (!v->var)
+      return NULL;
+    if (v->var != TOMBSTONE && v->nlen == nlen &&
+        memcmp(v->var, name, nlen) == 0) {
+      var_cache[ci] = v;
+      return v;
+    }
+    i = (i + 1) % var_tab_size;
   }
-  return NULL;
 }
 
 /** set variable value */
 void
-setvar(char *name, char *val, shvar_flags flags)
+setvar(char *restrict name, char *restrict val, shvar_flags flags)
 {
   if (aflag)
     flags |= VEXPRT;
-  shvar *v;
+  shvar *v, *n;
   char *nvar;
-  size_t vlen, nlen, i;
+  size_t vlen, nlen, i, ci;
 
   nlen = strlen(name);
-  if (!val) {
-    nvar = strndup_(name, nlen + 2);
-    nvar[nlen] = '=';
-    nvar[nlen + 1] = '\0';
-  } else {
-    vlen = strlen(val);
-    if (!(nvar = malloc(nlen + 1 + vlen + 1)))
-      return;
-    memcpy(nvar, name, nlen);
-    nvar[nlen] = '=';
+  vlen = val ? strlen(val) : 0;
+  if (!(nvar = malloc(nlen + vlen + 2)))
+    return;
+  memcpy(nvar, name, nlen);
+  nvar[nlen] = '=';
+  if (val)
     memcpy(nvar + nlen + 1, val, vlen + 1);
+  else
+   nvar[nlen + 1] = '\0';
+
+  i = hash_n(name, nlen, var_tab_size);
+  n = NULL;
+
+  for (;;) {
+    v = &var_tab[i];
+    if (!v->var) {
+      if (!n)
+        n = v;
+      break;
+    }
+    if (v->var == TOMBSTONE) {
+      if (!n)
+        n = v;
+    } else if (v->nlen == nlen && memcmp(v->var, name, nlen) == 0) {
+      if (v->flags & VREADONLY) {
+        free(nvar);
+        return;
+      }
+      free(v->var);
+      v->var = nvar;
+      v->nlen = nlen;
+      v->flags = flags;
+      goto callback;
+    }
+    i = (i + 1) % var_tab_size;
   }
 
-  i = hash_n(name, nlen, VAR_BUCKETS);
-  v = var_tab[i];
-  while (v) {
-    if (v->var[0] == name[0])
-      if (strncmp(v->var, name, nlen) == 0 && v->var[nlen] == '=') {
-        if (v->flags & VREADONLY) {
-          free(nvar);
-          return;
-        }
-        free(v->var);
-        v->var = nvar;
-        v->flags = flags;
-        goto callback;
-      }
-    v = v->next;
-  }
-  if (!(v = malloc(sizeof(shvar))))
-    return;
-  v->var = nvar;
-  v->flags = flags;
-  v->func = NULL;
-  v->next = var_tab[i];
-  var_tab[i] = v;
+  n->var = nvar;
+  n->nlen = nlen;
+  n->flags = flags;
+  n->func = NULL; // XXX: ???
+  v = n;
+  var_count++;
+  if (var_count > var_tab_size * 7 / 10)
+    resize_var_tab();
 
 callback:
+  ci = hash_n(name, nlen, VAR_CACHE_S);
+  var_cache[ci] = v;
   if (v->func)
     v->func(name);
   return;
@@ -95,26 +152,31 @@ callback:
 void
 rmvar(const char *name)
 {
-  unsigned int i;
-  shvar **prev;
+  size_t i, ci;
   shvar *v;
   size_t nlen;
 
   nlen = strlen(name);
-  i = hash_n(name, nlen, VAR_BUCKETS);
-  prev = &var_tab[i];
-  v = var_tab[i];
+  i = hash_n(name, nlen, var_tab_size);
 
-  while (v) {
-    if (v->var[0] == name[0])
-      if (strncmp(v->var, name, nlen) == 0) {
-        *prev = v->next;
-        free(v->var);
-        free(v);
-        return;
-      }
-    prev = &v->next;
-    v = v->next;
+  for (;;) {
+    v = &var_tab[i];
+    if (!v->var)
+      return;
+    if (v->var != TOMBSTONE && v->nlen == nlen &&
+        memcmp(v->var, name, nlen) == 0) {
+      free(v->var);
+      v->var = TOMBSTONE;
+      v->nlen = 0;
+      v->flags = 0;
+      v->func = NULL;
+      var_count--;
+      ci = hash_n(name, nlen, VAR_CACHE_S);
+      if (var_cache[ci] == v)
+        var_cache[ci] = NULL;
+      return;
+    }
+    i = (i + 1) % var_tab_size;
   }
 }
 
@@ -145,12 +207,10 @@ build_env(char **sh_env)
   /* way too complicated way of trying to copy strings into
    * an array of strings. for performance reasons... I guess.*/
 
-  size_t c, sh_c, j, len, var_len, arrsize;
-  size_t namelen, lenarr[MAX_ENV], tmplen[MAX_ENV], skipc;
-  char *eq, *buf, *tmpname[MAX_ENV], *shadowed[MAX_ENV];
+  size_t c, sh_c, j, len, arrsize;
+  size_t lenarr[MAX_ENV], tmplen[MAX_ENV], skipc;
+  char *buf, *tmpname[MAX_ENV], *shadowed[MAX_ENV];
   char **arr, **cmd_env, **mem;
-  shvar *var;
-  int skip;
 
   cmd_env = NULL;
   c = 0;
@@ -162,6 +222,7 @@ build_env(char **sh_env)
   if (sh_env) {
     sh_c = array_len(sh_env);
     for (size_t i = 0; i < sh_c; i++) {
+      char *eq;
       lenarr[c] = strlen(sh_env[i]) + 1;
       eq = strchrnul_(sh_env[i], '=');
       tmpname[i] = sh_env[i];
@@ -169,26 +230,28 @@ build_env(char **sh_env)
       len += lenarr[c++];
     }
   }
-  for (size_t i = 0; i < VAR_BUCKETS; i++) {
-    var = var_tab[i];
-    while (var) {
-      if (var->flags & VEXPRT) {
-        namelen = strchrnul_(var->var, '=') - var->var;
-        skip = 0;
-        for (size_t s = 0; s < sh_c; s++) {
-          if (namelen == tmplen[s] &&
-              (memcmp(var->var, tmpname[s], namelen)) == 0) {
-            shadowed[skipc++] = var->var;
-            skip = 1;
-            break;
-          }
-        }
-        if (!skip) {
-          lenarr[c] = strlen(var->var) + 1;
-          len += lenarr[c++];
+  for (size_t i = 0; i < var_tab_size; i++) {
+    size_t namelen, skip;
+    shvar *v;
+
+    v = &var_tab[i];
+    if (!v->var || v->var == TOMBSTONE)
+      continue;
+    if (v->flags & VEXPRT) {
+      namelen = v->nlen;
+      skip = 0;
+      for (size_t s = 0; s < sh_c; s++) {
+        if (namelen == tmplen[s] &&
+            (memcmp(v->var, tmpname[s], namelen)) == 0) {
+          shadowed[skipc++] = v->var;
+          skip = 1;
+          break;
         }
       }
-      var = var->next;
+      if (!skip) {
+        lenarr[c] = strlen(v->var) + 1;
+        len += lenarr[c++];
+      }
     }
   }
 
@@ -206,25 +269,27 @@ build_env(char **sh_env)
       buf += lenarr[j++];
     }
   }
-  for (size_t i = 0; i < VAR_BUCKETS; i++) {
-    var = var_tab[i];
-    while (var) {
-      if (var->flags & VEXPRT) {
-        skip = 0;
-        for (size_t s = 0; s < skipc; s++) {
-          if (var->var == shadowed[s]) {
-            skip = 1;
-            break;
-          }
-        }
-        if (!skip) {
-          *arr++ = buf;
-          var_len = lenarr[j++];
-          memcpy(buf, var->var, var_len);
-          buf += var_len;
+  for (size_t i = 0; i < var_tab_size; i++) {
+    size_t skip;
+    shvar *v;
+    v = &var_tab[i];
+    if (!v->var || v->var == TOMBSTONE)
+      continue;
+    if (v->flags & VEXPRT) {
+      skip = 0;
+      for (size_t s = 0; s < skipc; s++) {
+        if (v->var == shadowed[s]) {
+          skip = 1;
+          break;
         }
       }
-      var = var->next;
+      if (!skip) {
+        size_t var_len;
+        *arr++ = buf;
+        var_len = lenarr[j++];
+        memcpy(buf, v->var, var_len);
+        buf += var_len;
+      }
     }
   }
   *arr = NULL;
@@ -238,6 +303,7 @@ init_env(void)
   size_t i, env_c;
   shvar *p;
 
+  var_count = 0;
   env_c = array_len(environ);
   for (i = 0; i < env_c; i++) {
     char *name, *val;

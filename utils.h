@@ -71,7 +71,7 @@ strchrnul_(const char *s, int c)
 
 /**  strndup using memcpy  */
 static inline char *
-strndup_(const char *s, size_t n)
+strndup_(const char *restrict s, size_t n)
 {
   char *dup;
   
@@ -250,6 +250,7 @@ quotestrn(const char *s)
   char *buf, *p;
 
   c = 3;
+  // XXX: fix null pointer dereference bug (look into guards needed)
   for (size_t i = 0; s[i]; i++) {
     if (s[i] == '\'')
       c += 5;
