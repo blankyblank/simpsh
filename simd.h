@@ -59,6 +59,61 @@ simd_scan_word(const char *buf,size_t len)
 }
 
 static inline size_t
+simd_skip_spaces(const char *buf, size_t len)
+{
+  __m128i input, spacev, tabv, allones;
+  __m128i spacer, tabr, spacem, notspacem;
+  int mask;
+  size_t i;
+
+  i = 0;
+  spacev = _mm_set1_epi8(' ');
+  tabv = _mm_set1_epi8('\t');
+  allones = _mm_set1_epi8(-1);
+
+  for (;i + 16 <= len; i += 16) {
+  input = _mm_loadu_si128((const __m128i *)(buf + i));
+  spacer = _mm_cmpeq_epi8(input, spacev);
+  tabr = _mm_cmpeq_epi8(input, tabv);
+  spacem = _mm_or_si128(spacer, tabr);
+  notspacem = _mm_andnot_si128(spacem, allones);
+  if ((mask = _mm_movemask_epi8(notspacem)))
+    return i + __builtin_ctz(mask);
+  }
+  for (; i < len; i++)
+    if (buf[i] != ' ' && buf[i] != '\t')
+      return i;
+  return len;
+}
+
+static inline size_t
+simd_skip_nl(const char *buf, size_t len)
+{
+  __m128i input, nlv, allones, nlr, notnlm;
+  int mask;
+  size_t i;
+
+  allones = _mm_set1_epi8(-1);
+  nlv = _mm_set1_epi8('\n');
+  mask = 0;
+  i = 0;
+  for (;i + 16 <= len; i += 16) {
+    input = _mm_loadu_si128((const __m128i *)(buf + i));
+    nlr = _mm_cmpeq_epi8(input, nlv);
+    notnlm = _mm_andnot_si128(nlr, allones);
+    mask = _mm_movemask_epi8(notnlm);
+    if (mask)
+    return i + __builtin_ctz(mask);
+  }
+
+  for (; i < len; i++)
+    if (buf[i] != '\n')
+      return i;
+  return len;
+}
+
+
+static inline size_t
 simd_scan_delim(const char *buf, size_t len, const char *delims, int ndelims)
 {
   __m128i input, match, delim_vec;
@@ -109,6 +164,5 @@ simd_memchr_eq(const char *buf, size_t len, char c)
       return i;
   return len;
 }
-
 #endif /* SIMD_H */
 

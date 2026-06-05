@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include "lex.h"
 #include "opts.h"
+#include "simd.h"
 
 typedef struct strpush strpush;
 struct strpush {
@@ -120,13 +121,27 @@ shpeek(const char **p)
   return 0;
 }
 
+/* move forward in input by n, using simd */
 static inline void
 shadvance(size_t n)
 {
-  // XXX: move to simd_memchr_eq
-  for (size_t i = 0; i < n; i++)
-    if (cur_shinpt->nchar[i] == '\n')
+  const char *buf;
+  size_t pos;
+
+  buf = cur_shinpt->nchar;
+  pos = 0;
+
+  while (pos < n) {
+    size_t found;
+    found = simd_memchr_eq(buf + pos, n - pos, '\n');
+    if (found < n - pos) {
       cur_shinpt->linenum++;
+      pos += found + 1;
+    } else {
+      break;
+    }
+  }
+
   cur_shinpt->nchar += n;
   cur_shinpt->nleft -= n;
 }

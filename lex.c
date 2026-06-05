@@ -1,6 +1,6 @@
 /* lex.c - tokenizer functions */
-#include <stddef.h>
 #define _POSIX_C_SOURCE 200809L
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -469,20 +469,56 @@ tokenize(void)
   while ((c = shgetchar()) != SHEOF) {
     switch (NCHR(c)) {
       case C_SPACE:
+        {
+          const char *buf;
+          size_t avail = shpeek(&buf);
+          if (avail >= 16) {
+            size_t skip = simd_skip_spaces(buf, avail);
+            if (skip > 0)
+              shadvance(skip);
+          }
+        }
         continue;
       case C_COMMENT:
-        while ((c = shgetchar()) != '\n' && c != SHEOF) {}
-        if (c == '\n')
-          shungetc(c);
+        {
+          const char *buf;
+          size_t avail;
+          for (;;) {
+            size_t pos;
+            avail = shpeek(&buf);
+            if (!avail)
+              break;
+            pos = simd_scan_delim(buf, avail, "\n", 1);
+            if (pos > 0)
+              shadvance(pos);
+            if (pos < avail)
+              break;
+          }
+        }
+        // while ((c = shgetchar()) != '\n' && c != SHEOF) {}
+        // if (c == '\n')
+        //   shungetc(c);
         continue;
 
       case C_NL:
         if (wd & CHKNL)
           continue;
         cur_shinpt->linenum++;
-        while ((c = shgetchar()) == '\n')
-          cur_shinpt->linenum++;
-        if (c != SHEOF)
+        {
+          const char *buf;
+          size_t avail;
+          while ((avail = shpeek(&buf)) > 0) {
+            size_t skip;
+            skip = simd_skip_nl(buf, avail);
+            cur_shinpt->linenum += skip;
+            if (skip > 0)
+              shadvance(skip);
+            if (skip < avail)
+              break;
+          }
+        }
+        c = shgetchar();
+        if (c != '\n' && c != SHEOF)
           shungetc(c);
         return SHTOK(TNL);
 
