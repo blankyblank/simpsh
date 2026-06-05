@@ -11,12 +11,12 @@ typedef struct {
 } ifssect;
 
 
-extern char *exp_tilde(char *, size_t, size_t *, size_t *);
-extern char *exp_var(char *, size_t, size_t *, size_t *);
+extern char *exp_tilde(char *, size_t, size_t *restrict, size_t *restrict);
+extern char *exp_var(char *, size_t, size_t *restrict, size_t *restrict);
 extern char *homedir(char *);
-extern char **expand_argv(wf **, size_t *);
+extern char **expand_argv(wf **, size_t *restrict);
 extern char *expand_ps1(char *);
-extern char *exp_word(wf *, size_t *, ifssect **);
+extern char *exp_word(wf *, size_t *restrict, ifssect **restrict);
 
 /* vim: set filetype=c: */
 #endif /* EXPAND_H */

@@ -1,21 +1,21 @@
 /* expand.c - variable/string expandsion logic */
-#include "exec.h"
-#include <stddef.h>
 #define _POSIX_C_SOURCE 200809L
+#include <stddef.h>
 #include <string.h>
 #include <limits.h>
 #include <stdio.h>
 
+#include "exec.h"
 #include "expand.h"
 #include "lex.h"
 #include "main.h"
 #include "malloc.h"
 #include "opts.h"
 #include "parse.h"
-#include "var.h"
 #include "utils.h"
+#include "var.h"
 
-static char *var_n(const char *, size_t, size_t *, size_t *);
+static char *var_n(const char *, size_t, size_t * restrict, size_t * restrict);
 static char *varbrace_n(const char *, size_t, size_t *, size_t *);
 static char *lookupvar(const char *, size_t);
 static char **splitword(char *, size_t, ifssect *, size_t *);
@@ -83,7 +83,7 @@ is_posparam(const char *var, size_t var_l)
 
 /** expand $var style variables */
 char *
-var_n(const char *args, size_t i, size_t *end, size_t *olen)
+var_n(const char *args, size_t i, size_t * restrict end, size_t * restrict olen)
 {
   const char *env_var;
   char *var;
@@ -163,7 +163,6 @@ lookupvar(const char *vt, size_t vlen)
   char *var;
   shvar *v;
   int n;
-  size_t i;
 
   n = 0;
   if (is_posparam(vt, vlen)) {
@@ -171,13 +170,7 @@ lookupvar(const char *vt, size_t vlen)
       n = n * 10 + (vt[j] - '0');
     var = get_posparam(n);
   } else {
-    i = hash_n(vt, vlen, VAR_BUCKETS);
-    v = var_tab[i];
-    while (v) {
-      if (memcmp(v->var, vt, vlen) == 0)
-        break;
-      v = v->next;
-    }
+    v = findvar(st_strndup(vt, vlen));
     if (v)
       var = shvar_val(v);
     else
@@ -189,7 +182,7 @@ lookupvar(const char *vt, size_t vlen)
 
 /** expand variables in word */
 char *
-exp_var(char *word, size_t s, size_t *e, size_t *olen)
+exp_var(char *word, size_t s, size_t *restrict e, size_t *restrict olen)
 {
   // XXX: look into path to get here, and if a left garbage value matters since it should fail anyway
   if (word[s] != '$')
@@ -269,7 +262,7 @@ homedir(char *user)
 }
 
 char *
-exp_tilde(char *word, size_t s, size_t *e, size_t *olen)
+exp_tilde(char *word, size_t s, size_t *restrict e, size_t *restrict olen)
 {
   char *hm, strt;
   size_t end;
@@ -365,7 +358,7 @@ expand_ps1(char *p)
 
 /** expand argument vector */
 char **
-expand_argv(wf **args, size_t *t)
+expand_argv(wf **args, size_t *restrict t)
 {
   ifssect *ifsexp;
   size_t ifsn, cap, fargc, tlen;
@@ -403,7 +396,7 @@ expand_argv(wf **args, size_t *t)
 
 /** expand word with variable substitution */
 __attribute__((hot)) char *
-exp_word(wf *wordf, size_t *n, ifssect **ifssects)
+exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects)
 {
   size_t end, i, len;
   size_t nsplits, sectstart, si;
@@ -421,7 +414,6 @@ exp_word(wf *wordf, size_t *n, ifssect **ifssects)
     if (!(sects = malloc(nsplits * sizeof(ifssect))))
       return NULL;
     *ifssects = sects;
-    si = 0;
   } else {
     sects = NULL;
     if (ifssects)
