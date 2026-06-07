@@ -57,8 +57,8 @@ resize_var_tab(void)
 __attribute__((hot)) shvar *
 findvar(const char *name)
 {
-  unsigned int i, ci;
-  shvar *v, *cv;
+  unsigned int ci;
+  shvar *v, *cv, *end;
   size_t nlen;
 
   nlen = strlen(name);
@@ -69,9 +69,9 @@ findvar(const char *name)
       memcmp(cv->var, name, nlen) == 0)
     return cv;
 
-  i = hash_n(name, nlen, var_tab_size);
+  end = var_tab + var_tab_size;
+  v = var_tab + (hash_n(name, nlen, var_tab_size) & (var_tab_size - 1));
   for (;;) {
-    v = &var_tab[i];
     if (!v->var)
       return NULL;
     if (v->var != TOMBSTONE && v->nlen == nlen &&
@@ -79,7 +79,8 @@ findvar(const char *name)
       var_cache[ci] = v;
       return v;
     }
-    i = (i + 1) % var_tab_size;
+    if (++v >= end)
+      v = var_tab;
   }
 }
 
@@ -89,9 +90,9 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
 {
   if (aflag)
     flags |= VEXPRT;
-  shvar *v, *n;
+  shvar *v, *n, *end;
   char *nvar;
-  size_t vlen, nlen, i, ci;
+  size_t vlen, nlen, ci;
 
   nlen = strlen(name);
   vlen = val ? strlen(val) : 0;
@@ -104,11 +105,11 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
   else
    nvar[nlen + 1] = '\0';
 
-  i = hash_n(name, nlen, var_tab_size);
+  end = var_tab + var_tab_size;
+  v = var_tab + (hash_n(name, nlen, var_tab_size) & (var_tab_size - 1));
   n = NULL;
 
   for (;;) {
-    v = &var_tab[i];
     if (!v->var) {
       if (!n)
         n = v;
@@ -128,17 +129,28 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
       v->flags = flags;
       goto callback;
     }
-    i = (i + 1) % var_tab_size;
+    if (++v >= end)
+      v = var_tab;
   }
 
   n->var = nvar;
   n->nlen = nlen;
   n->flags = flags;
-  n->func = NULL; // XXX: ???
+  n->func = NULL;
   v = n;
   var_count++;
-  if (var_count > var_tab_size * 7 / 10)
+  if (var_count > var_tab_size * 7 / 10) {
     resize_var_tab();
+    end = var_tab + var_tab_size;
+    v = var_tab + (hash_n(name, nlen, var_tab_size) & (var_tab_size - 1));
+    for (;;) {
+      if (v->var && v->var != TOMBSTONE && v->nlen == nlen &&
+          memcmp(v->var, name, nlen) == 0)
+        break;
+      if (++v >= end)
+        v = var_tab;
+    }
+  }
 
 callback:
   ci = hash_n(name, nlen, VAR_CACHE_S);
@@ -152,15 +164,15 @@ callback:
 void
 rmvar(const char *name)
 {
-  size_t i, ci;
-  shvar *v;
+  size_t ci;
+  shvar *v, *end;
   size_t nlen;
 
   nlen = strlen(name);
-  i = hash_n(name, nlen, var_tab_size);
+  end = var_tab + var_tab_size;
+  v = var_tab + (hash_n(name, nlen, var_tab_size) & (var_tab_size - 1));
 
   for (;;) {
-    v = &var_tab[i];
     if (!v->var)
       return;
     if (v->var != TOMBSTONE && v->nlen == nlen &&
@@ -176,7 +188,8 @@ rmvar(const char *name)
         var_cache[ci] = NULL;
       return;
     }
-    i = (i + 1) % var_tab_size;
+    if (++v >= end)
+      v = var_tab;
   }
 }
 
@@ -205,7 +218,7 @@ char **
 build_env(char **sh_env)
 {
   /* way too complicated way of trying to copy strings into
-   * an array of strings. for performance reasons... I guess.*/
+   * an array of strings. in an attempt to keep performance */
 
   size_t c, sh_c, j, len, arrsize;
   size_t lenarr[MAX_ENV], tmplen[MAX_ENV], skipc;
@@ -322,7 +335,7 @@ init_env(void)
   sh_argc = 0;
   sh_argv = NULL;
   sh_bgpid = 0;
-  snprintf(sh_pid_s, 16, "%d", sh_pid);
+  lltoa(sh_pid, sh_pid_s);
   home = getenv("HOME");
 }
 
@@ -332,7 +345,6 @@ exportcmd(char **args)
   size_t argc;
   argc = array_len(args);
 
-  /* nvar = s_strndup(args[i], nvarlen + 1); */ 
   if (argc > 1) {
     for (size_t i = 1; i < argc; i++) {
       char *eq;
@@ -394,7 +406,6 @@ readonlycmd(char **argv)
   int argc, i;
   argc = array_len(argv);
 
-  /* nvar = s_strndup(args[i], nvarlen + 1); */ 
   if (argc > 1) {
     for (i = 1; i < argc; i++) {
       char *eq;

@@ -32,15 +32,24 @@ typedef struct fdlist {
   int saved;
 } fdlist;
 
-static int getbuiltin(char *);
+static const struct {
+  int flags;
+  mode_t mode;
+} redir_tab[] = {
+  [RDIN] = { O_RDONLY },
+  [RDOUT] = { O_WRONLY | O_CREAT | O_TRUNC, 0666 },
+  [RDCLOB] = { O_WRONLY | O_CREAT | O_TRUNC, 0666 },
+  [RDAPP] = { O_WRONLY | O_CREAT | O_APPEND, 0666 },
+  [RDRW] = { O_RDONLY | O_CREAT, 0666 },
+};
+
+static int findbuiltin(char *);
 static void poptmpvars(tmp_var *, size_t);
-// static int restore_fd(fdlist *, size_t);
 static void save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
 static int shexec(char **, const cmd_tree *, char **);
 static int run_if(const cmd_tree *);
 static int run_while(const cmd_tree *);
-// static int run_funcdef(const cmd_tree *);
 static int run_func(const cmd_tree *, char **);
 static int run_pipe(const cmd_tree *);
 static int run_bg(const cmd_tree *);
@@ -68,7 +77,7 @@ restore_fd(fdlist *sfd, size_t sfdc)
 
 /**  get builtin command  */
 int
-getbuiltin(char *args)
+findbuiltin(char *args)
 {
   size_t idx;
   idx = hash(args, BUILTIN_BUCKETS);
@@ -570,10 +579,10 @@ run_cmd(const cmd_tree *n)
 
   if (xflag) {
     char *xline;
-    shps4 = getvar("PS4");
-    shps4 = shps4 ? shps4 : "+";
+    sh_ps4 = getvar("PS4");
+    sh_ps4 = sh_ps4 ? sh_ps4 : "+";
     xline = join_strn(final, len);
-    printf("%s %s\n", shps4, xline);
+    printf("%s %s\n", sh_ps4, xline);
   }
 
   if (!final || !final[0]) {
@@ -613,7 +622,7 @@ run_cmd(const cmd_tree *n)
       status = run_func(f->body, final);
     }
 
-  } else if ((b = getbuiltin(*final)) >= 0) { /* if this is a builtin */
+  } else if ((b = findbuiltin(*final)) >= 0) { /* if this is a builtin */
     if (vars && vars[0]) { /*  handle name=value cmd  */
       tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; vars[i]; i++) {
@@ -642,7 +651,7 @@ run_cmd(const cmd_tree *n)
     }
     env = build_env(evars);
     if (!env) {
-      perror("idk your shit's all fucked up i guess");
+      perror("no environment found");
       return 1;
     }
     status = shexec(final, n, env);
@@ -673,10 +682,13 @@ run_redir(const cmd_tree *n)
     if (!(name = exp_word(r->name, NULL, NULL)))
       return 1;
     switch (r->type) {
+
       case RDIN:
-        OPENFD(name, O_RDONLY, fd)
-        DUPFD(fd, r->fd)
-        CLOSEFD(fd)
+      case RDAPP:
+      case RDCLOB:
+      case RDRW:
+        OPENFD(name, redir_tab[r->type].flags, fd)
+        goto dupfall;
         break;
       case RDOUT:
         if (Cflag) {
@@ -685,22 +697,12 @@ run_redir(const cmd_tree *n)
             warn("%s", name);
             return 1;
           }
-          goto dupfall;
+        } else {
+          OPENFD(name, O_WRONLY | O_CREAT | O_TRUNC, fd)
         }
-      /* fall through */
-      case RDCLOB:
-        OPENFD(name, O_WRONLY | O_CREAT | O_TRUNC, fd)
+        goto dupfall;
+        /* fall through */
 dupfall:
-        DUPFD(fd, r->fd)
-        CLOSEFD(fd)
-        break;
-      case RDAPP:
-        OPENFD(name, O_WRONLY | O_CREAT | O_APPEND, fd)
-        DUPFD(fd, r->fd)
-        CLOSEFD(fd)
-        break;
-      case RDRW:
-        OPENFD(name, O_RDWR | O_CREAT, fd)
         DUPFD(fd, r->fd)
         CLOSEFD(fd)
         break;
@@ -721,6 +723,10 @@ dupfall:
         break;
       case RDHERE_D:
       case RDHERE:
+        if (!r->heredoc) {
+          warn("heredoc not found");
+          return 1;
+        }
         {
           wf b;
           char *body;
@@ -761,9 +767,9 @@ dupfall:
 
   if (!(n->left && n->left->type == CMD && CARGS(n->left) &&
         CARGS(n->left)[0] && !CARGS(n->left)[1] &&
-        !(CARGS(n)[0]->word[0] == 'e' && CARGS(n)[0]->word[1] == 'x' &&
-          CARGS(n)[0]->word[2] == 'e' && CARGS(n)[0]->word[3] == 'c' &&
-          CARGS(n)[0]->word[4] == '\0'))) {
+        !(CARGS(n->left)[0]->word[0] == 'e' && CARGS(n->left)[0]->word[1] == 'x' &&
+          CARGS(n->left)[0]->word[2] == 'e' && CARGS(n->left)[0]->word[3] == 'c' &&
+          CARGS(n->left)[0]->word[4] == '\0'))) {
     fflush(NULL);
     restore_fd(sfd, sfdc);
   }

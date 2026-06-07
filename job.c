@@ -45,7 +45,7 @@ newjob(pid_t pgid, const char *cmd)
   nj->next = job_list;
   job_list = nj;
   sh_bgpid = pgid;
-  snprintf(sh_bgpid_s, 16, "%d", sh_bgpid);
+  lltoa(sh_bgpid, sh_bgpid_s);
   return nj;
 }
 
@@ -116,7 +116,7 @@ killjob(void)
 int
 startjob(pid_t pgid)
 {
-  if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
+  if (tcsetpgrp(STDIN_FILENO, pgid) < 0 && !iflag)
     err(-1, "tcset");
   return 0;
 }
@@ -126,6 +126,8 @@ jobmsg(job *j)
 {
   job *cur, *sec;
   char c;
+  const char *state;
+
   cur = findjob(NULL);
   sec = findjob("%-");
     if (cur == j)
@@ -134,8 +136,8 @@ jobmsg(job *j)
       c = '-';
     else
       c = ' ';
-
-  printf("[%d]%c %-8s\t\t\t\t\t\t\t\t\t\t\t\t%s\n", j->num, c, jstates[j->state], j->cmd); //XXX: clang says potential buffer overflow (overflow index)
+  state = j->state <= JDONE ? jstates[j->state] : "Unknown";
+  printf("[%d]%c %-8s\t\t\t\t\t\t\t\t\t\t\t\t%s\n", j->num, c, state, j->cmd);
 }
 
 void
