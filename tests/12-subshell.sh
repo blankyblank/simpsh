@@ -4,7 +4,7 @@
 
 [ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
 
-msg "running (echo test123)"
+msg_run "running (echo test123)"
 out=$(../simpsh -c "(echo test123)")
 if [ "$out" != "test123" ]; then
   msg_fail "\$out=$out differs from 'test123'"
@@ -14,7 +14,7 @@ else
 fi
 
 
-msg "running (echo test123)"
+msg_run "running (echo test123)"
 out2=$(../simpsh -c "(echo -n a ; echo b)")
 if [ "$out2" != "ab" ]; then
   msg_fail "\$out2=$out2 differs from 'ab'"
