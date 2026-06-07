@@ -60,6 +60,46 @@ atoi_(const char *s)
     return n;
 }
 
+static inline int
+atoll_(const char *s)
+{
+    long long n = 0;
+    while (isdigit_(*s))
+        n = n * 10 + (*s++ - '0');
+    return n;
+}
+
+static inline size_t
+lltoa(long long val, char *buf)
+{
+  char *p, *start, *end;
+  unsigned long long uval;
+
+  p = buf;
+
+  if (val < 0) {
+    *p++ = '-';
+    uval = -val;
+  } else {
+    uval = val;
+  }
+  start = p;
+  do {
+    *p++ = '0' + (uval % 10);
+    uval /= 10;
+  } while (uval);
+  end = p - 1;
+  while (start < end) {
+    char tmp;
+    tmp = *start;
+    *start++ = *end;
+    *end-- = tmp;
+  }
+  *p = '\0';
+  return p - buf;
+}
+
+
 /**  replicate strchrnul  */
 static inline char *
 strchrnul_(const char *s, int c)
@@ -121,27 +161,6 @@ array_len(char **arr)
   size_t n = 0;
   while (arr[n])
     n++;
-  return n;
-}
-
-/**  get length of generic array  */
-static inline size_t
-genarray_len(void *arr, size_t type)
-{
-  size_t n = 0;
-  char *cur;
-  cur = (char *)arr;
-
-  for (;;) {
-    void *p;
-    p = NULL;
-    for (size_t i = 0; i < type; i++)
-      ((char *)&p)[i] = cur[i];
-    if (p == NULL)
-      break;
-    n++;
-    current += type;
-  }
   return n;
 }
 
@@ -246,11 +265,13 @@ hash_n(const char *s, size_t n, unsigned int buckets) {
 static inline char *
 quotestrn(const char *s)
 {
+  if (!s)
+    return st_strdup("''");
+
   size_t c;
   char *buf, *p;
 
   c = 3;
-  // XXX: fix null pointer dereference bug (look into guards needed)
   for (size_t i = 0; s[i]; i++) {
     if (s[i] == '\'')
       c += 5;
