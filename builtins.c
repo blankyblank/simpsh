@@ -67,7 +67,7 @@ int (* const builtin_funcs[])(char **) = {
   &unaliascmd,
   &unsetcmd,
 };
-int builtinnum(void) {
+int nbuiltins(void) {
   return sizeof(builtins) / sizeof(char *);
 } /* clang-format on */
 
@@ -78,7 +78,7 @@ init_builtins(void)
   size_t i, n;
   size_t idx;
 
-  n = builtinnum();
+  n = nbuiltins();
   for (i = 0; i < BUILTIN_BUCKETS; i++)
     builtin_tab[i] = -1;
 
@@ -334,13 +334,11 @@ exitcmd(char **argv)
   argc = array_len(argv);
   if (argc > 2) {
     shwarnx(argv[0], "too many arguements"); /*NOLINT*/
-    // fprintf(stderr, "%s: %s: \n", sh_argv0 ,argv[0]);
     return 1;
   } else if (argc == 2) {
     for (size_t i = 0; argv[1][i]; i++) {
       if (!isdigit_(argv[1][i])) {
         shwarn_arg(argv[0], argv[1], "a number is required");
-        // fprintf(stderr, "%s: %s: a number is required\n", sh_argv0, argv[1]);
         return 1;
       }
     }
@@ -361,9 +359,9 @@ helpcmd(char **args)
 {
   (void)args;
   const char **helparray = builtins;
-  int i, n = builtinnum();
+  int i, n = nbuiltins();
 
-  printf("simpsh version idk.2 (still pre alpha) - "
+  printf("simpsh version (pre alpha) - "
          "https://codeberg.org/someoneelse/simpsh.git\n\n"
          "These are the builtin commands included with simpsh:\n");
   for (i = 0; i < n; i++) {

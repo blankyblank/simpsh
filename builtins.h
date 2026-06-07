@@ -8,7 +8,7 @@ extern const char *builtins[];
 extern int (* const builtin_funcs[])(char **);
 extern int builtin_tab[BUILTIN_BUCKETS];
 
-extern int builtinnum(void);
+extern int nbuiltins(void);
 extern void init_builtins(void);
 
 /* builtins */

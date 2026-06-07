@@ -17,7 +17,6 @@
 
 static char *var_n(const char *, size_t, size_t * restrict, size_t * restrict);
 static char *varbrace_n(const char *, size_t, size_t *, size_t *);
-static char *lookupvar(const char *, size_t);
 static char **splitword(char *, size_t, ifssect *, size_t *);
 
 /** get the pid shell variable */
@@ -26,7 +25,7 @@ static char **splitword(char *, size_t, ifssect *, size_t *);
 #define varargc() \
   char *buf; \
   buf = st_alloc(16); \
-  *olen = snprintf(buf, 16, "%d", sh_argc); \
+  *olen = lltoa(sh_argc, buf); \
   return buf;
 
 /** get the variable for the return status of last command */
@@ -184,8 +183,7 @@ lookupvar(const char *vt, size_t vlen)
 char *
 exp_var(char *word, size_t s, size_t *restrict e, size_t *restrict olen)
 {
-  // XXX: look into path to get here, and if a left garbage value matters since it should fail anyway
-  if (word[s] != '$')
+  if (word && word[s] != '$')
     return NULL;
   char *var;
 
@@ -402,7 +400,6 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects)
   size_t nsplits, sectstart, si;
   ifssect *sects;
   wf *f;
-  // char *s;
   char *expanded;
 
   nsplits = 0;
@@ -519,7 +516,6 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects)
 
           stnext = cmdsubpos;
           stleft = savesl;
-          // len += ((sublen = run_cmdsub(cmdsub)) < 0) ? 0 : sublen;
           if ((sublen = run_cmdsub(cmdsub)) < 0)
             return NULL;
           else {
@@ -536,8 +532,6 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects)
   }
   if (n)
     *n = si;
-  // if (ifssects)
-  //   *ifssects = sects;
   return grab_str(len);
 }
 

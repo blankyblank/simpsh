@@ -166,7 +166,8 @@ tree_dup(cmd_tree *s)
       CELSE(n) = tree_dup(CELSE(s));
       break;
     default:
-    return NULL;
+      free(n);
+      return NULL;
     case CMD:
       cnt = 0;
       for (size_t i = 0; CARGS(s)[i]; i++)

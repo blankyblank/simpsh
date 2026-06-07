@@ -32,10 +32,9 @@ char *sh_pid_s = NULL;
 char *sh_bgpid_s = NULL;
 pid_t sh_bgpid;
 char *sh_argv0;
-char *shps1;
-char *shps2;
-// char *shps3; // TODO: bring back when i implement select
-char *shps4;
+char *sh_ps1;
+char *sh_ps2;
+char *sh_ps4;
 char **sh_argv;
 int alloc_sh_argv = 0;
 char *home;
@@ -90,7 +89,7 @@ main(int argc, char **argv)
       break;
     case 'o':
       oarg = EARGF(usage());
-      i = checkopt(oarg);
+      i = chkopt(oarg);
       if (i >= 0)
         shopts[i] = 1;
       else {

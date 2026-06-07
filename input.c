@@ -93,7 +93,7 @@ setinputstrn(char *s, int len)
   shinput *new;
   new = st_alloc(sizeof(shinput));
   new->prev = cur_shinpt;
-  new->buf = NULL; // I GUESS????
+  new->buf = NULL;
   new->fd = -1;
   new->nleft = len;
   new->nchar = s;

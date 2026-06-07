@@ -14,7 +14,6 @@ extern void getbuildinfo(void);
 extern void init_history(void);
 #endif /* ifdef READLINE */
 
-// extern char *read_accumulate(void);
 extern void simpsh_run(void);
 extern int sh_interactive(void);
 

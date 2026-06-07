@@ -27,7 +27,7 @@ extern const char *shoptname[OPTC];
 
 extern void init_opts(void);
 extern void freeshargv(void);
-extern int checkopt(char *);
+extern int chkopt(char *);
 extern int setcmd(char **);
 
 #define UFLAGMSG(v) fprintf(stderr, "%s: %s: unbound variable\n", sh_argv0, v)

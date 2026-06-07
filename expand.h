@@ -17,6 +17,7 @@ extern char *homedir(char *);
 extern char **expand_argv(wf **, size_t *restrict);
 extern char *expand_ps1(char *);
 extern char *exp_word(wf *, size_t *restrict, ifssect **restrict);
+extern char *lookupvar(const char *, size_t);
 
 /* vim: set filetype=c: */
 #endif /* EXPAND_H */

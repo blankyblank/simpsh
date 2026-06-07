@@ -43,7 +43,6 @@ struct cmd_tree {
     struct { token op_t; } op;
     struct { redir *redirs;} redir;
     struct { wf *name; } func;
-    // struct { cmd_tree *cond; cmd_tree *then_; cmd_tree *else_; } if_;
     struct { cmd_tree *else_; } if_;
     struct { wf *name; wf **words; } for_;
   } t;

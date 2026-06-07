@@ -40,8 +40,6 @@ init_job(void)
   signal(SIGTTIN, SIG_IGN);
   signal(SIGTTOU, SIG_IGN);
   tcgetattr(STDIN_FILENO, &sh_termios);
-  // TOSTOP if desired
-  // sh_termios.c_lflag |= TOSTOP;
   tcsetattr(STDIN_FILENO, TCSADRAIN, &sh_termios);
   sh_pgid = getpgrp();  //
 }

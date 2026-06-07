@@ -139,7 +139,7 @@ getpath(char *file)
 
   if ((strchr(file, '/')) && access(file, X_OK) == 0) {
     return (st_strdup(file));
-    // XXX: maybe hash full path's idk
+    // XXX: consider hashing full paths
   }
 
   if (hflag && (fullpath = findchash(file)))

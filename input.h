@@ -39,7 +39,6 @@ extern shinput *cur_shinpt;
 #define BASEBUFSIZE BUFSIZ
 #define shinput_linenum() (cur_shinpt ? cur_shinpt->linenum : 0)
 #define shinput_isfile() (cur_shinpt && cur_shinpt->fd >= 0)
-// #define popinput() (cur_shinpt = cur_shinpt->prev)
 
 #define popinput() \
   do { \
@@ -48,7 +47,6 @@ extern shinput *cur_shinpt;
     cur_shinpt = cur_shinpt->prev; \
   } while (0)
 
-// extern int shgetchar(void);
 extern int shungetc(int);
 extern size_t shgetline(char *, size_t);
 extern void setinputstrn(char *, int);
@@ -112,8 +110,6 @@ shpeek(const char **p)
   }
   if (cur_shinpt->strpush)
     return 0;
-  // if (cur_shinpt->mapsize)
-  //   return 0;
   if (shreadbuf()) {
     *p = cur_shinpt->nchar;
     return cur_shinpt->nleft;

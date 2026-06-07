@@ -32,10 +32,9 @@ enum {
 extern char **environ;
 extern char *sh_argv0; /* the shells first arguement */
 extern char **sh_argv; /* shell arguement array */
-extern char *shps1; /* prompt string */
-extern char *shps2; /* continuation prompt string */
-// extern char *shps3;  // TODO: bring back when i implement select
-extern char *shps4;
+extern char *sh_ps1; /* prompt string */
+extern char *sh_ps2; /* continuation prompt string */
+extern char *sh_ps4;
 extern int sh_argc; /* shell arg count */
 extern int lstatus; /* last exit status */
 extern pid_t sh_pid; /* the shell's pid */

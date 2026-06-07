@@ -121,7 +121,7 @@ setopts(char *arg, int n, char *argv0)
 }
 
 int
-checkopt(char *argv)
+chkopt(char *argv)
 {
   for (size_t i = 0; i < OPTC; i++) {
     if (strcasecmp(argv, shoptname[i]) == 0)
@@ -274,7 +274,7 @@ setcmd(char **argv)
         listopts(minus);
         continue;
       }
-      idx = checkopt(o);
+      idx = chkopt(o);
       if (idx < 0)
         return 1;
       shopts[idx] = minus;

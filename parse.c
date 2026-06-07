@@ -132,17 +132,6 @@ newifnode(cmd_tree *cond, cmd_tree *then, cmd_tree *else_)
   return n;
 }
 
-/* static inline int
-allnum(wf *w)
-{
-  if (w->len == 0 || w->word[0] < '0' || w->word[0] > '9')
-    return 0;
-  for (size_t i = 0; i < w->len; i++)
-    if (w->word[i] < '0' || w->word[i] > '9')
-      return 0;
-  return 1;
-} */
-
 /* check if word is name=value */
 static int
 is_assn(wf *cmd)
