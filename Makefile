@@ -1,6 +1,6 @@
 CC := gcc
 # cc | gcc | clang
-BUILD       ?= debug
+BUILD       ?= sanitize
 # debug | release | sanitize | valgrind | profile
 BUILD_LINK  ?= dynamic
 # dynamic | static
@@ -14,7 +14,7 @@ LDLIBS  :=
 
 # Build mode presets
 ifeq ($(BUILD),release)
-	CFLAGS += -march=native -O2 -g -flto
+	CFLAGS += -march=native -O2 -flto=auto
 # -D_FORTIFY_SOURCE=3
 endif
 ifeq ($(BUILD),debug)
