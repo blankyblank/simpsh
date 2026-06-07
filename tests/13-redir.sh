@@ -11,7 +11,6 @@ if [ "$out1" != "test123" ]; then
   exit 1
 else
   test_pass  "out1" "matches" "test123"
-  # rm $f
 fi
 
 
@@ -27,3 +26,35 @@ else
   msg_pass ">> append redirection"
   rm $f
 fi
+
+echo "input_test" > $f
+msg_run "cat < $f"
+out=$(../simpsh -c "cat < $f")
+[ "$out" = "input_test" ] && msg_pass "input redirection" || { msg_fail "input redirection: $out"; exit 1; }
+rm $f
+
+echo "original" > $f
+msg_run "set -C; echo new > $f (should fail)"
+../simpsh -c "set -C; echo new > $f" 2>/dev/null
+out=$(cat $f)
+[ "$out" = "original" ] && msg_pass "Cflag blocks overwrite" || msg_fail "Cflag"
+msg_run "set -C; echo new >| $f (should work)"
+../simpsh -c "set -C; echo new >| $f"
+out=$(cat $f)
+[ "$out" = "new" ] && msg_pass "noclobber" || { msg_fail "noclobber"; exit 1; }
+rm $f
+
+msg_run "echo stderr >&2"
+out=$(../simpsh -c "echo hello 2>&1 1>/dev/null")
+[ -z "$out" ] && msg_pass "redirect duplication" || { msg_fail "redirect duplication"; exit 1; }
+
+msg_run "cat << EOF"
+out=$(../simpsh -c 'cat << EOF
+hello world
+EOF')
+[ "$out" = "hello world" ] && msg_pass "heredoc" || { msg_fail "heredoc: $out"; exit 1; }
+
+out=$(env tmpvar=expanded ../simpsh -c 'cat << '\''EOF'\''
+$tmpvar
+EOF')
+[ "$out" = '$tmpvar' ] && msg_pass "quoted heredoc" || { msg_fail "quoted heredoc: $out"; exit 1; }
