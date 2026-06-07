@@ -4,17 +4,22 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "lex.h"
+#include "arith.h"
 #include "env.h"
-#include "utils.h"
-#include "malloc.h"
 #include "input.h"
+#include "lex.h"
+#include "malloc.h"
+#include "main.h"
 #include "simd.h"
+#include "utils.h"
 
 #define CTX_MAX 8
 #define NCHR(c) (nchars[(unsigned char)c])
 #define DCHR(c) (dqchars[(unsigned char)c])
 #define SCHR(c) (sqchars[(unsigned char)c])
+#define current_ctx() (ctx_stack[ctx_depth])
+#define push_ctx(m) (ctx_stack[++ctx_depth] = (m))
+#define pop_ctx() (ctx_depth--)
 #define KEYW(f, s, t) \
   if (memcmp(s, f->word, f->len) == 0) \
     return (sh_tok) { .type = t, .cmd = f }
@@ -40,16 +45,13 @@ static const unsigned char nchars[256] = {
   ['<'] = C_LT,
   ['>'] = C_GT,
   ['`'] = C_BTICK,
-  /* everything else is 0 = C_WORD */ /* clang-format on */
-};
-
+}; /* everything else is 0 = C_WORD */  /* clang-format on */
 static const unsigned char dqchars[256] = {
   ['"'] = C_DQUOTE,
   ['\\'] = C_BSLASH,
   ['$'] = C_DOLLAR,
   ['`'] = C_BTICK,
 };
-
 static const unsigned char sqchars[256] = {
   ['\''] = C_SQUOTE,
 };
@@ -69,22 +71,6 @@ int chkwd = 0;
 
 static void append_wf(wf **, wf **, char *, size_t len, int);
 static wf *get_wf(int);
-
-static inline tokmode
-current_ctx(void)
-{
-  return ctx_stack[ctx_depth];
-}
-static inline void
-push_ctx(tokmode m)
-{
-  ctx_stack[++ctx_depth] = m;
-}
-static inline void
-pop_ctx(void)
-{
-  ctx_depth--;
-}
 
 static const unsigned char *ctx_tables[] = {
   [M_NORMAL] = nchars,
@@ -144,7 +130,7 @@ eatbnl(void)
   return c;
 }
 
-/* takes word fragment and returns (char *) */
+/* combines word fragments into a string */
 char *
 join_wf(wf *wordf)
 {
@@ -180,24 +166,10 @@ append_wf(wf **head, wf **tail, char *w, size_t len, int quoted)
   *tail = f;
 }
 
-/** Get word fragment */
+/** Get wf's from input */
 __attribute__((hot)) static wf *
 get_wf(int c)
 {
-  /*
-   * damn that function long.
-   *
-   * parses a line extracts a word, handles quoting, escaping.
-   *
-   * returns immediately if it's at the position of an
-   * opterator tokenize handles finding those. also whitespace etc.
-   * it advances the position for the caller, then the caller needs to advance
-   * through whitespace, and operators when it handles them.
-   * it returns word fragments, a linked list of (char *)s
-   * that are used to track the quote state of the line later
-   * XXX: verify description is still accurate
-   */
-
   enum {
     insq = (1 << 0),
     indq = (1 << 1),
@@ -206,14 +178,16 @@ get_wf(int c)
 
   wf *head;
   wf *tail;
-  char n, *w;
+  char n, n2, *w;
   size_t len, cmdsubd, cmdlen;
 
   head = NULL;
   tail = NULL;
   len = 0;
+
   for (;;) {
-    if (current_ctx() == M_NORMAL && ctx_tables[current_ctx()][(unsigned char)c] == C_WORD) {
+    if (current_ctx() == M_NORMAL &&
+        ctx_tables[current_ctx()][(unsigned char)c] == C_WORD) {
       size_t avail;
       const char *buf;
       size_t pos;
@@ -240,7 +214,8 @@ get_wf(int c)
       case C_SQUOTE:
         if (len > 0) {
           w = grab_str(len); /* save unquoted frag if nonempty */
-          append_wf(&head, &tail, w, len, current_ctx() == M_SQUOTE ? QSINGLE : QNONE);
+          append_wf(&head, &tail, w, len,
+                    current_ctx() == M_SQUOTE ? QSINGLE : QNONE);
           len = 0;
         }
         if (current_ctx() == M_SQUOTE)
@@ -248,10 +223,12 @@ get_wf(int c)
         else
           push_ctx(M_SQUOTE);
         break;
+
       case C_DQUOTE:
         if (len > 0) {
           w = grab_str(len); /* save unquoted frag if nonempty */
-          append_wf(&head, &tail, w, len, current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
+          append_wf(&head, &tail, w, len,
+                    current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
           len = 0;
         }
         if (current_ctx() == M_DQUOTE)
@@ -259,6 +236,7 @@ get_wf(int c)
         else
           push_ctx(M_DQUOTE);
         break;
+
       case C_BSLASH:
         n = shgetchar();
         if (n == '\n') {
@@ -267,13 +245,14 @@ get_wf(int c)
         }
         if (n == SHEOF)
           goto done;
-
         if (len > 0) {
           w = grab_str(len); /* save frag if nonempty */
-          append_wf(&head, &tail, w, len, current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
+          append_wf(&head, &tail, w, len,
+                    current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
           len = 0;
         }
-        if (current_ctx() == M_DQUOTE && n != '$' && n != '"' && n != '\\' && n != '`') {
+        if (current_ctx() == M_DQUOTE && n != '$' && n != '"' && n != '\\' &&
+            n != '`') {
           st_putc(c);
           len++;
         }
@@ -283,17 +262,123 @@ get_wf(int c)
         append_wf(&head, &tail, w, len, QSINGLE);
         len = 0;
         break;
+
       case C_DOLLAR:
         n = eatbnl();
         if (n == '(') {
-          int cstate;
+          n2 = eatbnl();
+          if (n2 == '(') {
+            /* $(()) */
+            char arbuf[4096];
+            size_t arlen;
+            int depth;
+            struct {
+              size_t pos;
+              int depth;
+            } arstack[8];
+            int arsp = 0;
 
+            if (len > 0) {
+              w = grab_str(len);
+              append_wf(&head, &tail, w, len,
+                        current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
+              len = 0;
+            }
+            arlen = 0;
+            depth = 0;
+          startarith:
+            for (;;) {
+              char ch;
+              ch = shgetchar();
+              if (ch == SHEOF) {
+                notclosed = 1;
+                goto done;
+              }
+              if (ch == '(') {
+                depth++;
+                if (arlen >= sizeof(arbuf) - 1) {
+                  shwarn_arg("arithmetic", arbuf, "expression too long");
+                  goto done;  // or break
+                }
+                arbuf[arlen++] = ch;
+              } else if (ch == '$') {
+                if ((n = shgetchar()) == '(') {
+                  if ((n2 = shgetchar()) == '(') {
+                    arstack[arsp].pos = arlen;
+                    arstack[arsp].depth = depth;
+                    arsp++;
+                    depth = 0;
+                    goto startarith;
+                  }
+                  shungetc(n2);
+                }
+                shungetc(n);
+                arbuf[arlen++] = ch;
+              } else if (ch == ')') {
+
+                if (depth > 0) {
+                  depth--;
+                  arbuf[arlen++] = ')';
+                } else if (arsp > 0) {
+                 if ((ch = shgetchar()) == ')') {
+                    size_t start, rlen, inlen;
+                    long long val;
+                    char res[32];
+                    start = arstack[arsp - 1].pos;
+                    val = arith_eval(arbuf + start, arlen - start);
+                    rlen = lltoa(val, res);
+                    inlen = arlen - start;
+                    if (rlen != inlen)
+                      memmove(arbuf + start + rlen, arbuf + start + inlen,
+                              arlen - start - inlen);
+                    memcpy(arbuf + start, res, rlen);
+                    arlen = start + rlen;
+                    arsp--;
+                    depth = arstack[arsp].depth;
+                  } else {
+                    shungetc(ch);
+                    arbuf[arlen++] = ')';
+                  }
+                } else {
+                  if ((ch = shgetchar()) == ')')
+                    break;
+                  shungetc(ch);
+                  arbuf[arlen++] = ')';
+                }
+              } else {
+                if (arlen >= sizeof(arbuf) - 1) {
+                  shwarn_arg("arithmetic", arbuf, "expression too long");
+                  goto done;  // or break
+                }
+                arbuf[arlen++] = ch;
+              }
+            }
+            arbuf[arlen] = '\0';
+            long long exprres;
+            char *res;
+            size_t reslen;
+            exprres = arith_eval(arbuf, arlen);
+            res = st_alloc(32);
+            reslen = lltoa(exprres, res);
+            append_wf(&head, &tail, res, reslen,
+                       QDOUBLE);
+            c = eatbnl();
+            if (c == SHEOF)
+              goto done;
+            continue;
+          } else {
+            shungetc(n2);
+          }
+
+          /* $() */
+          int cstate;
           cmdsubd = 1;
           cstate = 0;
           cmdlen = 0;
           if (len > 0) {
             w = grab_str(len); /* save frag if nonempty */
-            append_wf(&head, &tail, w, len, current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
+            append_wf(&head, &tail, w, len,
+                      current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
             len = 0;
           }
 
@@ -349,13 +434,15 @@ get_wf(int c)
 
       case C_BTICK:
         {
+          /* `cmd`*/
           int cstate;
 
           cstate = 0;
           cmdlen = 0;
           if (len > 0) {
             w = grab_str(len); /* save frag if nonempty */
-            append_wf(&head, &tail, w, len, current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
+            append_wf(&head, &tail, w, len,
+                      current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
             len = 0;
           }
 
@@ -391,7 +478,6 @@ get_wf(int c)
                 break;
             }
           }
-
 cmdsubend:
           w = grab_str(cmdlen);
           append_wf(&head, &tail, w, cmdlen,
@@ -495,9 +581,6 @@ tokenize(void)
               break;
           }
         }
-        // while ((c = shgetchar()) != '\n' && c != SHEOF) {}
-        // if (c == '\n')
-        //   shungetc(c);
         continue;
 
       case C_NL:
@@ -664,7 +747,6 @@ tokenize(void)
             }
             pushstring(a->value, strlen(a->value), 1);
             wd &= ~CHKALIAS;
-            // push string i guess goes here. idk wtf it's even supposed to
             continue;
           }
         }

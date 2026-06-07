@@ -93,45 +93,123 @@ simpsh_run(void)
 /* Check if accumulated input needs continuation
  * Returns: 1 = needs more, 0 = complete, -1 = error (unclosed quotes) */
 static int
-need_more(char *lines, size_t lineslen)
+need_more(const char *lines, size_t lineslen)
 {
-  sh_tok tmp, lastt;
-  stmark m;
-  int needs_more = 0;
+  /* context states */
+  enum { NCTX_NORMAL, NCTX_SQUOTE, NCTX_DQUOTE, NCTX_CSUB,
+         NCTX_ARITH, NCTX_BTICK };
+  int ctx = NCTX_NORMAL;
+  int depth = 0;
+  int last = 0, prev = 0;
   size_t i;
-  
-  notclosed = 0;
-  setinputstrn(lines, (int)lineslen);
-  {
-    tmp = SHTOK(TNONE);
-    m = stack_mark();
-    do {
-      lastt = tmp;
-      chkwd |= CHKNL;
-      tmp = tokenize();
-    } while (tmp.type != TEOF);
-    
-    if (!notclosed && (lastt.type == TAND || lastt.type == TOR || lastt.type == TPIPE))
-      needs_more = 1;
-    else if (notclosed)
-      needs_more = 1;
-      
-    stack_restore(m);
+
+  for (i = 0; i < lineslen; i++) {
+    int c = (unsigned char)lines[i];
+    int next = (i + 1 < lineslen) ? (unsigned char)lines[i + 1] : 0;
+
+    switch (ctx) {
+    case NCTX_NORMAL:
+      if (c == '\'') {
+        ctx = NCTX_SQUOTE;
+      } else if (c == '"') {
+        ctx = NCTX_DQUOTE;
+      } else if (c == '`') {
+        ctx = NCTX_BTICK;
+      } else if (c == '\\' && next) {
+        i++;
+      } else if (c == '$' && next == '(') {
+        i++;
+        if (i + 1 < lineslen && lines[i + 1] == '(') {
+          i++;
+          ctx = NCTX_ARITH;
+          depth = 0;
+        } else {
+          ctx = NCTX_CSUB;
+          depth = 1;
+        }
+      } else if (c != '\n' && c != ' ' && c != '\t') {
+        prev = last;
+        last = c;
+      }
+      break;
+
+    case NCTX_SQUOTE:
+      if (c == '\'')
+        ctx = NCTX_NORMAL;
+      break;
+
+    case NCTX_DQUOTE:
+      if (c == '"')
+        ctx = NCTX_NORMAL;
+      else if (c == '\\' && next)
+        i++;
+      break;
+
+    case NCTX_CSUB:
+      if (c == '(') {
+        depth++;
+      } else if (c == ')') {
+        if (--depth <= 0)
+          ctx = NCTX_NORMAL;
+      } else if (c == '$' && next == '(') {
+        i++;
+        depth++;
+        if (i + 1 < lineslen && lines[i + 1] == '(') {
+          i++;
+          depth++;
+        }
+      }
+      break;
+
+    case NCTX_ARITH:
+      if (c == '(') {
+        depth++;
+      } else if (c == ')') {
+        if (depth > 0) {
+          depth--;
+        } else if (next == ')') {
+          i++;
+          ctx = NCTX_NORMAL;
+        }
+      } else if (c == '$' && next == '(') {
+        i++;
+        depth++;
+        if (i + 1 < lineslen && lines[i + 1] == '(') {
+          i++;
+          depth++;
+        }
+      }
+      break;
+
+    case NCTX_BTICK:
+      if (c == '`')
+        ctx = NCTX_NORMAL;
+      else if (c == '\\' && next)
+        i++;
+      break;
+    }
   }
-  popinput();
-  
-  /* Check for trailing backslash (e.g., "echo hello \") */
-  if (!needs_more && lineslen >= 2) {
-    i = lineslen - 2;  /* Position of character before \n we added */
-    /* Skip trailing whitespace */
+
+  /* still inside an unclosed context */
+  if (ctx != NCTX_NORMAL)
+    return 1;
+
+  /* trailing operator: |, ||, or && */
+  if (last == '|')
+    return 1;
+  if (last == '&' && prev == '&')
+    return 1;
+
+  /* trailing backslash (e.g., "echo hello \\") */
+  if (lineslen >= 2) {
+    i = lineslen - 2;
     while (i > 0 && (lines[i] == ' ' || lines[i] == '\t'))
       i--;
-    /* Check for backslash that's not escaped (not preceded by another backslash) */
-    if (i > 0 && lines[i] == '\\' && lines[i-1] != '\\')
-      needs_more = 1;
+    if (i > 0 && lines[i] == '\\' && lines[i - 1] != '\\')
+      return 1;
   }
-  
-  return needs_more;
+
+  return 0;
 }
 
 /* Read complete command from user, including continuations
