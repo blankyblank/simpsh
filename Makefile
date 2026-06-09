@@ -1,6 +1,6 @@
 CC := gcc
 # cc | gcc | clang
-BUILD       ?= sanitize
+BUILD       ?= release
 # debug | release | sanitize | valgrind | profile
 BUILD_LINK  ?= dynamic
 # dynamic | static
