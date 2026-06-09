@@ -24,3 +24,4 @@ reports
 *.optimized
 *.out
 *sh-st
+perf.data*
