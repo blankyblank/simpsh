@@ -1,6 +1,5 @@
 #!/bin/sh
 ### shellcheck #disable=2015
-# set -x
 
 [ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
 
