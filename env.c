@@ -14,87 +14,8 @@
 
 alias *alias_tab[ENV_BUCKETS];
 shfunc *func_tab[ENV_BUCKETS];
-static cmd_tree *tree_dup(cmd_tree *);
-static wf * wfdup(wf *s);
 
-static void
-free_wf(wf *f)
-{
-  if (!f)
-    return;
-  free(f->word);
-  free_wf(f->next);
-  free(f);
-}
-
-static inline void
-free_redir(redir *r)
-{
-  while (r) {
-    redir *tmp;
-    tmp = r;
-    r = r->next;
-    free_wf(tmp->name);
-    free(tmp);
-  }
-  return;
-}
-
-static inline void
-free_tree(cmd_tree *n)
-{
-  if (!n)
-    return;
-
-  switch (n->type) {
-    case OP:
-      free_tree(n->left);
-      free_tree(n->right);
-      free(n);
-      break;
-    case SUBSHELL:
-      free_tree(n->left);
-      free(n);
-      break;
-    case FUNC:
-      free_wf(CARGS(n)[0]);
-      free(CARGS(n));
-      free_tree(n->left);
-      free(n);
-      break;
-    case REDIR:
-      free_redir(CREDR(n));
-      free_tree(n->left);
-      free(n);
-      break;
-    case WHILE:
-      free_tree(n->left);
-      free_tree(n->right);
-      free(n);
-      break;
-    case IF:
-      free_tree(n->left);
-      free_tree(n->right);
-      free_tree(CELSE(n));
-      free(n);
-      break;
-    case CMD:
-      for (size_t i = 0; CARGS(n)[i]; i++)
-        free_wf(CARGS(n)[i]);
-      free(CARGS(n));
-      if (CVARS(n)) {
-        for (size_t i = 0; CVARS(n)[i]; i++)
-          free_wf(CVARS(n)[i]);
-        free(CVARS(n));
-      }
-      free(n);
-      break;
-    default:
-      return;
-  }
-}
-
-static wf *
+wf *
 wfdup(wf *s)
 {
   wf *n;
@@ -109,22 +30,7 @@ wfdup(wf *s)
   return n;
 }
 
-static inline redir *
-redirdup(redir *s)
-{
-  redir *n;
-  if (!s)
-    return NULL;
-  n = malloc(sizeof(redir));
-  n->fd = s->fd;
-  n->name = wfdup(s->name);
-  n->type = s->type;
-  n->next = redirdup(s->next);
-  return n;
-}
-
-
-static cmd_tree *
+cmd_tree *
 tree_dup(cmd_tree *s)
 {
   cmd_tree *n;
@@ -209,7 +115,7 @@ findfunc(const char *name)
 }
 
 void
-setfunc(const char *name, cmd_tree *body)
+setfunc(const char *restrict name, cmd_tree *restrict body)
 {
   shfunc *f, *n;
   size_t i;
@@ -253,7 +159,7 @@ findalias(const char *name)
 
 /** set alias value */
 void
-setalias(const char *name, const char *val)
+setalias(const char *restrict name, const char *restrict val)
 {
   alias *a;
 

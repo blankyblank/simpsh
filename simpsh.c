@@ -14,6 +14,7 @@
 #include <readline/readline.h>
 #else
 #include <errno.h>
+#include "utils.h"
 #endif /* ifdef READLINE */
 
 #include "parse.h"
@@ -75,7 +76,7 @@ simpsh_run(void)
     
     mark = stack_mark();
     chkwd = CHKALIAS | CHKNL;
-    c = parse_list(TEOF);
+    c = parse_list(TEOF, 0);
     if (!c) {
       stack_restore(mark);
       break;
@@ -215,7 +216,7 @@ need_more(const char *lines, size_t lineslen)
 /* Read complete command from user, including continuations
  * Returns: 1 = got command (*cmd set), 0 = EOF, -1 = error (continuation EOF) */
 static int
-read_cmd(char **cmd, size_t *len)
+read_cmd(char **restrict cmd, size_t *restrict len)
 {
   char *line, *lines, *new, *ps1;
   size_t n, lineslen;

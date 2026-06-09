@@ -61,12 +61,24 @@ atoi_(const char *s)
 }
 
 static inline int
-atoll_(const char *s)
+atoll_(const char *restrict s, long long *restrict res)
 {
-    long long n = 0;
-    while (isdigit_(*s))
-        n = n * 10 + (*s++ - '0');
-    return n;
+  long long n = 0;
+  int neg = 0;
+
+  if (*s == '-') {
+    neg = 1;
+    s++;
+  }
+
+  if (!isdigit_(*s)) {
+    *res = 0;
+    return -1;
+  }
+  while (isdigit_(*s))
+    n = n * 10 + (*s++ - '0');
+  *res = neg ? -n : n;
+  return 0;
 }
 
 static inline size_t
@@ -123,7 +135,7 @@ strndup_(const char *restrict s, size_t n)
 
 /** strcat using memcpy */
 static inline char *
-strcat_(char *dest, const char *src)
+strcat_(char *restrict dest, const char *restrict src)
 {
   size_t destlen = strlen(dest), srclen = strlen(src) + 1;
   memcpy(dest + destlen, src, srclen);
@@ -132,7 +144,7 @@ strcat_(char *dest, const char *src)
 
 /** mempcpy implementation */
 __attribute__((always_inline)) static inline char *
-mempcpy_(char *dest, const char *src, size_t n)
+mempcpy_(char *restrict dest, const char *restrict src, size_t n)
 {
   memcpy(dest, src, n);
   return dest + n;
@@ -201,7 +213,7 @@ skip_ws(const char *s)
 
 /**  brief find name and value from name=value pair  */
 static inline void
-read_assn(const char *assn, char **name, char **value)
+read_assn(const char *assn, char **restrict name, char **restrict value)
 {
   char *eq;
   size_t l;
@@ -217,7 +229,7 @@ read_assn(const char *assn, char **name, char **value)
 }
 
 static inline void
-st_read_assn(const char *assn, char **name, char **value)
+st_read_assn(const char *assn, char **restrict name, char **restrict value)
 {
   char *eq;
   size_t l, total;

@@ -54,6 +54,7 @@ enum {
   UNTIL = 1 << 1,
   EFLAG_SAFE = 1 << 2,
   EXECED = 1 << 3,
+  NECMDSUB = 1 << 4,
 };
 
 #define CARGS(n) ((n)->t.cmd.args)
@@ -68,7 +69,7 @@ enum {
 #define CELSE(n) ((n)->t.if_.else_)
 
 /** build ast tree */
-extern cmd_tree *parse_list(token s);
+extern cmd_tree *parse_list(token s, int);
 
 #endif /* PARSE_H */
 

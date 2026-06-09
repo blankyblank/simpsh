@@ -31,13 +31,13 @@ static int is_assn(wf *);
 static int get_assn(wf **, wf *** restrict);
 static cmd_tree *parse_group(void);
 static cmd_tree *parse_func(void);
-static cmd_tree *parse_cmd(void);
+static cmd_tree *parse_cmd(int);
 static cmd_tree *parse_while(token);
 static cmd_tree *parse_if(void);
 static cmd_tree *parse_simple_cmd(size_t);
 
 static inline cmd_tree *
-newcmdnode(wf **args, int flags, wf **sh_vars, size_t vc)
+newcmdnode(wf **restrict args, int flags, wf **restrict sh_vars, size_t vc)
 {
   cmd_tree *n = st_alloc(sizeof(cmd_tree));
   if (!n)
@@ -64,7 +64,7 @@ newsubsh(cmd_tree *left, int negate)
 }
 
 static inline cmd_tree *
-newfuncnode(wf *name, cmd_tree *body)
+newfuncnode(wf *restrict name, cmd_tree *restrict body)
 {
   cmd_tree *n = st_alloc(sizeof(cmd_tree));
   if (!n)
@@ -77,7 +77,7 @@ newfuncnode(wf *name, cmd_tree *body)
 }
 
 static inline cmd_tree *
-newredirnode(cmd_tree *l, redir *r)
+newredirnode(cmd_tree *restrict l, redir *restrict r)
 {
   cmd_tree *n = st_alloc(sizeof(cmd_tree));
   if (!n) {
@@ -93,22 +93,22 @@ newredirnode(cmd_tree *l, redir *r)
 }
 
 static inline cmd_tree *
-newoppnode(token opp_t, cmd_tree *left, cmd_tree *right)
+newoppnode(token opp_t, cmd_tree *l, cmd_tree *r)
 {
   cmd_tree *n = st_alloc(sizeof(cmd_tree));
   if (!n)
     return NULL;
   n->type = OP;
   COPP(n) = opp_t;
-  n->left = left;
-  n->right = right;
+  n->left = l;
+  n->right = r;
   n->flags = 0;
   /* opp tree doesn't have a command stored and doesn't use the ! opperator */
   return n;
 }
 
 static inline cmd_tree *
-newwhilenode(cmd_tree *cond, cmd_tree *body, token untilt)
+newwhilenode(cmd_tree *restrict cond, cmd_tree *restrict body, token untilt)
 {
   cmd_tree *n;
   n = st_alloc(sizeof(cmd_tree));
@@ -120,7 +120,7 @@ newwhilenode(cmd_tree *cond, cmd_tree *body, token untilt)
 }
 
 static inline cmd_tree *
-newifnode(cmd_tree *cond, cmd_tree *then, cmd_tree *else_)
+newifnode(cmd_tree *restrict cond, cmd_tree *restrict then, cmd_tree *restrict else_)
 {
   cmd_tree *n;
   n = st_alloc(sizeof(cmd_tree));
@@ -191,7 +191,7 @@ get_assn(wf **args, wf ***restrict sh_vars)
 }
 
 __attribute__((hot)) cmd_tree *
-parse_list(token s)
+parse_list(token s, int noexec)
 {
   sh_tok t;
   cmd_tree *l, *r;
@@ -205,17 +205,18 @@ parse_list(token s)
   }
   last_tok = t;
 
-  l = parse_cmd();
+  l = parse_cmd(noexec);
   if (!l)
     return NULL;
+
+  if (heredoc_head)
+    parse_heredoc();
 
   for (;;) {
     chkwd |= CHKALIAS | CHKKWD;
     t = tokenize();
     if (t.type == TSEMI || (t.type == TNL && s != TEOF) || t.type == TBKGRND) {
       chkwd |= CHKALIAS | CHKKWD;
-      if (heredoc_head)
-        parse_heredoc();
       sh_tok t2;
       t2 = tokenize();
       if (tokendlist[t2.type]) {
@@ -223,7 +224,7 @@ parse_list(token s)
         break;
       }
       last_tok = t2;
-      r = parse_cmd();
+      r = parse_cmd(noexec);
       if (!r) {
         if (t.type == TBKGRND)
           l = newoppnode(TBKGRND, l, NULL);
@@ -250,7 +251,7 @@ parse_group(void)
 {
   cmd_tree *body;
   sh_tok t;
-  body = parse_list(TRB);
+  body = parse_list(TRB, 1);
   t = tokenize();
   if (t.type != TRB) {
     last_tok = t;
@@ -269,7 +270,7 @@ parse_func(void)
     return parse_group();
   if (t.type == TLP) {
     cmd_tree *sub;
-    sub = parse_list(TRP);
+    sub = parse_list(TRP, 1);
     t = tokenize();
     if (t.type != TRP)
       return NULL;
@@ -317,6 +318,11 @@ parse_heredoc(void)
       for (;;) {
         c = shgetchar();
         if (c == SHEOF) {
+          llen = stnext - lpos;
+          if (llen == eofvlen && memcmp(lpos, eofv, eofvlen) == 0) {
+            stunalloc(lpos);
+            goto done;
+          }
           fprintf(stderr, "unexpected EOF while looking for delimiter\n");
           return;
         } else if (c == '\n') {
@@ -334,6 +340,7 @@ parse_heredoc(void)
       }
     }
 
+done:
     bodylen = stnext - bpos;
     r->heredoc = grab_str(bodylen);
   }
@@ -346,12 +353,12 @@ parse_while(token tok)
   cmd_tree *condition, *body, *n;
   sh_tok t;
 
-  if (!(condition = parse_list(TDO)))
+  if (!(condition = parse_list(TDO, 1)))
     return NULL;
   t = tokenize();
   if (t.type != TDO)
     return NULL;
-  if (!(body = parse_list(TDONE)))
+  if (!(body = parse_list(TDONE, 1)))
     return NULL;
   t = tokenize();
   if (t.type != TDONE)
@@ -368,11 +375,11 @@ parse_if(void)
   cmd_tree *cond, *then, *else_;
   sh_tok t;
 
-  cond = parse_list(TTHEN);
+  cond = parse_list(TTHEN, 1);
   t = tokenize();
   if (t.type != TTHEN)
     return NULL;
-  then = parse_list(TFI);
+  then = parse_list(TFI, 1);
   t = tokenize();
 
   switch (t.type) {
@@ -380,7 +387,7 @@ parse_if(void)
       else_ = parse_if();
       break;
     case TELSE:
-      else_ = parse_list(TFI);
+      else_ = parse_list(TFI, 1);
       t = tokenize();
       if (t.type != TFI)
         return NULL;
@@ -402,6 +409,7 @@ parse_simple_cmd(size_t neg)
   redir *redirs, **tail;
   size_t vc, wc, cap;
   cmd_tree *body, *l;
+  int cmdflags;
 
 
   args = st_alloc(8 * sizeof(wf *));
@@ -409,6 +417,7 @@ parse_simple_cmd(size_t neg)
   tail = &redirs;
   wc = 0;
   cap = 8;
+  cmdflags = (neg & 1) ? NEG : 0;
 
   for (;;) {
     int fd;
@@ -460,6 +469,8 @@ parse_simple_cmd(size_t neg)
             continue;
           }
           last_tok = n;
+          if (t.cmd->flags & WFCMDSUB)
+            cmdflags |= NECMDSUB;
           if (wc >= cap) {
             wf **new;
             cap *= 2;
@@ -479,7 +490,7 @@ parse_simple_cmd(size_t neg)
 
   args[wc] = NULL;
   if (!wc && redirs) {
-    l = newcmdnode(NULL, (neg & 1) ? NEG : 0, NULL, 0);
+    l = newcmdnode(NULL, cmdflags, NULL, 0);
     return newredirnode(l, redirs);
   }
   if (!wc && redirs == NULL)
@@ -499,7 +510,7 @@ parse_simple_cmd(size_t neg)
   }
 
   vc = get_assn(args, &sh_vars);
-  l = newcmdnode(args, (neg & 1) ? NEG : 0, sh_vars, vc);
+  l = newcmdnode(args, cmdflags, sh_vars, vc);
   if (redirs)
     return newredirnode(l, redirs);
   return l;
@@ -509,7 +520,7 @@ parse_simple_cmd(size_t neg)
 
 /**  recursive decent parser  */
 __attribute__((hot)) cmd_tree *
-parse_cmd(void)
+parse_cmd(int noexec)
 {
   size_t neg;
   cmd_tree *sub, *l, *r, *r2;
@@ -537,7 +548,7 @@ parse_cmd(void)
     case TUNTIL:
       return parse_while(t.type);
     case TLP:
-      sub = parse_list(TRP);
+      sub = parse_list(TRP, noexec);
       t = tokenize();
       if (t.type != TRP)
         return NULL;
@@ -607,7 +618,7 @@ parse_cmd(void)
     }
   }
 
-    if (l->type == CMD) {
+    if (!noexec && l->type == CMD && !(l->flags & NECMDSUB)) {
       CSTATUS(l) = run_commands(l);
       l->flags |= EXECED;
     }

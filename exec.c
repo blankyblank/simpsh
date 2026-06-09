@@ -47,10 +47,10 @@ static int findbuiltin(char *);
 static void poptmpvars(tmp_var *, size_t);
 static void save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
-static int shexec(char **, const cmd_tree *, char **);
+static int shexec(char **restrict , const cmd_tree *restrict , char **restrict);
 static int run_if(const cmd_tree *);
 static int run_while(const cmd_tree *);
-static int run_func(const cmd_tree *, char **);
+static int run_func(const cmd_tree *restrict, char **restrict);
 static int run_pipe(const cmd_tree *);
 static int run_bg(const cmd_tree *);
 static int run_redir(const cmd_tree *);
@@ -132,7 +132,7 @@ bg_cmd(const cmd_tree *n)
 
 /** fork and exec external command */
 static int
-shexec(char **args, const cmd_tree *n, char **env)
+shexec(char **restrict args, const cmd_tree *restrict n, char **restrict env)
 {
   pid_t pid;
   sigset_t old;
@@ -194,10 +194,11 @@ run_if(const cmd_tree *n)
 static int
 run_while(const cmd_tree *n)
 {
-  int status;
+  int status, cond;
+  status = 0;
   for (;;) {
-    status = run_commands(n->left);
-    if ((n->flags & UNTIL) ? status == 0 : status != 0)
+    cond = run_commands(n->left);
+    if ((n->flags & UNTIL) ? cond == 0 : cond != 0)
       break;
     status = run_commands(n->right);
   }
@@ -591,8 +592,9 @@ run_cmd(const cmd_tree *n)
         char *name, *val /*, *evar*/;
         shvar_flags flags;
         char *evar;
-        evar = exp_word(vars[i], NULL, NULL);
+        evar = exp_word(vars[i], NULL, NULL, NULL); // XXX: probably wrong len here actually
         st_read_assn(evar, &name, &val);
+        // XXX: where is len??
         v = findvar(name);
         if (v)
           flags = v->flags;
@@ -611,7 +613,7 @@ run_cmd(const cmd_tree *n)
       tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; vars[i]; i++) {
         char *name, *val;
-        st_read_assn(exp_word(vars[i], NULL, NULL), &name, &val);
+        st_read_assn(exp_word(vars[i], NULL, NULL, NULL), &name, &val);
         tmp[i] = grabvar(name);
         vc++;
         setvar(name, val, 0);
@@ -627,7 +629,7 @@ run_cmd(const cmd_tree *n)
       tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; vars[i]; i++) {
         char *name, *val;
-        st_read_assn(exp_word(vars[i], NULL, NULL), &name, &val);
+        st_read_assn(exp_word(vars[i], NULL, NULL, NULL), &name, &val);
         tmp[i] = grabvar(name);
         vc++;
         setvar(name, val, 0);
@@ -643,7 +645,7 @@ run_cmd(const cmd_tree *n)
     if ((vc = CVARC(n))) {
       evars = st_alloc((vc + 1) * sizeof(char *));
       for (i = 0; i < vc; i++) {
-        evars[i] = exp_word(vars[i], NULL, NULL);
+        evars[i] = exp_word(vars[i], NULL, NULL, NULL);
         evars[vc] = NULL;
       }
     } else {
@@ -655,7 +657,8 @@ run_cmd(const cmd_tree *n)
       return 1;
     }
     status = shexec(final, n, env);
-    free(env);
+    if (evars)
+      free(env);
   }
   if (CNEG(n))
     status = !status;
@@ -679,7 +682,7 @@ run_redir(const cmd_tree *n)
   while (r) {
     char *name;
     int fd;
-    if (!(name = exp_word(r->name, NULL, NULL)))
+    if (!(name = exp_word(r->name, NULL, NULL, NULL)))
       return 1;
     switch (r->type) {
 
@@ -708,7 +711,7 @@ dupfall:
         break;
       case RDDUPO:
       case RDDUPI:
-        if (name[0] == 0 && name[1] == '\0') {
+        if (name[0] == '-' && name[1] == '\0') {
           CLOSEFD(r->fd)
         } else {
           char *p = name;
@@ -747,7 +750,7 @@ dupfall:
             b.len = strlen(r->heredoc);
             b.qs = QDOUBLE;
             b.next = NULL;
-            body = exp_word(&b, NULL, NULL);
+            body = exp_word(&b, NULL, NULL, NULL);
             blen = strlen(body);
           }
           if (pipe(p) < 0)
@@ -778,6 +781,7 @@ dupfall:
     exit(lstatus);
   return lstatus;
 }
+
 
 
 /**  run command tree  */

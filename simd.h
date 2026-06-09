@@ -114,7 +114,7 @@ simd_skip_nl(const char *buf, size_t len)
 
 
 static inline size_t
-simd_scan_delim(const char *buf, size_t len, const char *delims, int ndelims)
+simd_scan_delim(const char *restrict buf, size_t len, const char *restrict delims, int ndelims)
 {
   __m128i input, match, delim_vec;
   int mask, d;

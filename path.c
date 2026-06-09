@@ -17,7 +17,7 @@
 cmdent chash[CHASH_MAX];
 size_t chashn;
 
-static char * tildepath(const char *, size_t, size_t *);
+static char *tildepath(const char * restrict, size_t, size_t * restrict);
 
 char *
 findchash(const char *n)
@@ -29,7 +29,7 @@ findchash(const char *n)
 }
 
 void
-setchash(const char *n, const char *p)
+setchash(const char *restrict n, const char *restrict p)
 {
   for (size_t i = 0; i < chashn; i++)
     if (n[0] == chash[i].name[0] && strcmp(n, chash[i].name) == 0)
@@ -58,7 +58,7 @@ rmchash(const char *unused)
 }
 
 static char *
-tildepath(const char *s, size_t dirlen, size_t *seg)
+tildepath(const char *restrict s, size_t dirlen, size_t *restrict seg)
 {
   size_t lseg;
   char *hm;
@@ -81,7 +81,7 @@ tildepath(const char *s, size_t dirlen, size_t *seg)
 /** check in path for name stop at the first one with proper permissions if
  * cdmode 1 check for dir */
 char *
-chkpath(const char *path, const char *name, unsigned int cdmode)
+chkpath(const char *restrict path, const char *restrict name, unsigned int cdmode)
 {
   size_t flen, seg;
   char *e, buf[PATH_MAX], expbuf[PATH_MAX];

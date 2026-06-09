@@ -14,9 +14,9 @@ extern size_t chashn;
 
 extern void initchash(void);
 extern char *findchash(const char *);
-extern void setchash(const char *,const char *);
+extern void setchash(const char *restrict,const char *restrict);
 extern void rmchash(const char *);
-extern char *chkpath(const char *, const char *, unsigned int);
+extern char *chkpath(const char *restrict, const char *restrict, unsigned int);
 extern char *getpath(char *);
 extern int hashcmd(char **);
 
