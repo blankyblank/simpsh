@@ -1,12 +1,14 @@
 #ifndef VAR_H
 #define VAR_H
 #include <stddef.h>
+#include <string.h>
 
 typedef int shvar_flags;
 typedef struct shvar shvar;
 struct shvar {
   char *var;
   size_t nlen;
+  size_t flen;
   shvar_flags flags;
   void (*func)(const char *);
 };
@@ -27,11 +29,12 @@ enum {
 #define VAR_BUCKETS_INIT 128
 #define LOCAL_MAX 256
 #define TOMBSTONE ((char *)1)
-#define VAR_CACHE_S 16
+#define VAR_CACHE_S 64
 
 #define shvar_val(v) ((v)->var + (v)->nlen + 1)
 // XXX: probably just remove the namelen macro
 #define shvar_namelen(v) ((v)->nlen)
+#define findvar(v) findvar_n(v, strlen(v))
 
 extern shvar *var_tab;
 extern size_t var_tab_size;
@@ -44,7 +47,7 @@ extern char **build_env(char **);
 extern void init_env(void);
 extern void setvar(char * restrict, char * restrict, shvar_flags);
 extern tmp_var grabvar(char *);
-extern shvar *findvar(const char *);
+extern shvar *findvar_n(const char *restrict, size_t);
 extern void rmvar(const char *);
 
 /* builtins */

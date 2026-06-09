@@ -14,6 +14,7 @@
 #include "utils.h"
 
 #define CTX_MAX 8
+#define WF_CHUNK_SIZE 4
 #define NCHR(c) (nchars[(unsigned char)c])
 #define DCHR(c) (dqchars[(unsigned char)c])
 #define SCHR(c) (sqchars[(unsigned char)c])
@@ -64,12 +65,14 @@ typedef enum {
 static tokmode ctx_stack[CTX_MAX] = { M_NORMAL };
 static int ctx_depth;
 
+static wf *wf_chunk = NULL;
+static size_t wf_chunk_left = 0;
 int alias_depth = 0;
 int notclosed = 0;
 sh_tok last_tok = { .type = TNONE };
 int chkwd = 0;
 
-static void append_wf(wf **, wf **, char *, size_t len, int);
+static void append_wf(wf **restrict, wf **restrict, char *restrict, size_t len, int);
 static wf *get_wf(int);
 
 static const unsigned char *ctx_tables[] = {
@@ -152,9 +155,14 @@ join_wf(wf *wordf)
 
 /**  add word fragment onto the end of the linked list  */
 static void
-append_wf(wf **head, wf **tail, char *w, size_t len, int quoted)
+append_wf(wf **restrict head, wf **restrict tail, char *restrict w, size_t len, int quoted)
 {
-  wf *f = st_alloc(sizeof(wf));
+  if (wf_chunk_left == 0) {
+    wf_chunk = st_alloc(WF_CHUNK_SIZE * sizeof(wf));
+    wf_chunk_left = WF_CHUNK_SIZE;
+  }
+  wf *f = wf_chunk++;
+  wf_chunk_left--;
   f->word = w;
   f->len = len;
   f->qs = quoted;
@@ -175,14 +183,12 @@ get_wf(int c)
     indq = (1 << 1),
     esc = (1 << 2),
   };
-
-  wf *head;
-  wf *tail;
   char n, n2, *w;
   size_t len, cmdsubd, cmdlen;
-
-  head = NULL;
-  tail = NULL;
+  wf *head = NULL;
+  wf *tail = NULL;
+  wf_chunk = NULL;
+  wf_chunk_left = 0;
   len = 0;
 
   for (;;) {
@@ -354,14 +360,9 @@ get_wf(int c)
               }
             }
             arbuf[arlen] = '\0';
-            long long exprres;
-            char *res;
-            size_t reslen;
-            exprres = arith_eval(arbuf, arlen);
-            res = st_alloc(32);
-            reslen = lltoa(exprres, res);
-            append_wf(&head, &tail, res, reslen,
-                       QDOUBLE);
+            char *exprtxt;
+            exprtxt = st_strndup(arbuf, arlen);
+            append_wf(&head, &tail, exprtxt, arlen, QARITH);
             c = eatbnl();
             if (c == SHEOF)
               goto done;
@@ -682,6 +683,8 @@ tokenize(void)
         for (wf *p = f; p; p = p->next) {
           if (p->qs != QNONE)
             f->flags |= WFDOUBLE;
+          if (p->qs == QCMDSUB || p->qs == QCMDSUB_DQ)
+            f->flags |= WFCMDSUB;
           for (size_t i = 0; i < p->len; i++)
             if (p->word[i] < '0' || p->word[i] > '9')
               allnum = 0;

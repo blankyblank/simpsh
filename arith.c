@@ -418,12 +418,12 @@ static long long
 lookupavar(void)
 {
   shvar *rvar;
-  char *var;
+  long long res;
 
-  var = st_strndup(aname, anlen);
-  rvar = findvar(var);
+  rvar = findvar_n(aname, anlen);
   if (!rvar)
     return 0;
-  return atoll_(shvar_val(rvar));
-
+  if (atoll_(shvar_val(rvar), &res) < 0)
+    return 0;
+  return res;
 }

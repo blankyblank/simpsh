@@ -10,6 +10,15 @@
 #define MINSTACK_S align_mem(2048)
 /**  return stmark with the current state of the allocator  */
 #define stack_mark() ((stmark){ current, stnext, stleft })
+/* currently only used in exp_word */
+#define st_write(src, n, len) do { \
+    size_t _n = (n); \
+    if (_n >= stleft) grow_stack(_n); \
+    memcpy(stnext, (src), _n); \
+    stnext += _n; \
+    stleft -= _n; \
+    len += _n; \
+} while(0)
 
 typedef struct stack_seg stack_seg;
 struct stack_seg {

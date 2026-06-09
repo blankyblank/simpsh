@@ -16,6 +16,8 @@
 #include "var.h"
 
 static shvar var_tab_init[VAR_BUCKETS_INIT];
+static char **env_cache;
+static int env_dirty = 1;
 shvar *var_tab = var_tab_init;
 shvar *var_cache[VAR_CACHE_S];
 size_t var_tab_size = VAR_BUCKETS_INIT;
@@ -55,22 +57,20 @@ resize_var_tab(void)
 
 /** find variable by name */
 __attribute__((hot)) shvar *
-findvar(const char *name)
+findvar_n(const char *restrict name, size_t nlen)
 {
-  unsigned int ci;
+  unsigned int ci, bucket;
   shvar *v, *cv, *end;
-  size_t nlen;
 
-  nlen = strlen(name);
-
-  ci = hash_n(name, nlen, VAR_CACHE_S);
+  bucket =  hash_n(name, nlen, var_tab_size);
+  ci = bucket & (VAR_CACHE_S - 1);
   cv = var_cache[ci];
   if (cv && cv->var && cv->var != TOMBSTONE && cv->nlen == nlen &&
       memcmp(cv->var, name, nlen) == 0)
     return cv;
 
   end = var_tab + var_tab_size;
-  v = var_tab + (hash_n(name, nlen, var_tab_size) & (var_tab_size - 1));
+  v = var_tab + (bucket & (var_tab_size - 1));
   for (;;) {
     if (!v->var)
       return NULL;
@@ -92,19 +92,11 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
     flags |= VEXPRT;
   shvar *v, *n, *end;
   char *nvar;
-  size_t vlen, nlen, ci;
+  size_t vlen, nlen, flen, ci;
 
   nlen = strlen(name);
   vlen = val ? strlen(val) : 0;
-  if (!(nvar = malloc(nlen + vlen + 2)))
-    return;
-  memcpy(nvar, name, nlen);
-  nvar[nlen] = '=';
-  if (val)
-    memcpy(nvar + nlen + 1, val, vlen + 1);
-  else
-   nvar[nlen + 1] = '\0';
-
+  flen = nlen + vlen + 2;
   end = var_tab + var_tab_size;
   v = var_tab + (hash_n(name, nlen, var_tab_size) & (var_tab_size - 1));
   n = NULL;
@@ -119,13 +111,29 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
       if (!n)
         n = v;
     } else if (v->nlen == nlen && memcmp(v->var, name, nlen) == 0) {
-      if (v->flags & VREADONLY) {
-        free(nvar);
+      if (v->flags & VREADONLY)
         return;
+      if (v->flen >= flen) {
+        if (val)
+          memcpy(v->var + nlen + 1, val, vlen + 1);
+        else
+          v->var[nlen + 1] = '\0';
+      } else {
+        if (!(nvar = malloc(flen)))
+          return;
+        memcpy(nvar, name, nlen);
+        nvar[nlen] = '=';
+        if (val)
+          memcpy(nvar + nlen + 1, val, vlen + 1);
+        else
+          nvar[nlen + 1] = '\0';
+        free(v->var);
+        v->var = nvar;
+        v->nlen = nlen;
+        v->flen = flen;
       }
-      free(v->var);
-      v->var = nvar;
-      v->nlen = nlen;
+      if (v->flags & VEXPRT || flags & VEXPRT)
+        env_dirty = 1;
       v->flags = flags;
       goto callback;
     }
@@ -133,8 +141,19 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
       v = var_tab;
   }
 
+  if (!(nvar = malloc(flen)))
+    return;
+  memcpy(nvar, name, nlen);
+  nvar[nlen] = '=';
+  if (val)
+    memcpy(nvar + nlen + 1, val, vlen + 1);
+  else
+    nvar[nlen + 1] = '\0';
+  if (flags & VEXPRT)
+    env_dirty = 1;
   n->var = nvar;
   n->nlen = nlen;
+  n->flen = flen;
   n->flags = flags;
   n->func = NULL;
   v = n;
@@ -183,6 +202,7 @@ rmvar(const char *name)
       v->flags = 0;
       v->func = NULL;
       var_count--;
+      env_dirty = 1;
       ci = hash_n(name, nlen, VAR_CACHE_S);
       if (var_cache[ci] == v)
         var_cache[ci] = NULL;
@@ -199,6 +219,7 @@ grabvar(char *name)
   tmp_var tmp;
   shvar *v;
 
+  // XXX: again where is nlen/len??
   v = findvar(name);
   if (v) {
     tmp.set = 1;
@@ -213,17 +234,14 @@ grabvar(char *name)
   return tmp;
 }
 
-/** build environment array for exec */
 char **
-build_env(char **sh_env)
+rebuild_env(char **sh_env)
 {
-  /* way too complicated way of trying to copy strings into
-   * an array of strings. in an attempt to keep performance */
-
   size_t c, sh_c, j, len, arrsize;
   size_t lenarr[MAX_ENV], tmplen[MAX_ENV], skipc;
   char *buf, *tmpname[MAX_ENV], *shadowed[MAX_ENV];
   char **arr, **cmd_env, **mem;
+
 
   cmd_env = NULL;
   c = 0;
@@ -243,10 +261,10 @@ build_env(char **sh_env)
       len += lenarr[c++];
     }
   }
+
   for (size_t i = 0; i < var_tab_size; i++) {
     size_t namelen, skip;
     shvar *v;
-
     v = &var_tab[i];
     if (!v->var || v->var == TOMBSTONE)
       continue;
@@ -262,7 +280,7 @@ build_env(char **sh_env)
         }
       }
       if (!skip) {
-        lenarr[c] = strlen(v->var) + 1;
+        lenarr[c] = v->flen;
         len += lenarr[c++];
       }
     }
@@ -309,6 +327,29 @@ build_env(char **sh_env)
   return cmd_env;
 }
 
+/** check if environment has been updated for external commands if so
+ * rebuild, otherwise used cached env array */
+char **
+build_env(char **sh_env)
+{
+  if (sh_env) {
+    return rebuild_env(sh_env);
+  }
+
+  if (!env_dirty)
+    return env_cache;
+  char **env;
+
+  env = rebuild_env(NULL);
+  if (env) {
+    free(env_cache);
+    env_cache = env;
+    env_dirty = 0;
+  }
+  return env;
+}
+
+
 /** initialize environment from environ */
 void
 init_env(void)
@@ -354,9 +395,10 @@ exportcmd(char **args)
       eq = strchrnul_(args[i], '=');
       if (*eq == '\0') {
         v = findvar(args[i]);
-        if (v)
+        if (v) {
           v->flags |= VEXPRT;
-        else
+          env_dirty = 1;
+        } else
           setvar(args[i], NULL, VEXPRT);
       } else {
         read_assn(args[i], &name, &val);

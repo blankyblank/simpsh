@@ -5,8 +5,11 @@
 #include <limits.h>
 #include <stdio.h>
 
+#include "arith.h"
+#include "env.h"
 #include "exec.h"
 #include "expand.h"
+#include "input.h"
 #include "lex.h"
 #include "main.h"
 #include "malloc.h"
@@ -16,8 +19,8 @@
 #include "var.h"
 
 static char *var_n(const char *, size_t, size_t * restrict, size_t * restrict);
-static char *varbrace_n(const char *, size_t, size_t *, size_t *);
-static char **splitword(char *, size_t, ifssect *, size_t *);
+static char *varbrace_n(const char *, size_t, size_t *restrict , size_t *restrict);
+static char **splitword(char *restrict, size_t, size_t, ifssect *restrict, size_t *restrict);
 
 /** get the pid shell variable */
 #define varpid() (st_strdup(sh_pid_s))
@@ -120,7 +123,7 @@ var_n(const char *args, size_t i, size_t * restrict end, size_t * restrict olen)
 
 /** expand ${var} style variables */
 char *
-varbrace_n(const char *args, size_t i, size_t *end, size_t *olen)
+varbrace_n(const char *args, size_t i, size_t *restrict end, size_t *restrict olen)
 {
   char *var, *env_var;
   size_t j, vt_l;
@@ -169,7 +172,7 @@ lookupvar(const char *vt, size_t vlen)
       n = n * 10 + (vt[j] - '0');
     var = get_posparam(n);
   } else {
-    v = findvar(st_strndup(vt, vlen));
+    v = findvar_n(vt, vlen);
     if (v)
       var = shvar_val(v);
     else
@@ -181,7 +184,7 @@ lookupvar(const char *vt, size_t vlen)
 
 /** expand variables in word */
 char *
-exp_var(char *word, size_t s, size_t *restrict e, size_t *restrict olen)
+exp_var(char *restrict word, size_t s, size_t *restrict e, size_t *restrict olen)
 {
   if (word && word[s] != '$')
     return NULL;
@@ -260,7 +263,7 @@ homedir(char *user)
 }
 
 char *
-exp_tilde(char *word, size_t s, size_t *restrict e, size_t *restrict olen)
+exp_tilde(char *restrict word, size_t s, size_t *restrict e, size_t *restrict olen)
 {
   char *hm, strt;
   size_t end;
@@ -360,7 +363,7 @@ expand_argv(wf **args, size_t *restrict t)
 {
   ifssect *ifsexp;
   size_t ifsn, cap, fargc, tlen;
-  size_t i, argc;
+  size_t i, argc, elen;
   char **fargv, **argv;
 
   *t = 0;
@@ -378,12 +381,10 @@ expand_argv(wf **args, size_t *restrict t)
 
   for (i = 0; i < argc; i++) {
     char *expanded;
-    if (!(expanded = exp_word(args[i], &ifsn, &ifsexp))) {
-      free(ifsexp);
+    if (!(expanded = exp_word(args[i], &ifsn, &ifsexp,  &elen))) {
       return NULL;
     }
-    fargv = splitword(expanded, ifsn, ifsexp, &tlen);
-    free(ifsexp);
+    fargv = splitword(expanded, elen, ifsn, ifsexp, &tlen);
     *t += tlen;
     for (int j = 0; fargv[j]; j++)
       argv[fargc++] = fargv[j];
@@ -394,22 +395,20 @@ expand_argv(wf **args, size_t *restrict t)
 
 /** expand word with variable substitution */
 __attribute__((hot)) char *
-exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects)
+exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *restrict rlen)
 {
-  size_t end, i, len;
-  size_t nsplits, sectstart, si;
+  size_t end = 0, len = 0, si = 0, nsplits = 0;
+  size_t sectstart, i;
   ifssect *sects;
   wf *f;
   char *expanded;
 
-  nsplits = 0;
   for (f = wordf; f; f = f->next) {
     if (f->qs == QNONE || f->qs == QCMDSUB)
       nsplits++;
   }
   if (nsplits > 0 && ifssects) {
-    if (!(sects = malloc(nsplits * sizeof(ifssect))))
-      return NULL;
+    sects = st_alloc(nsplits * sizeof(ifssect));
     *ifssects = sects;
   } else {
     sects = NULL;
@@ -417,20 +416,11 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects)
       *ifssects = NULL;
   }
 
-
-  len = 0;
-  end = 0;
-  si = 0;
   for (f = wordf; f; f = f->next) {
     sectstart = len;
     switch (f->qs) {
       case QSINGLE:
-        if (f->len >= stleft)
-          grow_stack(f->len);
-        memcpy(stnext, f->word, f->len);
-        stnext += f->len;
-        stleft -= f->len;
-        len += f->len;
+        st_write(f->word, f->len, len);
         break;
       case QDOUBLE:
       case QNONE:
@@ -446,26 +436,15 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects)
               i++;
           }
           r = i - s;
-          if (r) {
-            if (r >= stleft)
-              grow_stack(r);
-            memcpy(stnext, f->word + s, r);
-            stnext += r;
-            stleft -= r;
-            len += r;
-          }
-          if (i>= f->len)
+          if (r)
+            st_write(f->word, r, len);
+          if (i >= f->len)
             continue;
           if (f->word[i] == '~' && f->qs == QNONE) {
             size_t elen = 0;
             expanded = exp_tilde(f->word, i, &end, &elen);
             if (expanded) {
-              if (elen >= stleft)
-                grow_stack(elen);
-              memcpy(stnext, expanded, elen);
-              stnext += elen;
-              stleft -= elen;
-              len += elen;
+              st_write(expanded, elen, len);
               i = end;
             } else {
               st_putc('~');
@@ -480,12 +459,7 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects)
             size_t vlen;
             expanded = exp_var(f->word, i, &end, &vlen);
             if (expanded) {
-              if (vlen >= stleft)
-                grow_stack(vlen);
-              memcpy(stnext, expanded, vlen);
-              stnext += vlen;
-              stleft -= vlen;
-              len += vlen;
+              st_write(expanded, vlen, len);
               i = end;
             } else {
               i = end;
@@ -498,29 +472,48 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects)
             len - sectstart,
           };
         break;
+      case QARITH:
+        {
+          long long val;
+          char buf[32];
+          size_t rlen;
+          stmark arithm;
+
+          arithm = stack_mark();
+          val = arith_eval(f->word, f->len);
+          stack_restore(arithm);
+          rlen = lltoa(val, buf);
+          st_write(buf, rlen, len);
+          break;
+        }
       case QCMDSUB:
       case QCMDSUB_DQ:
         {
-          cmd_tree *cmdsub;
+          cmd_tree *cmdsub, *cmdsdup;
           int sublen;
           char *cmdsubpos;
           size_t savesl;
 
           savesl = stleft;
           cmdsubpos = stnext;
-          pushstring(f->word, f->len, 0);
+          setinputstrn(f->word, f->len);
           last_tok = SHTOK(TNONE);
           chkwd = 0;
           notclosed = 0;
-          cmdsub = parse_list(TEOF);
+          cmdsub = parse_list(TEOF, 1);
 
+          popinput();
+          cmdsdup = tree_dup(cmdsub);
+          if (!cmdsdup)
+            return NULL;
           stnext = cmdsubpos;
           stleft = savesl;
-          if ((sublen = run_cmdsub(cmdsub)) < 0)
+          if ((sublen = run_cmdsub(cmdsdup)) < 0) {
+            free_tree(cmdsdup);
             return NULL;
-          else {
-            len += sublen;
           }
+          len += sublen;
+          free_tree(cmdsdup);
           if (f->qs == QCMDSUB && sects)
             sects[si++] = (ifssect) {
               sectstart,
@@ -532,11 +525,13 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects)
   }
   if (n)
     *n = si;
+  if (rlen)
+    *rlen = len;
   return grab_str(len);
 }
 
 static char **
-splitword(char *str, size_t nsect, ifssect *sects, size_t *tlen)
+splitword(char *restrict str, size_t slen, size_t nsect, ifssect *restrict sects, size_t *restrict tlen)
 {
   enum {
     M_IMMUNE,
@@ -546,8 +541,8 @@ splitword(char *str, size_t nsect, ifssect *sects, size_t *tlen)
   };
 
   char *ifs;
-  char **fargv;        // don't like fields as a name either
-  size_t slen, fargc;  // nfields only makes sense if i go with fields
+  char **fargv;
+  size_t fargc;
   int mode;
 
   ifs = getvar("IFS");
@@ -562,7 +557,6 @@ splitword(char *str, size_t nsect, ifssect *sects, size_t *tlen)
     fargv[1] = NULL;
     return fargv;
   }
-  slen = strlen(str);
   fargv = st_alloc((slen + 1) * sizeof(char *));
 
   size_t sidx, pos;

@@ -62,12 +62,14 @@ typedef enum {
   QSINGLE,
   QCMDSUB,
   QCMDSUB_DQ,
+  QARITH,
 } quoted;
 
 typedef enum {
   WFSINGLE = 1 << 0,
   WFDOUBLE = 1 << 1,
   WFALLNUM = 1 << 2,
+  WFCMDSUB = 1 << 3,
 } wf_flags;
 
 /**
