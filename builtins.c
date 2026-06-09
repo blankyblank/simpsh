@@ -19,6 +19,7 @@
 #include "env.h"
 #include "main.h"
 #include "opts.h"
+#include "test.h"
 #include "utils.h"
 #include "var.h"
 
@@ -26,6 +27,8 @@ static char *pwdpath(char *);
 
 /* the array of builtin commands */ /* clang-format off */
 const char *builtins[] = {
+  "[",
+  ":",
   "alias",
   "bg",
   "cd",
@@ -42,11 +45,14 @@ const char *builtins[] = {
   "pwd",
   "readonly",
   "set",
+  "test",
   "true",
   "unalias",
   "unset",
 };
 int (* const builtin_funcs[])(char **) = {
+  &testcmd,
+  &truecmd,
   &aliascmd,
   &bgcmd,
   &cdcmd,
@@ -63,6 +69,7 @@ int (* const builtin_funcs[])(char **) = {
   &pwdcmd,
   &readonlycmd,
   &setcmd,
+  &testcmd,
   &truecmd,
   &unaliascmd,
   &unsetcmd,
@@ -293,7 +300,9 @@ echocmd(char *argv[])
   }
   if (!(nf & FLAG_N))
     fputc('\n', stdout);
-  fflush(stdout);
+  if (fflush(stdout) == EOF) {
+    sherr(1, bargv0, "could not write to stdout");
+  }
   return 0;
 }
 

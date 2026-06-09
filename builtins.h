@@ -20,7 +20,6 @@ extern int falsecmd(char **);
 extern int helpcmd(char **);
 extern int pwdcmd(char **);
 extern int truecmd(char **);
-extern int testcmd(char **);
 
 /* vim: set filetype=c: */
 #endif /* BUILTIN_H */
