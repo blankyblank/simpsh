@@ -351,7 +351,7 @@ int
 testcmd(char **argv) {
   size_t argc = 0;
   int res;
-  testvar tv;
+  testvar tv, fasttv;
 
   argc = array_len(argv);
   if (*argv[0] == '[' && argv[0][1] == '\0') {
@@ -363,6 +363,24 @@ testcmd(char **argv) {
   }
   if (argc <= 1)
     return 1;
+
+  fasttv.flags = 0;
+  if (argc == 2) {
+    testop op = istestop(argv[1], 1);
+    if (op != TEND) {
+      res = testeval(&fasttv, op, argv[1], NULL);
+      if (!(fasttv.flags & terr))
+        return res ? 0 : 1;
+    }
+  } else if (argc == 3) {
+    testop op = istestop(argv[2], 0);
+    if (op != TEND) {
+      return testeval(&fasttv, op, argv[1], argv[2]);
+      if (!(fasttv.flags & terr))
+        return res ? 0 : 1;
+    }
+  }
+
 
   tv.flags = 0;
   tv.pos = argv + 1;
