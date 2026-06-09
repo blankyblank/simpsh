@@ -18,7 +18,7 @@
 #define NCHR(c) (nchars[(unsigned char)c])
 #define DCHR(c) (dqchars[(unsigned char)c])
 #define SCHR(c) (sqchars[(unsigned char)c])
-#define current_ctx() (ctx_stack[ctx_depth])
+#define current_ctx (ctx_stack[ctx_depth])
 #define push_ctx(m) (ctx_stack[++ctx_depth] = (m))
 #define pop_ctx() (ctx_depth--)
 #define KEYW(f, s, t) \
@@ -192,8 +192,8 @@ get_wf(int c)
   len = 0;
 
   for (;;) {
-    if (current_ctx() == M_NORMAL &&
-        ctx_tables[current_ctx()][(unsigned char)c] == C_WORD) {
+    if (current_ctx == M_NORMAL &&
+        ctx_tables[current_ctx][(unsigned char)c] == C_WORD) {
       size_t avail;
       const char *buf;
       size_t pos;
@@ -216,15 +216,15 @@ get_wf(int c)
         }
       }
     }
-    switch (ctx_tables[current_ctx()][(unsigned char)c]) {
+    switch (ctx_tables[current_ctx][(unsigned char)c]) {
       case C_SQUOTE:
         if (len > 0) {
           w = grab_str(len); /* save unquoted frag if nonempty */
           append_wf(&head, &tail, w, len,
-                    current_ctx() == M_SQUOTE ? QSINGLE : QNONE);
+                    current_ctx == M_SQUOTE ? QSINGLE : QNONE);
           len = 0;
         }
-        if (current_ctx() == M_SQUOTE)
+        if (current_ctx == M_SQUOTE)
           pop_ctx();
         else
           push_ctx(M_SQUOTE);
@@ -234,10 +234,10 @@ get_wf(int c)
         if (len > 0) {
           w = grab_str(len); /* save unquoted frag if nonempty */
           append_wf(&head, &tail, w, len,
-                    current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
+                    current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
           len = 0;
         }
-        if (current_ctx() == M_DQUOTE)
+        if (current_ctx == M_DQUOTE)
           pop_ctx();
         else
           push_ctx(M_DQUOTE);
@@ -254,10 +254,10 @@ get_wf(int c)
         if (len > 0) {
           w = grab_str(len); /* save frag if nonempty */
           append_wf(&head, &tail, w, len,
-                    current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
+                    current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
           len = 0;
         }
-        if (current_ctx() == M_DQUOTE && n != '$' && n != '"' && n != '\\' &&
+        if (current_ctx == M_DQUOTE && n != '$' && n != '"' && n != '\\' &&
             n != '`') {
           st_putc(c);
           len++;
@@ -271,6 +271,14 @@ get_wf(int c)
 
       case C_DOLLAR:
         n = eatbnl();
+        if (n == '{') {
+          if (len > 0) {
+            w = grab_str(len);
+            append_wf(&head, &tail, w, len,
+                      current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
+            len = 0;
+          }
+        }
         if (n == '(') {
           n2 = eatbnl();
           if (n2 == '(') {
@@ -287,7 +295,7 @@ get_wf(int c)
             if (len > 0) {
               w = grab_str(len);
               append_wf(&head, &tail, w, len,
-                        current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
+                        current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
               len = 0;
             }
             arlen = 0;
@@ -379,7 +387,7 @@ get_wf(int c)
           if (len > 0) {
             w = grab_str(len); /* save frag if nonempty */
             append_wf(&head, &tail, w, len,
-                      current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
+                      current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
             len = 0;
           }
 
@@ -426,11 +434,11 @@ get_wf(int c)
                 break;
             }
           }
-        } else {
-          st_putc(c);
-          len++;
-          shungetc(n);
-        }
+                  } else {
+                    st_putc(c);
+                    len++;
+                    shungetc(n);
+                  }
         break;
 
       case C_BTICK:
@@ -443,7 +451,7 @@ get_wf(int c)
           if (len > 0) {
             w = grab_str(len); /* save frag if nonempty */
             append_wf(&head, &tail, w, len,
-                      current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
+                      current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
             len = 0;
           }
 
@@ -482,10 +490,10 @@ get_wf(int c)
 cmdsubend:
           w = grab_str(cmdlen);
           append_wf(&head, &tail, w, cmdlen,
-                    (current_ctx() == M_DQUOTE) ? QCMDSUB_DQ : QCMDSUB);
+                    (current_ctx == M_DQUOTE) ? QCMDSUB_DQ : QCMDSUB);
           c = eatbnl();
           if (c == SHEOF) {
-            if (current_ctx() != M_NORMAL)
+            if (current_ctx != M_NORMAL)
               notclosed = 1;
             goto done;
           }
@@ -504,7 +512,7 @@ cmdsubend:
       case C_GT:
       case C_SPACE:
       case C_NL:
-        if (current_ctx() == M_NORMAL) {
+        if (current_ctx == M_NORMAL) {
           shungetc(c);
           goto done;
         }
@@ -517,9 +525,9 @@ cmdsubend:
         break;
     }
 
-    c = (current_ctx() == M_SQUOTE) ? shgetchar() : eatbnl();
+    c = (current_ctx == M_SQUOTE) ? shgetchar() : eatbnl();
     if (c == SHEOF) {
-      if (current_ctx() != M_NORMAL)
+      if (current_ctx != M_NORMAL)
         notclosed = 1;
       goto done;
     }
@@ -529,8 +537,8 @@ done:
   if (len) {
     w = grab_str(len);
     append_wf(&head, &tail, w, len,
-              current_ctx() == M_SQUOTE ? QSINGLE :
-              current_ctx() == M_DQUOTE ? QDOUBLE : QNONE);
+              current_ctx == M_SQUOTE ? QSINGLE :
+              current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
   }
   return head;
 }
