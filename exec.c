@@ -195,12 +195,15 @@ static int
 run_while(const cmd_tree *n)
 {
   int status, cond;
+  stmark w;
   status = 0;
   for (;;) {
+    w = stack_mark();
     cond = run_commands(n->left);
     if ((n->flags & UNTIL) ? cond == 0 : cond != 0)
       break;
     status = run_commands(n->right);
+    stack_restore(w);
   }
   return status;
 }
