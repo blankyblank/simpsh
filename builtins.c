@@ -353,7 +353,7 @@ exitcmd(char **argv)
     }
     exnum = atoi_(argv[1]);
   }
-  exit(exnum);
+  _exit(exnum);
 }
 
 int

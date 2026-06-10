@@ -327,7 +327,7 @@ run_subsh(const cmd_tree *n)
       child_setup_fg(0);
       status = run_commands(n->left);
       if (efl && status != 0 && !ifl)
-        exit(status);
+        _exit(status);
       fflush(NULL);
       _exit(status);
     // XXX: might be able to clean this more idk

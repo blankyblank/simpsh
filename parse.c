@@ -553,7 +553,8 @@ parse_cmd(int noexec)
       if (t.type != TRP)
         return NULL;
       chkwd |= CHKALIAS | CHKKWD;
-      return newsubsh(sub, (neg & 1) ? NEG : 0);
+      l = newsubsh(sub, (neg & 1) ? NEG : 0);
+      break;
     case TTHEN:
     case TELIF:
     case TELSE:
@@ -567,11 +568,11 @@ parse_cmd(int noexec)
       break;
   }
 
-  last_tok = t;
-
-  if (!(l = parse_simple_cmd(neg)))
-    return NULL;
-
+  if (!l) {
+    last_tok = t;
+    if (!(l = parse_simple_cmd(neg)))
+      return NULL;
+  }
   // parse_pipe
   for (;;) {
     t = tokenize();
