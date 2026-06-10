@@ -548,7 +548,7 @@ parse_cmd(int noexec)
     case TUNTIL:
       return parse_while(t.type);
     case TLP:
-      sub = parse_list(TRP, noexec);
+      sub = parse_list(TRP, 1);
       t = tokenize();
       if (t.type != TRP)
         return NULL;

@@ -301,7 +301,6 @@ sh_interactive(void)
     
     r = read_cmd(&lines, &lineslen);
     if (r == 0) {
-      if (feof(stdin)) {
         if (Iflag && iflag) {
           clearerr(stdin);
           if ((write(STDOUT_FILENO, "\nUse \"exit\" to leave the shell \n", 33)) < 0)
@@ -309,7 +308,6 @@ sh_interactive(void)
           continue;
         }
         break;
-      }
       clearerr(stdin);
       stack_restore(mark);
       continue;
