@@ -60,6 +60,7 @@ typedef enum {
   QNONE,
   QDOUBLE,
   QSINGLE,
+  QHEREDOC,
   QVAR,
   QVAR_DQ,
   QBRACE,

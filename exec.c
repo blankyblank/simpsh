@@ -14,6 +14,7 @@
 #include "exec.h"
 #include "expand.h"
 #include "job.h"
+#include "input.h"
 #include "main.h"
 #include "malloc.h"
 #include "parse.h"
@@ -751,7 +752,7 @@ dupfall:
           } else {
             b.word = r->heredoc;
             b.len = strlen(r->heredoc);
-            b.qs = QDOUBLE;
+            b.qs = QHEREDOC;
             b.next = NULL;
             body = exp_word(&b, NULL, NULL, NULL);
             blen = strlen(body);

@@ -19,6 +19,7 @@
 #include "var.h"
 
 static char **splitword(char *restrict, size_t, size_t, ifssect *restrict, size_t *restrict);
+static char *exp_str(char *restrict, size_t, size_t *restrict);
 
 /** get the pid shell variable */
 #define varpid() (st_strdup(sh_pid_s))
@@ -125,6 +126,90 @@ homedir(char *user)
   fclose(pw);
   return NULL;
 }
+
+static char *
+exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
+{
+  size_t i = 0, vlen, end, tlen = 0;
+  char buf[16], *val;
+
+  while (i < slen) {
+    size_t s = i;
+    while (i < slen && str[i] != '$')
+      i++;
+    if (i > s)
+      st_write(str + s, i - s, tlen);
+    if (i >= slen)
+      break;
+    vlen = 0;
+    end = i;
+    val = NULL;
+    switch (str[i + 1]) {
+      case '$':
+        val = varpid();
+        vlen = strlen(val);
+        end = i + 2;
+        break;
+      case '?':
+        val = varstatus(&vlen);
+        end = i + 2;
+        break;
+      case '!':
+        val = varbgpid();
+        vlen = strlen(val);
+        end = i + 2;
+        break;
+      case '#':
+        vlen = lltoa(sh_argc, buf);
+        val = buf;
+        end = i + 2;
+        break;
+      case '{':
+        {
+          size_t j, vtl;
+          shvar *v;
+          j = i + 2;
+          while (j < slen && str[j] != '}')
+            j++;
+          if (j < slen) {
+            vtl = j - (i + 2);
+            if (vtl > 0) {
+              v = findvar_n(str + i + 2, vtl);
+              if (v) {
+                val = shvar_val(v);
+                vlen = strlen(val);
+              }
+            }
+            end = j + 1;
+          } else {
+            end = i + 1;
+          }
+          break;
+        }
+      default:
+        if (isalnum_(str[i + 1]) || str[i + 1] == '_') {
+          size_t j = i + 1;
+          shvar *v;
+          while (j < slen && (isalnum_(str[j]) || str[j] == '_'))
+            j++;
+          v = findvar_n(str + i + 1, j - (i + 1));
+          if (v) {
+            val = shvar_val(v);
+            vlen = strlen(val);
+          }
+          end = j;
+        } else {
+          end = i + 1;
+        }
+    }
+    if (val)
+      st_write(val, vlen, tlen);
+    i = end;
+  }
+  *outlen = tlen;
+  return grab_str(tlen);
+}
+
 
 char *
 exp_tilde(char *restrict word, size_t s, size_t *restrict e, size_t *restrict olen)
@@ -267,6 +352,7 @@ expand_argv(wf **args, size_t *restrict t)
   size_t ifsn, cap, fargc, tlen;
   size_t i, argc, elen;
   char **fargv, **argv;
+  // enum {  };
 
   *t = 0;
   cap = 0;
@@ -303,7 +389,7 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *res
   size_t sectstart, i;
   ifssect *sects;
   wf *f;
-  char *expanded;
+  char *expanded, buf[16];
 
   for (f = wordf; f; f = f->next) {
     if (f->qs == QNONE || f->qs == QCMDSUB)
@@ -405,7 +491,6 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *res
       case QBRACE:
       case QBRACE_DQ: {
         char *val = NULL;
-        char buf[16];
         size_t vlen = 0;
 
         if (f->len == 1) {
@@ -435,18 +520,96 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *res
           val = get_posparam(n);
           vlen = val ? strlen(val) : 0;
         } else {
-          shvar *v = findvar_n(f->word, f->len);
-          if (v) {
-            val = shvar_val(v);
-            // vlen = v->flen - (v->nlen + 2);
-            vlen = strlen(val);
-          } else if (uflag && f->len > 0) {
-            char name[64];
-            nmemcpy(name, f->word, f->len);
-            UFLAGMSG(name);
-            nounseterr = 1;
+          shvar *v;
+          if (f->word[0] == '#') {
+            size_t rlen;
+            if ((v = findvar_n(f->word + 1, f->len - 1))) {
+              rlen = strlen(shvar_val(v));
+              vlen = lltoa(rlen, buf);
+            } else {
+              vlen = 1;
+              buf[0] = '0';
+              buf[1] = '\0';
+            }
+            val = buf;
+          } else {
+            size_t op = 0;
+            for (size_t j = 0; j < f->len; j++) {
+              if (f->word[j] == ':') {
+                char c = f->word[j + 1];
+                if (c == '-' || c == '=' || c == '?' || c == '+') {
+                  op = j + 1;
+                  break;
+                }
+              }
+            }
+            /*
+             * - sets default value if unset or null
+             * = if unset or null we set variable to value in var_tab
+             * ? error and exit if unset or null
+             * + if value is set substitute
+             */
+            if (op > 0) {
+              int isnull;
+              v = findvar_n(f->word, op - 1);
+              if (v)
+                val = shvar_val(v);
+              else
+                val = NULL;
+              isnull = (val == NULL || *val == '\0');
+
+              switch (f->word[op]) {
+                char *name;
+                case '-':
+                  if (isnull) {
+                    val = exp_str(f->word + op + 1, f->len - op - 1, &vlen);
+                  }
+                  break;
+                case '=':
+                  if (isnull) {
+                    val = exp_str(f->word + op + 1, f->len - op - 1, &vlen);
+                    name = st_strndup(f->word, op - 1);
+                    setvar(name, val, 0);
+                  }
+                  break;
+                case '?':
+                  if (isnull) {
+                    name = st_strndup(f->word, op - 1);
+                    shwarnx(name, f->word + op + 1);
+                    if (!iflag)
+                      exit(1);
+                    return NULL;
+                  }
+                  break;
+                case '+':
+                  if (!isnull) {
+                    val = exp_str(f->word + op + 1, f->len - op - 1, &vlen);
+                  } else {
+                    val = NULL;
+                    vlen = 0;
+                  }
+                  break;
+              }
+              // vlen = v->flen - (v->nlen + 2);
+              if (!vlen && val)
+                vlen = strlen(val);
+
+            } else {
+              v = findvar_n(f->word, f->len);
+              if (v) {
+                val = shvar_val(v);
+                // vlen = v->flen - (v->nlen + 2);
+                vlen = strlen(val);
+              } else if (uflag && f->len > 0) {
+                char name[64];
+                nmemcpy(name, f->word, f->len);
+                UFLAGMSG(name);
+                nounseterr = 1;
+              }
+            }
           }
         }
+
         if (val) {
           st_write(val, vlen, len);
           if ((f->qs == QVAR || f->qs == QBRACE) && sects)
@@ -454,6 +617,13 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *res
         }
         break;
         }
+      case QHEREDOC:
+        {
+          size_t elen;
+          char *exp = exp_str(f->word, f->len, &elen);
+          st_write(exp, elen, len);
+        }
+        break;
     }
   }
   if (n)
