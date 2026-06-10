@@ -13,6 +13,12 @@
 #include "simd.h"
 #include "utils.h"
 
+static wf *wf_chunk = NULL;
+static size_t wf_chunk_left = 0;
+int alias_depth = 0;
+int notclosed = 0;
+sh_tok last_tok = { .type = TNONE };
+int chkwd = 0;
 #define CTX_MAX 8
 #define WF_CHUNK_SIZE 4
 #define NCHR(c) (nchars[(unsigned char)c])
@@ -21,9 +27,25 @@
 #define current_ctx (ctx_stack[ctx_depth])
 #define push_ctx(m) (ctx_stack[++ctx_depth] = (m))
 #define pop_ctx() (ctx_depth--)
+
 #define KEYW(f, s, t) \
   if (memcmp(s, f->word, f->len) == 0) \
     return (sh_tok) { .type = t, .cmd = f }
+
+#define flushword(h, t, w, l, qs) \
+  do { \
+    if (l > 0) { \
+      w = grab_str(l); \
+      append_wf(h, t, w, l, qs); \
+      l = 0; \
+    } \
+  } while (0)
+
+typedef enum {
+  M_NORMAL,
+  M_DQUOTE,
+  M_SQUOTE
+} tokmode;
 
 /* clang-format off */
 static const unsigned char nchars[256] = {
@@ -47,39 +69,28 @@ static const unsigned char nchars[256] = {
   ['>'] = C_GT,
   ['`'] = C_BTICK,
 }; /* everything else is 0 = C_WORD */  /* clang-format on */
+
 static const unsigned char dqchars[256] = {
   ['"'] = C_DQUOTE,
   ['\\'] = C_BSLASH,
   ['$'] = C_DOLLAR,
   ['`'] = C_BTICK,
 };
+
 static const unsigned char sqchars[256] = {
   ['\''] = C_SQUOTE,
 };
-
-typedef enum {
-  M_NORMAL,
-  M_DQUOTE,
-  M_SQUOTE
-} tokmode;
-static tokmode ctx_stack[CTX_MAX] = { M_NORMAL };
-static int ctx_depth;
-
-static wf *wf_chunk = NULL;
-static size_t wf_chunk_left = 0;
-int alias_depth = 0;
-int notclosed = 0;
-sh_tok last_tok = { .type = TNONE };
-int chkwd = 0;
-
-static void append_wf(wf **restrict, wf **restrict, char *restrict, size_t len, int);
-static wf *get_wf(int);
 
 static const unsigned char *ctx_tables[] = {
   [M_NORMAL] = nchars,
   [M_DQUOTE] = dqchars,
   [M_SQUOTE] = sqchars,
 };
+
+static tokmode ctx_stack[CTX_MAX] = { M_NORMAL };
+static int ctx_depth;
+static wf *get_wf(int);
+
 
 #define qescape(c) \
   case insq: \
@@ -154,7 +165,7 @@ join_wf(wf *wordf)
 }
 
 /**  add word fragment onto the end of the linked list  */
-static void
+static inline void
 append_wf(wf **restrict head, wf **restrict tail, char *restrict w, size_t len, int quoted)
 {
   if (wf_chunk_left == 0) {
@@ -209,8 +220,7 @@ get_wf(int c)
           stleft -= pos;
           len += pos;
           shadvance(pos);
-          c = eatbnl();
-          if (c == SHEOF)
+          if ((c = eatbnl()) == SHEOF)
             goto done;
           continue;
         }
@@ -218,12 +228,8 @@ get_wf(int c)
     }
     switch (ctx_tables[current_ctx][(unsigned char)c]) {
       case C_SQUOTE:
-        if (len > 0) {
-          w = grab_str(len); /* save unquoted frag if nonempty */
-          append_wf(&head, &tail, w, len,
-                    current_ctx == M_SQUOTE ? QSINGLE : QNONE);
-          len = 0;
-        }
+        flushword(&head, &tail, w, len,
+                  current_ctx == M_SQUOTE ? QSINGLE : QNONE);
         if (current_ctx == M_SQUOTE)
           pop_ctx();
         else
@@ -231,12 +237,8 @@ get_wf(int c)
         break;
 
       case C_DQUOTE:
-        if (len > 0) {
-          w = grab_str(len); /* save unquoted frag if nonempty */
-          append_wf(&head, &tail, w, len,
-                    current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
-          len = 0;
-        }
+        flushword(&head, &tail, w, len,
+                  current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
         if (current_ctx == M_DQUOTE)
           pop_ctx();
         else
@@ -244,19 +246,14 @@ get_wf(int c)
         break;
 
       case C_BSLASH:
-        n = shgetchar();
-        if (n == '\n') {
+        if ((n = shgetchar()) == '\n') {
           cur_shinpt->linenum++;
           break;
         }
         if (n == SHEOF)
           goto done;
-        if (len > 0) {
-          w = grab_str(len); /* save frag if nonempty */
-          append_wf(&head, &tail, w, len,
-                    current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
-          len = 0;
-        }
+        flushword(&head, &tail, w, len,
+                  current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
         if (current_ctx == M_DQUOTE && n != '$' && n != '"' && n != '\\' &&
             n != '`') {
           st_putc(c);
@@ -271,14 +268,6 @@ get_wf(int c)
 
       case C_DOLLAR:
         n = eatbnl();
-        if (n == '{') {
-          if (len > 0) {
-            w = grab_str(len);
-            append_wf(&head, &tail, w, len,
-                      current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
-            len = 0;
-          }
-        }
         if (n == '(') {
           n2 = eatbnl();
           if (n2 == '(') {
@@ -292,19 +281,14 @@ get_wf(int c)
             } arstack[8];
             int arsp = 0;
 
-            if (len > 0) {
-              w = grab_str(len);
-              append_wf(&head, &tail, w, len,
-                        current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
-              len = 0;
-            }
+            flushword(&head, &tail, w, len,
+                      current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
             arlen = 0;
             depth = 0;
           startarith:
             for (;;) {
               char ch;
-              ch = shgetchar();
-              if (ch == SHEOF) {
+              if ((ch = shgetchar()) == SHEOF) {
                 notclosed = 1;
                 goto done;
               }
@@ -371,8 +355,7 @@ get_wf(int c)
             char *exprtxt;
             exprtxt = st_strndup(arbuf, arlen);
             append_wf(&head, &tail, exprtxt, arlen, QARITH);
-            c = eatbnl();
-            if (c == SHEOF)
+            if ((c = eatbnl()) == SHEOF)
               goto done;
             continue;
           } else {
@@ -384,12 +367,8 @@ get_wf(int c)
           cmdsubd = 1;
           cstate = 0;
           cmdlen = 0;
-          if (len > 0) {
-            w = grab_str(len); /* save frag if nonempty */
-            append_wf(&head, &tail, w, len,
-                      current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
-            len = 0;
-          }
+          flushword(&head, &tail, w, len,
+                    current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
 
           for (char ch = shgetchar();; ch = shgetchar()) {
             if (ch == SHEOF) {
@@ -434,11 +413,90 @@ get_wf(int c)
                 break;
             }
           }
-                  } else {
-                    st_putc(c);
-                    len++;
-                    shungetc(n);
-                  }
+
+          /* ${...} */
+        } else if (n == '{') {
+          flushword(&head, &tail, w, len,
+                    current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
+          size_t nlen = 0;
+          for (char ch = shgetchar();; ch = shgetchar()) {
+            if (ch == SHEOF) {
+              notclosed = 1;
+              goto done;
+            }
+            if (ch == '}')
+              break;
+            st_putc(ch);
+            nlen++;
+          }
+          w = grab_str(nlen);
+          append_wf(&head, &tail, w, nlen,
+                    current_ctx == M_DQUOTE ? QBRACE_DQ : QBRACE);
+          if ((c = eatbnl()) == SHEOF)
+            goto done;
+          continue;
+
+          /* $name */
+        } else if (isalpha_(n) || n == '_') {
+          flushword(&head, &tail, w, len,
+                    current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
+          st_putc(n);
+          size_t nlen = 1;
+          for (;;) {
+            char ch = eatbnl();
+            if (!isalnum_(ch) && ch != '_') { // XXX: might make more sense? than || ch == '_'
+              shungetc(ch);
+              break;
+            }
+            st_putc(ch);
+            nlen++;
+          }
+          w = grab_str(nlen);
+          append_wf(&head, &tail, w, nlen,
+                    current_ctx == M_DQUOTE ? QVAR_DQ : QVAR);
+          if ((c = eatbnl()) == SHEOF)
+            goto done;
+          continue;
+
+          /* $$ $? $! $# */
+        } else if (n == '$' || n == '?' || n == '!' || n == '#') {
+          flushword(&head, &tail, w, len,
+                    current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
+          st_putc(n);
+          w = grab_str(1);
+          append_wf(&head, &tail, w, 1,
+                    current_ctx == M_DQUOTE ? QVAR_DQ : QVAR);
+          if ((c = eatbnl()) == SHEOF)
+            goto done;
+          continue;
+
+          /* $1 numbers */
+        } else if (isdigit_(n)) {
+          flushword(&head, &tail, w, len,
+                    current_ctx == M_DQUOTE ? QBRACE_DQ : QBRACE);
+          st_putc(n);
+          size_t nlen = 1;
+          for (;;) {
+            char ch = eatbnl();
+            if (!isdigit_(ch)) {
+              shungetc(ch);
+              break;
+            }
+            st_putc(ch);
+            nlen++;
+          }
+          w = grab_str(nlen);
+          append_wf(&head, &tail, w, nlen,
+                    current_ctx == M_DQUOTE ? QVAR_DQ : QVAR);
+          if ((c = eatbnl()) == SHEOF)
+            goto done;
+          continue;
+
+        } else {
+          st_putc(c);
+          len++;
+          shungetc(n);
+        }
         break;
 
       case C_BTICK:
@@ -448,13 +506,8 @@ get_wf(int c)
 
           cstate = 0;
           cmdlen = 0;
-          if (len > 0) {
-            w = grab_str(len); /* save frag if nonempty */
-            append_wf(&head, &tail, w, len,
-                      current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
-            len = 0;
-          }
-
+          flushword(&head, &tail, w, len,
+                    current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
           for (char ch = shgetchar();; ch = shgetchar()) {
             if (ch == SHEOF) {
               notclosed = 1;
@@ -491,8 +544,7 @@ cmdsubend:
           w = grab_str(cmdlen);
           append_wf(&head, &tail, w, cmdlen,
                     (current_ctx == M_DQUOTE) ? QCMDSUB_DQ : QCMDSUB);
-          c = eatbnl();
-          if (c == SHEOF) {
+          if ((c = eatbnl()) == SHEOF) {
             if (current_ctx != M_NORMAL)
               notclosed = 1;
             goto done;

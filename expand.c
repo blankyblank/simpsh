@@ -18,8 +18,6 @@
 #include "utils.h"
 #include "var.h"
 
-static char *var_n(const char *, size_t, size_t * restrict, size_t * restrict);
-static char *varbrace_n(const char *, size_t, size_t *restrict , size_t *restrict);
 static char **splitword(char *restrict, size_t, size_t, ifssect *restrict, size_t *restrict);
 
 /** get the pid shell variable */
@@ -81,140 +79,6 @@ is_posparam(const char *var, size_t var_l)
       return 0;
   }
   return 1;
-}
-
-/** expand $var style variables */
-char *
-var_n(const char *args, size_t i, size_t * restrict end, size_t * restrict olen)
-{
-  const char *env_var;
-  char *var;
-  size_t j, vt_l;
-
-  for (j = i + 1;; j++) {
-    if ((isalnum_(args[j]) == 0 && args[j] != '_') || args[j] == '\0') {
-      vt_l = j - (i + 1);
-
-      if (vt_l == 0) {
-        env_var = NULL;
-        break;
-      } else {
-        env_var = lookupvar(&args[i + 1], vt_l);
-        break;
-      }
-    }
-  }
-
-  *end = j;
-  if (!env_var) {
-    if (uflag && vt_l > 0) {
-      char name[64];
-      // WARN: this might buffer overflow at some point, need to fix that later probably
-      nmemcpy(name, &args[i+1], vt_l);
-      UFLAGMSG(name);
-      nounseterr = 1;
-    }
-      return NULL;
-  }
-  *olen = strlen(env_var);
-  var = st_strndup(env_var, *olen);
-  return var;
-}
-
-/** expand ${var} style variables */
-char *
-varbrace_n(const char *args, size_t i, size_t *restrict end, size_t *restrict olen)
-{
-  char *var, *env_var;
-  size_t j, vt_l;
-
-  if (strchr(args, '}') == NULL)
-    return NULL;
-
-  for (j = i + 1;; j++) {
-    if (args[j] == '}') {
-      vt_l = j - (i + 2);
-      if (vt_l == 0)
-        return NULL;
-      else {
-        env_var = lookupvar(&args[i + 2], vt_l);
-        break;
-      }
-    }
-  }
-
-  *end = j;
-  if (!env_var) {
-    if (uflag && vt_l > 0) {
-      char name[64];
-      nmemcpy(name, &args[i + 2], vt_l);
-      UFLAGMSG(name);
-      nounseterr = 1;
-    }
-    return NULL;
-  }
-  *olen = strlen(env_var);
-  var = st_strndup(env_var, *olen);
-  return var;
-}
-
-/** lookup variable by name */
-char *
-lookupvar(const char *vt, size_t vlen)
-{
-  char *var;
-  shvar *v;
-  int n;
-
-  n = 0;
-  if (is_posparam(vt, vlen)) {
-    for (size_t j = 0;j < vlen; j++)
-      n = n * 10 + (vt[j] - '0');
-    var = get_posparam(n);
-  } else {
-    v = findvar_n(vt, vlen);
-    if (v)
-      var = shvar_val(v);
-    else
-      var = NULL;
-  }
-
-  return var;
-}
-
-/** expand variables in word */
-char *
-exp_var(char *restrict word, size_t s, size_t *restrict e, size_t *restrict olen)
-{
-  if (word && word[s] != '$')
-    return NULL;
-  char *var;
-
-  switch (word[s + 1]) {
-    case '$':
-      *e = s + 2;
-      var = varpid();
-      *olen = strlen(var);
-      return var;
-    case '!':
-      *e = s + 2;
-      var = varbgpid();
-      *olen = strlen(var);
-      return var;
-    case '?':
-      *e = s + 2;
-      var = varstatus(olen);
-      return var;
-    case '#':
-      *e = s + 2;
-      varargc(); // NOTE: calls return within macro
-    case '{':
-      var = varbrace_n(word, s, e, olen);
-      return var;
-    default:
-      var = var_n(word, s, e, olen);
-      return var;
-  }
 }
 
 char *
@@ -297,8 +161,8 @@ exp_tilde(char *restrict word, size_t s, size_t *restrict e, size_t *restrict ol
 char *
 expand_ps1(char *p)
 {
-  size_t i, end, varlen, cbrace, flen, elen;
-  char *s, *expanded;
+  size_t i, varlen, cbrace, flen;
+  char *s, *val = NULL;
   char f[4096], vcpy[256];
 
   if (!p)
@@ -316,16 +180,17 @@ expand_ps1(char *p)
         vcpy[2] = '\0';
       } else if (p[i + 1] == '{') {
         cbrace = i + 2;
-        while (p[cbrace] && p[cbrace] == '}') {
+        while (p[cbrace] && p[cbrace] != '}')
           cbrace++;
-          if (!p[cbrace]) {
-            f[flen++] = p[i++];
-            continue;
-          }
-          varlen = cbrace - i + 1;
-          memcpy(vcpy, p + i, varlen);
-          vcpy[varlen] = '\0';
+        if (!p[cbrace]) {
+          f[flen++] = p[i++];
+          continue;
         }
+        varlen = cbrace - (i + 2);
+        vcpy[0] = '$';
+        memcpy(vcpy + 1, p + i + 2, varlen);
+        vcpy[varlen + 1] = '\0';
+        varlen = cbrace - i + 1;
       } else if (isalnum_(p[i + 1])) {
         varlen = i + 1;
         while (isalnum_(p[varlen]))
@@ -342,8 +207,45 @@ expand_ps1(char *p)
         f[flen++] = p[i++];
         continue;
       }
-      if ((expanded = exp_var(vcpy, 0, &end, &elen))) {
-        for (s = expanded; *s; s++)
+
+      size_t vlen = 0;
+      if (vcpy[0] == '$' && vcpy[1]) {
+        switch (vcpy[1]) {
+          case '$':
+            val = varpid();
+            vlen = strlen(val);
+            break;
+          case '?':
+            val = varstatus(&vlen);
+            break;
+          case '!':
+            val = varbgpid();
+            vlen = strlen(val);
+            break;
+          case '#':
+            {
+              char buf[16];
+              vlen = lltoa(sh_argc, buf);
+              val = buf;
+              break;
+            }
+          default:
+            if (isdigit_(vcpy[1])) {
+              int n = atoi(vcpy + 1);
+              val = get_posparam(n);
+              vlen = val ? strlen(val) : 0;
+            } else {
+              shvar *v = findvar_n(vcpy + 1, strlen(vcpy + 1));
+              if (v) {
+                val = shvar_val(v);
+                vlen = strlen(val);
+              }
+            }
+        }
+      }
+
+      if (val) {
+        for (s = val; *s; s++)
           f[flen++] = *s;
       }
       i += varlen;
@@ -419,28 +321,14 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *res
   for (f = wordf; f; f = f->next) {
     sectstart = len;
     switch (f->qs) {
+      case QDOUBLE:
       case QSINGLE:
         st_write(f->word, f->len, len);
         break;
-      case QDOUBLE:
       case QNONE:
         i = 0;
         while (i < f->len) {
-          size_t s, r;
-          s = i;
-          if (f->qs == QNONE) {
-            while (i < f->len && f->word[i] != '$' && f->word[i] != '~')
-              i++;
-          } else {
-            while (i < f->len && f->word[i] != '$')
-              i++;
-          }
-          r = i - s;
-          if (r)
-            st_write(f->word, r, len);
-          if (i >= f->len)
-            continue;
-          if (f->word[i] == '~' && f->qs == QNONE) {
+          if (f->word[i] == '~') {
             size_t elen = 0;
             expanded = exp_tilde(f->word, i, &end, &elen);
             if (expanded) {
@@ -451,22 +339,13 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *res
               len++;
               i++;
             }
-          } else if (f->word[i] != '$') {
+          } else {
             st_putc(f->word[i]);
             len++;
             i++;
-          } else {
-            size_t vlen;
-            expanded = exp_var(f->word, i, &end, &vlen);
-            if (expanded) {
-              st_write(expanded, vlen, len);
-              i = end;
-            } else {
-              i = end;
-            }
           }
         }
-        if (f->qs == QNONE && sects)
+        if (sects)
           sects[si++] = (ifssect) {
             sectstart,
             len - sectstart,
@@ -520,6 +399,60 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *res
               len - sectstart,
             };
           break;
+        }
+      case QVAR:
+      case QVAR_DQ:
+      case QBRACE:
+      case QBRACE_DQ: {
+        char *val = NULL;
+        char buf[16];
+        size_t vlen = 0;
+
+        if (f->len == 1) {
+          switch (f->word[0]) {
+            case '$':
+            val = varpid();
+            vlen = strlen(val);
+            break;
+            case '?':
+            val = varstatus(&vlen);
+            break;
+            case '!':
+            val = varbgpid();
+            vlen = strlen(val);
+            break;
+            case '#': {
+              vlen = lltoa(sh_argc, buf);
+              val  = buf;
+              break;
+            }
+          }
+        }
+        if (is_posparam(f->word, f->len)) {
+          int n = 0;
+          for (size_t i = 0; i < f->len; i++)
+            n = n * 10 + (f->word[i] - '0');
+          val = get_posparam(n);
+          vlen = val ? strlen(val) : 0;
+        } else {
+          shvar *v = findvar_n(f->word, f->len);
+          if (v) {
+            val = shvar_val(v);
+            // vlen = v->flen - (v->nlen + 2);
+            vlen = strlen(val);
+          } else if (uflag && f->len > 0) {
+            char name[64];
+            nmemcpy(name, f->word, f->len);
+            UFLAGMSG(name);
+            nounseterr = 1;
+          }
+        }
+        if (val) {
+          st_write(val, vlen, len);
+          if ((f->qs == QVAR || f->qs == QBRACE) && sects)
+            sects[si++] = (ifssect) { sectstart, len - sectstart };
+        }
+        break;
         }
     }
   }
