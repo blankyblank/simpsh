@@ -1,6 +1,7 @@
 #!/home/blank/dev/simpsh/simpsh
 
+testv=test123
 cat <<EOF
   this is a test
-  please don't segfault
+  this should expand to test123: $testv
 EOF
