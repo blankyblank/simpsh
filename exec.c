@@ -14,7 +14,6 @@
 #include "exec.h"
 #include "expand.h"
 #include "job.h"
-#include "input.h"
 #include "main.h"
 #include "malloc.h"
 #include "parse.h"
@@ -799,8 +798,6 @@ run_commands(const cmd_tree *n)
     return 0;
   switch (n->type) {
     case CMD:
-      if (n->flags & EXECED)
-        return lstatus = CSTATUS(n);
       return lstatus = run_cmd(n);
     case SUBSHELL:
       return lstatus = run_subsh(n);

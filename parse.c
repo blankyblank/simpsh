@@ -1,5 +1,4 @@
 /* parse.c - parser functions */
-#include "exec.h"
 #define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
 #include <string.h>
@@ -31,7 +30,7 @@ static int is_assn(wf *);
 static int get_assn(wf **, wf *** restrict);
 static cmd_tree *parse_group(void);
 static cmd_tree *parse_func(void);
-static cmd_tree *parse_cmd(int);
+static cmd_tree *parse_cmd(void);
 static cmd_tree *parse_while(token);
 static cmd_tree *parse_if(void);
 static cmd_tree *parse_simple_cmd(size_t);
@@ -191,7 +190,7 @@ get_assn(wf **args, wf ***restrict sh_vars)
 }
 
 __attribute__((hot)) cmd_tree *
-parse_list(token s, int noexec)
+parse_list(token s)
 {
   sh_tok t;
   cmd_tree *l, *r;
@@ -205,7 +204,7 @@ parse_list(token s, int noexec)
   }
   last_tok = t;
 
-  l = parse_cmd(noexec);
+  l = parse_cmd();
   if (!l)
     return NULL;
 
@@ -224,7 +223,7 @@ parse_list(token s, int noexec)
         break;
       }
       last_tok = t2;
-      r = parse_cmd(noexec);
+      r = parse_cmd();
       if (!r) {
         if (t.type == TBKGRND)
           l = newoppnode(TBKGRND, l, NULL);
@@ -251,7 +250,7 @@ parse_group(void)
 {
   cmd_tree *body;
   sh_tok t;
-  body = parse_list(TRB, 1);
+  body = parse_list(TRB);
   t = tokenize();
   if (t.type != TRB) {
     last_tok = t;
@@ -260,7 +259,6 @@ parse_group(void)
     chkwd |= CHKALIAS | CHKKWD;
   return body;
 }
-
 static cmd_tree *
 parse_func(void)
 {
@@ -270,7 +268,7 @@ parse_func(void)
     return parse_group();
   if (t.type == TLP) {
     cmd_tree *sub;
-    sub = parse_list(TRP, 1);
+    sub = parse_list(TRP);
     t = tokenize();
     if (t.type != TRP)
       return NULL;
@@ -353,12 +351,12 @@ parse_while(token tok)
   cmd_tree *condition, *body, *n;
   sh_tok t;
 
-  if (!(condition = parse_list(TDO, 1)))
+  if (!(condition = parse_list(TDO)))
     return NULL;
   t = tokenize();
   if (t.type != TDO)
     return NULL;
-  if (!(body = parse_list(TDONE, 1)))
+  if (!(body = parse_list(TDONE)))
     return NULL;
   t = tokenize();
   if (t.type != TDONE)
@@ -375,11 +373,11 @@ parse_if(void)
   cmd_tree *cond, *then, *else_;
   sh_tok t;
 
-  cond = parse_list(TTHEN, 1);
+  cond = parse_list(TTHEN);
   t = tokenize();
   if (t.type != TTHEN)
     return NULL;
-  then = parse_list(TFI, 1);
+  then = parse_list(TFI);
   t = tokenize();
 
   switch (t.type) {
@@ -387,7 +385,7 @@ parse_if(void)
       else_ = parse_if();
       break;
     case TELSE:
-      else_ = parse_list(TFI, 1);
+      else_ = parse_list(TFI);
       t = tokenize();
       if (t.type != TFI)
         return NULL;
@@ -520,7 +518,7 @@ parse_simple_cmd(size_t neg)
 
 /**  recursive decent parser  */
 __attribute__((hot)) cmd_tree *
-parse_cmd(int noexec)
+parse_cmd(void)
 {
   size_t neg;
   cmd_tree *sub, *l, *r, *r2;
@@ -548,7 +546,7 @@ parse_cmd(int noexec)
     case TUNTIL:
       return parse_while(t.type);
     case TLP:
-      sub = parse_list(TRP, 1);
+      sub = parse_list(TRP);
       t = tokenize();
       if (t.type != TRP)
         return NULL;
@@ -619,9 +617,5 @@ parse_cmd(int noexec)
     }
   }
 
-    if (!noexec && l->type == CMD && !(l->flags & NECMDSUB)) {
-      CSTATUS(l) = run_commands(l);
-      l->flags |= EXECED;
-    }
   return l;
 }

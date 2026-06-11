@@ -76,7 +76,7 @@ simpsh_run(void)
     
     mark = stack_mark();
     chkwd = CHKALIAS | CHKNL;
-    c = parse_list(TEOF, 0);
+    c = parse_list(TEOF);
     if (!c) {
       stack_restore(mark);
       break;

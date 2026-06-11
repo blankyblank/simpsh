@@ -465,7 +465,7 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *res
           last_tok = SHTOK(TNONE);
           chkwd = 0;
           notclosed = 0;
-          cmdsub = parse_list(TEOF, 1);
+          cmdsub = parse_list(TEOF);
 
           popinput();
           cmdsdup = tree_dup(cmdsub);
