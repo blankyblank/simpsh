@@ -10,6 +10,8 @@ doc
 bak
 fake
 notes.txt
+tests/bench.sh
+tests/script-test.sh
 
 .cache/
 *.json
