@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <stddef.h>
 #include <stdio.h>
+// #include <stdnoreturn.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -23,9 +24,11 @@
 #include "var.h"
 
 #define MAX_TMP_VARS 40
+#define xpnd(a) (join_wf(exp_word(a, NULL)))
 #define builtin_launch(i, a) ((*builtin_funcs[i])(a))
 
 int func_depth = 0;
+redir *predir = NULL;
 
 typedef struct fdlist {
   int orig;
@@ -40,22 +43,24 @@ static const struct {
   [RDOUT] = { O_WRONLY | O_CREAT | O_TRUNC, 0666 },
   [RDCLOB] = { O_WRONLY | O_CREAT | O_TRUNC, 0666 },
   [RDAPP] = { O_WRONLY | O_CREAT | O_APPEND, 0666 },
-  [RDRW] = { O_RDONLY | O_CREAT, 0666 },
+  [RDRW] = { O_RDWR | O_CREAT, 0666 },
 };
 
 static int findbuiltin(char *);
 static void poptmpvars(tmp_var *, size_t);
-static void save_fd(redir *, fdlist *, size_t * restrict);
+static int save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
-static int shexec(char **restrict , const cmd_tree *restrict , char **restrict);
+static __attribute__((noreturn)) void shexec(char **restrict, char **restrict, redir *);
+static int shfexec(char **restrict, const cmd_tree *restrict, char **restrict, redir *);
+static pid_t forkrun(sigset_t *, int);
 static int run_if(const cmd_tree *);
 static int run_while(const cmd_tree *);
 static int run_func(const cmd_tree *restrict, char **restrict);
 static int run_pipe(const cmd_tree *);
 static int run_bg(const cmd_tree *);
-static int run_redir(const cmd_tree *);
-static int run_subsh(const cmd_tree *);
-static int run_cmd(const cmd_tree *);
+static int run_subsh(const cmd_tree *, int);
+static int run_cmd(const cmd_tree *, int);
+
 
 static inline int
 restore_fd(fdlist *sfd, size_t sfdc)
@@ -75,8 +80,103 @@ restore_fd(fdlist *sfd, size_t sfdc)
   return 0;
 }
 
+static int
+apply_redir(redir *r)
+{
+  int qs;
+  while (r) {
+    char *name;
+    int fd;
+    if (!(name = xpnd(r->name)))
+      return 1;
+    switch (r->type) {
+
+      case RDIN:
+      case RDAPP:
+      case RDCLOB:
+      case RDRW:
+        OPENFD(name, redir_tab[r->type].flags, fd)
+        goto dupfall;
+        break;
+      case RDOUT:
+        if (Cflag) {
+          if ((fd = open(name, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, 0666)) <
+              0) {
+            warn("%s", name);
+            return 1;
+          }
+        } else {
+          OPENFD(name, O_WRONLY | O_CREAT | O_TRUNC, fd)
+        }
+        goto dupfall;
+        /* fall through */
+dupfall:
+        DUPFD(fd, r->fd)
+        CLOSEFD(fd)
+        break;
+      case RDDUPO:
+      case RDDUPI:
+        if (name[0] == '-' && name[1] == '\0') {
+          CLOSEFD(r->fd)
+        } else {
+          char *p = name;
+          while (*p && isdigit_(*p))
+            p++;
+          if (*p) {
+            err(1, "simpsh");
+          }
+          fd = atoi_(name);
+          DUPFD(fd, r->fd);
+        }
+        break;
+      case RDHERE_D:
+      case RDHERE:
+        if (!r->heredoc) {
+          warn("heredoc not found");
+          return 1;
+        }
+        {
+          wf b;
+          char *body;
+          int p[2];
+          size_t blen;
+
+          qs = 0;
+          for (wf *f = r->name; f; f = f->next)
+            if (f->qs != QNONE) {
+              qs = 1;
+              break;
+            }
+          if (qs) {
+            body = r->heredoc;
+            blen = strlen(body);
+          } else {
+            b.word = r->heredoc;
+            b.len = strlen(r->heredoc);
+            b.qs = QHEREDOC;
+            b.next = NULL;
+
+            body = xpnd(&b);
+            blen = strlen(body);
+          }
+          if (pipe(p) < 0)
+            err(1, "pipe");
+          if (write(p[1], body, blen) < 0)
+            err(1, "write");
+          CLOSEFD(p[1]);
+          DUPFD(p[0], r->fd);
+          CLOSEFD(p[0]);
+          break;
+        }
+    }
+    r = r->next;
+  }
+  return 0;
+}
+
+
 /**  get builtin command  */
-int
+static inline int
 findbuiltin(char *args)
 {
   size_t idx;
@@ -88,7 +188,7 @@ findbuiltin(char *args)
   return -1;
 }
 
-static void
+static inline void
 poptmpvars(tmp_var *tmp, size_t vc)
 {
   for (size_t i = 0; i < vc; i++) {
@@ -99,17 +199,43 @@ poptmpvars(tmp_var *tmp, size_t vc)
   }
 }
 
-static void
+static inline int
 save_fd(redir *r, fdlist *sfd, size_t * restrict sfdc)
 {
   redir *t;
   t = r;
   while (t) {
     sfd[*sfdc].orig = t->fd;
-    sfd[(*sfdc)++].saved = dup(t->fd);
+    if ((sfd[(*sfdc)++].saved = dup(t->fd)) < 0) {
+      shwarn("redirection", "save fd failed");
+      return 1;
+    }
     t = t->next;
   }
-  return;
+  return 0;
+}
+
+static pid_t
+forkrun(sigset_t *old, int bg)
+{
+  pid_t pid;
+
+  job_lock(old);
+  switch (pid = fork()) {
+    case -1:
+      perror("fork");
+      job_unlock(old);
+      return -1;
+    case 0:
+      job_unlock(old);
+      if (bg)
+        child_setup_bg();
+      else
+        child_setup_fg(0);
+      return pid;
+    default:
+      return pid;
+  }
 }
 
 static char *
@@ -130,9 +256,27 @@ bg_cmd(const cmd_tree *n)
   }
 }
 
+void
+shexec(char **restrict args, char **restrict env, redir *r)
+{
+  char *fpath;
+  if (!(fpath = getpath(args[0]))) {
+    fprintf(stderr, "%s: %s: command not found\n", sh_argv0, args[0]);
+    _exit(127);
+  }
+
+  if (r && apply_redir(r))
+    _exit(1);
+  if (execve(fpath, args, env) < 0) {
+    perror(args[0]);
+    _exit(1);
+  }
+  _exit(0);
+}
+
 /** fork and exec external command */
 static int
-shexec(char **restrict args, const cmd_tree *restrict n, char **restrict env)
+shfexec(char **restrict args, const cmd_tree *restrict n, char **restrict env, redir *r)
 {
   pid_t pid;
   sigset_t old;
@@ -153,13 +297,9 @@ shexec(char **restrict args, const cmd_tree *restrict n, char **restrict env)
       job_unlock(&old);
       return 1;
     case 0:
-      /* if fork was successful run the command */
       job_unlock(&old);
       child_setup_fg(0);
-      if (execve(fullpath, args, env) < 0) {
-        perror(args[0]);
-        _exit(1);
-      }
+      shexec(args, env, r);
     /* fall through */
     default:
       // XXX: i really want to clean up all this jobcontrol stuff
@@ -182,11 +322,11 @@ static int
 run_if(const cmd_tree *n)
 {
   int status;
-  status = run_commands(n->left);
+  status = run_commands(n->left, 0);
   if (status == 0)
-    return run_commands(n->right);
+    return run_commands(n->right, 0);
   else if (CELSE(n))
-    return run_commands(CELSE(n));
+    return run_commands(CELSE(n), 0);
   else
     return status;
 }
@@ -199,10 +339,10 @@ run_while(const cmd_tree *n)
   status = 0;
   for (;;) {
     w = stack_mark();
-    cond = run_commands(n->left);
+    cond = run_commands(n->left, 0);
     if ((n->flags & UNTIL) ? cond == 0 : cond != 0)
       break;
-    status = run_commands(n->right);
+    status = run_commands(n->right, 0);
     stack_restore(w);
   }
   return status;
@@ -238,13 +378,13 @@ run_func(const cmd_tree *n, char **args)
 
 
   if (func_depth >= MAX_FUNC_DEPTH) {
-    fprintf(stderr, "function: too many levels of recursion\n"); /*NOLINT*/
+    fprintf(stderr, "function: too many levels of recursion\n");
     status = 1;
     goto done;
   }
   func_depth++;
 
-  status = run_commands(n);
+  status = run_commands(n, 0);
   func_depth--;
   goto done;
 
@@ -274,17 +414,11 @@ run_bg(const cmd_tree *n)
   job *j;
   int status;
 
-  job_lock(&sigold);
-  pid = fork();
-  switch (pid) {
+  switch (pid = forkrun(&sigold, 1)) {
     case -1:
-      perror("failed to create subshell");
-      job_unlock(&sigold);
       return 1;
     case 0:
-      child_setup_bg();
-      job_unlock(&sigold);
-      status = run_commands(n->left);
+      status = run_commands(n->left, _INCHLD);
       fflush(NULL);
       _exit(status);
     default:
@@ -293,12 +427,12 @@ run_bg(const cmd_tree *n)
       j = newjob(pid, bg_cmd(n->left));
       job_unlock(&sigold);
       jobmsg(j);
-      return run_commands(n->right);
+      return run_commands(n->right, 0);
   }
 }
 
 static int
-run_subsh(const cmd_tree *n)
+run_subsh(const cmd_tree *n, int chld)
 {
   int status;
   int efl, ifl, mfl;
@@ -310,26 +444,28 @@ run_subsh(const cmd_tree *n)
     return 1;
   }
 
+  if ((chld & _INCHLD) && !mflag) {
+    if (predir && apply_redir(predir))
+      _exit(1);
+    status = run_commands(n->left, _INCHLD);
+    fflush(NULL);
+    _exit(status);
+  }
   mfl = mflag;
   efl = eflag;
   ifl = iflag;
 
-  job_lock(&old);
-  pid = fork();
-  switch (pid) {
+  switch (pid = forkrun(&old, 0)) {
     case -1:
-      perror("failed to create subshell");
-      job_unlock(&old);
       return 1;
     case 0:
-      job_unlock(&old);
-      child_setup_fg(0);
-      status = run_commands(n->left);
-      if (efl && status != 0 && !ifl)
+      if (predir && apply_redir(predir))
+        _exit(1);
+      status = run_commands(n->left, _INCHLD);
+      if (efl && status != 0 && !ifl) // XXX: make sure i should keep
         _exit(status);
       fflush(NULL);
       _exit(status);
-    // XXX: might be able to clean this more idk
     default:
       if (mfl && getpid() == sh_pgid) {
         job *j;
@@ -391,7 +527,7 @@ run_cmdsub(const cmd_tree *n)
       if (close(pipefd[1]) < 0)
         warn("close");
       child_setup_fg(0);
-      lstatus = run_commands(n);
+      lstatus = run_commands(n, _INCHLD);
       fflush(NULL);
       _exit(lstatus);
     default:
@@ -479,7 +615,7 @@ run_pipe(const cmd_tree *n)
       CLOSEFD(pipefd[0]);
       DUPFD(pipefd[1], STDOUT_FILENO);
       CLOSEFD(pipefd[1]); 
-      int _st = run_commands(n->left);
+      int _st = run_commands(n->left, _INCHLD);
       fflush(NULL);
       _exit(_st);
     default:
@@ -502,7 +638,7 @@ run_pipe(const cmd_tree *n)
       CLOSEFD(pipefd[1]);
       DUPFD(pipefd[0], STDIN_FILENO);
       CLOSEFD(pipefd[0]);
-      int _st = run_commands(n->right);
+      int _st = run_commands(n->right, _INCHLD);
       fflush(NULL);
       _exit(_st);
     default:
@@ -550,6 +686,8 @@ run_pipe(const cmd_tree *n)
     }
   }
 
+  if (CNEG(n))
+    status = !status;
   pipedepth--;
   if (eflag && status != 0 && !iflag && !(n->flags & EFLAG_SAFE))
     exit(status);
@@ -557,7 +695,7 @@ run_pipe(const cmd_tree *n)
 }
 
 __attribute__((hot)) static int
-run_cmd(const cmd_tree *n)
+run_cmd(const cmd_tree *n, int inchld)
 {
   int status;
   int ifl, efl;
@@ -565,9 +703,9 @@ run_cmd(const cmd_tree *n)
   char **env = NULL;
   wf **vars;
   shvar *v;
-  shfunc *f;
+  shfunc *f = NULL;
   size_t i, vc, len;
-  int b;
+  int b = 0;
 
   ifl = iflag;
   efl = eflag;
@@ -595,9 +733,8 @@ run_cmd(const cmd_tree *n)
         char *name, *val /*, *evar*/;
         shvar_flags flags;
         char *evar;
-        evar = exp_word(vars[i], NULL, NULL, NULL); // XXX: probably wrong len here actually
+        evar = xpnd(vars[i]);
         st_read_assn(evar, &name, &val);
-        // XXX: where is len??
         v = findvar(name);
         if (v)
           flags = v->flags;
@@ -605,42 +742,35 @@ run_cmd(const cmd_tree *n)
           flags = 0;
         setvar(name, val, flags);
       }
-      return 0;
-    } else {
-      return 0;
     }
+    if (predir)
+      return apply_redir(predir);
+    return 0;
   }
 
-  if ((f = findfunc(final[0]))) { /* if this is a shell function */
+  if ((f = findfunc(final[0])) || (b = findbuiltin(*final)) >= 0) {
+    fdlist sfd[10];
+    size_t sfdc = 0;
+    if (predir)
+      if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
+        return 1;
     if (vars && vars[0]) {
       tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; vars[i]; i++) {
         char *name, *val;
-        st_read_assn(exp_word(vars[i], NULL, NULL, NULL), &name, &val);
+        st_read_assn(xpnd(vars[i]), &name, &val);
         tmp[i] = grabvar(name);
         vc++;
         setvar(name, val, 0);
       }
-      status = run_func(f->body, final);
+      status = f ? run_func(f->body, final) : builtin_launch(b, final);
       poptmpvars(tmp, vc);
     } else {
-      status = run_func(f->body, final);
+      status = f ? run_func(f->body, final) : builtin_launch(b, final);
     }
-
-  } else if ((b = findbuiltin(*final)) >= 0) { /* if this is a builtin */
-    if (vars && vars[0]) { /*  handle name=value cmd  */
-      tmp_var tmp[MAX_TMP_VARS];
-      for (vc = 0, i = 0; vars[i]; i++) {
-        char *name, *val;
-        st_read_assn(exp_word(vars[i], NULL, NULL, NULL), &name, &val);
-        tmp[i] = grabvar(name);
-        vc++;
-        setvar(name, val, 0);
-      }
-      status = builtin_launch(b, final);
-      poptmpvars(tmp, vc);
-    } else {
-      status = builtin_launch(b, final);
+    if (predir) {
+      fflush(NULL);
+      restore_fd(sfd, sfdc);
     }
 
   } else { /* if this is a external command */
@@ -648,7 +778,7 @@ run_cmd(const cmd_tree *n)
     if ((vc = CVARC(n))) {
       evars = st_alloc((vc + 1) * sizeof(char *));
       for (i = 0; i < vc; i++) {
-        evars[i] = exp_word(vars[i], NULL, NULL, NULL);
+        evars[i] = xpnd(vars[i]);
         evars[vc] = NULL;
       }
     } else {
@@ -659,7 +789,10 @@ run_cmd(const cmd_tree *n)
       perror("no environment found");
       return 1;
     }
-    status = shexec(final, n, env);
+    if (inchld & _INCHLD)
+      shexec(final, env, predir);
+    else
+      status = shfexec(final, n, env, predir);
     if (evars)
       free(env);
   }
@@ -670,160 +803,83 @@ run_cmd(const cmd_tree *n)
   return status;
 }
 
-static int
-run_redir(const cmd_tree *n)
+static inline int
+run_redir(const cmd_tree *n, int nchld)
 {
   fdlist sfd[10];
   size_t sfdc;
+  int status;
   redir *r;
-  int qs;
+
+  r = CREDR(n);
+
+  if (n->left->type == CMD || n->left->type == SUBSHELL) {
+    redir *prev = predir;
+    predir = r;
+    status = run_commands(n->left, nchld);
+    predir = prev;
+    return status;
+  }
 
   sfdc = 0;
-  r = CREDR(n);
-  save_fd(CREDR(n), sfd, &sfdc);
-
-  while (r) {
-    char *name;
-    int fd;
-    if (!(name = exp_word(r->name, NULL, NULL, NULL)))
-      return 1;
-    switch (r->type) {
-
-      case RDIN:
-      case RDAPP:
-      case RDCLOB:
-      case RDRW:
-        OPENFD(name, redir_tab[r->type].flags, fd)
-        goto dupfall;
-        break;
-      case RDOUT:
-        if (Cflag) {
-          if ((fd = open(name, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, 0666)) <
-              0) {
-            warn("%s", name);
-            return 1;
-          }
-        } else {
-          OPENFD(name, O_WRONLY | O_CREAT | O_TRUNC, fd)
-        }
-        goto dupfall;
-        /* fall through */
-dupfall:
-        DUPFD(fd, r->fd)
-        CLOSEFD(fd)
-        break;
-      case RDDUPO:
-      case RDDUPI:
-        if (name[0] == '-' && name[1] == '\0') {
-          CLOSEFD(r->fd)
-        } else {
-          char *p = name;
-          while (*p && isdigit_(*p))
-            p++;
-          if (*p) {
-            err(1, "simpsh");
-          }
-          fd = atoi_(name);
-          DUPFD(fd, r->fd);
-        }
-        break;
-      case RDHERE_D:
-      case RDHERE:
-        if (!r->heredoc) {
-          warn("heredoc not found");
-          return 1;
-        }
-        {
-          wf b;
-          char *body;
-          int p[2];
-          size_t blen;
-
-          qs = 0;
-          for (wf *f = r->name; f; f = f->next)
-            if (f->qs != QNONE) {
-              qs = 1;
-              break;
-            }
-          if (qs) {
-            body = r->heredoc;
-            blen = strlen(body);
-          } else {
-            b.word = r->heredoc;
-            b.len = strlen(r->heredoc);
-            b.qs = QHEREDOC;
-            b.next = NULL;
-            body = exp_word(&b, NULL, NULL, NULL);
-            blen = strlen(body);
-          }
-          if (pipe(p) < 0)
-            err(1, "pipe");
-          if (write(p[1], body, blen) < 0)
-            err(1, "write");
-          CLOSEFD(p[1]);
-          DUPFD(p[0], r->fd);
-          CLOSEFD(p[0]);
-          break;
-        }
-    }
-    r = r->next;
-  }
-
-  lstatus = run_commands(n->left);
-
-  if (!(n->left && n->left->type == CMD && CARGS(n->left) &&
-        CARGS(n->left)[0] && !CARGS(n->left)[1] &&
-        !(CARGS(n->left)[0]->word[0] == 'e' && CARGS(n->left)[0]->word[1] == 'x' &&
-          CARGS(n->left)[0]->word[2] == 'e' && CARGS(n->left)[0]->word[3] == 'c' &&
-          CARGS(n->left)[0]->word[4] == '\0'))) {
-    fflush(NULL);
-    restore_fd(sfd, sfdc);
-  }
+  if ((save_fd(CREDR(n), sfd, &sfdc)))
+    return 1;
+  if (apply_redir(r))
+    return 1;
+  status = run_commands(n->left, nchld);
+  fflush(NULL);
+  if (restore_fd(sfd, sfdc))
+    return 1;
 
   if (eflag && lstatus != 0 && !iflag && !(n->flags & EFLAG_SAFE))
     exit(lstatus);
-  return lstatus;
+  return status;
 }
 
 
 
 /**  run command tree  */
 __attribute__((hot)) int
-run_commands(const cmd_tree *n)
+run_commands(const cmd_tree *n, int nchld)
 {
   int l_status;
   l_status = lstatus;
 
   if (!n)
     return 0;
+
+  while (n->type == OP && (COPP(n) == TSEMI || COPP(n) == TNL)) {
+    lstatus = run_commands(n->left, 0);
+    if (!n->right)
+      return lstatus;
+    n = n->right;
+  }
+
   switch (n->type) {
     case CMD:
-      return lstatus = run_cmd(n);
+      return lstatus = run_cmd(n, nchld);
     case SUBSHELL:
-      return lstatus = run_subsh(n);
+      return lstatus = run_subsh(n, nchld);
     case FUNC:
       return lstatus = run_funcdef(n);
     case REDIR:
-      return lstatus = run_redir(n);
+      return lstatus = run_redir(n, nchld);
     case WHILE:
       return lstatus = run_while(n);
     case IF:
       return lstatus = run_if(n);
     case OP:
       if (COPP(n) != TPIPE && COPP(n) != TBKGRND)
-        l_status = run_commands(n->left);
+        l_status = run_commands(n->left, 0);
       switch (COPP(n)) {
-        case TSEMI:
-        case TNL:
-          return lstatus = run_commands(n->right);
         case TAND:
           if (l_status != 0)
             return lstatus;
-          return lstatus = run_commands(n->right);
+          return lstatus = run_commands(n->right, nchld);
         case TOR:
           if (l_status == 0)
             return lstatus;
-          return lstatus = run_commands(n->right);
+          return lstatus = run_commands(n->right, nchld);
         case TPIPE:
           return lstatus = run_pipe(n);
         case TBKGRND:
@@ -835,7 +891,7 @@ run_commands(const cmd_tree *n)
           return 1;
       }
     default:
-    return 1;
+      return 1;
   }
   return 0;
 }

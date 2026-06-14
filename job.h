@@ -62,8 +62,8 @@ extern int jobscmd(char **);
 static inline void
 ttyrestore(void)
 {
-  tcsetpgrp(STDIN_FILENO, sh_pgid);
-  tcsetattr(STDIN_FILENO, TCSADRAIN, &sh_termios);
+  tcsetpgrp(tty_fd, sh_pgid);
+  tcsetattr(tty_fd, TCSADRAIN, &sh_termios);
 }
 
 #endif /* JOB_H */

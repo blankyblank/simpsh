@@ -245,7 +245,7 @@ testeval(testvar *tv, testop op, const char *opnd1, const char *opnd2)
 static int
 nexpr(testvar *tv)
 {
-  if (tv->pos < tv->wpend && **tv->pos == '!') {
+  if (tv->pos < tv->wpend && (*tv->pos)[0] == '!' && (*tv->pos)[1] == '\0') {
     tv->pos++;
     return !nexpr(tv);
   }

@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 #include <stddef.h>
+#include "malloc.h"
 
 enum chars {
   C_WORD,
@@ -14,7 +15,6 @@ enum chars {
   C_DQUOTE,
   C_BSLASH,
   C_DOLLAR,
-  C_EXCL,
   C_AMP,
   C_PIPE,
   C_SEMI,
@@ -100,10 +100,14 @@ typedef struct {
   int sub;
 } sh_tok;
 
+extern wf *wf_chunk;
+extern size_t wf_chunk_left;
 extern int alias_depth;
 extern int notclosed;
 extern sh_tok last_tok;
 extern int chkwd;
+
+#define WF_CHUNK_SIZE 4
 #define SHTOK(t) ((sh_tok){ .type = t, .sub = 0 })
 #define SHREDIR(s) ((sh_tok){ .type = TREDIR, .sub = (s) })
 #define SHWORD(w) ((sh_tok) { .type = TWORD, .cmd = w, .sub = 0 })
@@ -130,5 +134,39 @@ extern sh_tok tokenize(void);
 extern void pushstring(char *, size_t, int);
 extern void popstring(void);
 extern char *join_wf(wf *wordf);
+
+static inline wf *
+wfalloc(void)
+{
+  if (wf_chunk_left == 0) {
+    wf_chunk = st_alloc(WF_CHUNK_SIZE * sizeof(wf));
+    wf_chunk_left = WF_CHUNK_SIZE;
+  }
+  wf *f = wf_chunk++;
+  wf_chunk_left--;
+  return f;
+}
+
+/**  add word fragment onto the end of the linked list  */
+static inline void
+append_wf(wf **restrict head, wf **restrict tail, char *restrict w, size_t len, int quoted)
+{
+  if (wf_chunk_left == 0) {
+    wf_chunk = st_alloc(WF_CHUNK_SIZE * sizeof(wf));
+    wf_chunk_left = WF_CHUNK_SIZE;
+  }
+  wf *f = wf_chunk++;
+  wf_chunk_left--;
+
+  f->word = w;
+  f->len = len;
+  f->qs = quoted;
+  f->next = NULL;
+  if (!*head)
+    *head = f;
+  else
+    (*tail)->next = f;
+  *tail = f;
+}
 
 #endif /* LEX_H */

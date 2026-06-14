@@ -21,6 +21,7 @@
 #include "exec.h"
 #include "expand.h"
 #include "job.h"
+#include "lex.h"
 #include "main.h"
 #include "malloc.h"
 #include "simpsh.h"
@@ -79,11 +80,13 @@ simpsh_run(void)
     c = parse_list(TEOF);
     if (!c) {
       stack_restore(mark);
+      last_tok = SHTOK(TNONE);
       break;
     }
     if (!nflag)
-      run_commands(c);
+      run_commands(c, 0);
     stack_restore(mark);
+    last_tok = SHTOK(TNONE);
     if (neednotify) {
       neednotify = 0;
       jobnotify();

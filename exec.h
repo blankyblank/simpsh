@@ -11,9 +11,10 @@
 #include "opts.h"
 #include "sig.h"
 
+#define _INCHLD (1 << 0)
 extern int func_depth;
 
-extern int run_commands(const cmd_tree *);
+extern int run_commands(const cmd_tree *, int);
 extern int run_cmdsub(const cmd_tree *);
 
 #define DUPFD(s, d) \
@@ -67,9 +68,9 @@ fgwait(job *j)
   }
 
   if (j->state == JSTP) {
-    tcgetattr(STDIN_FILENO, &j->ttystate);
+    tcgetattr(tty_fd, &j->ttystate);
     j->flags |= JSAVEDTTY;
-    j->saved_ttypgrp = tcgetpgrp(STDIN_FILENO);
+    j->saved_ttypgrp = tcgetpgrp(tty_fd);
     if (j->saved_ttypgrp >= 0)
       j->flags |= JSAVEDTTYPGRP;
     ttyrestore();

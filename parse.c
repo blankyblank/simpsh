@@ -448,8 +448,21 @@ parse_simple_cmd(size_t neg)
         }
       case TWORD:
         {
-          sh_tok n = tokenize();
-          if (n.type == TREDIR && (t.cmd->flags & WFALLNUM)) {
+          sh_tok n;
+          int adj = 0;
+          if (t.cmd->flags & WFALLNUM) {
+            char c = shgetchar();
+            if (c != SHEOF && (c == '<' || c == '>')) {
+              adj = 1;
+              if (c != SHEOF)
+                shungetc(c);
+            } else {
+              if (c != SHEOF)
+                shungetc(c);
+            }
+          }
+          n = tokenize();
+          if (n.type == TREDIR && (t.cmd->flags & WFALLNUM) && adj) {
             sh_tok name = tokenize();
             if (name.type != TWORD)
               return NULL;
@@ -515,107 +528,103 @@ parse_simple_cmd(size_t neg)
 
 }
 
-
-/**  recursive decent parser  */
 __attribute__((hot)) cmd_tree *
 parse_cmd(void)
 {
   size_t neg;
-  cmd_tree *sub, *l, *r, *r2;
-  sh_tok t, t2;
+  cmd_tree *sub = NULL, *l, *r = NULL, *cmb = NULL;
+  sh_tok t;
+  int op;
 
-  l = NULL;
-  neg = 0;
-
+  
   for (;;) {
-    t = tokenize();
-    if (t.type != TNOT) {
-      last_tok = t;
-      break;
-    }
-    chkwd |= CHKALIAS | CHKKWD;
-    neg++;
-  }
+    l = NULL;
+    neg = 0;
 
-  t = tokenize();
-
-  switch (t.type) {
-    case TIF:
-      return parse_if();
-    case TWHILE:
-    case TUNTIL:
-      return parse_while(t.type);
-    case TLP:
-      sub = parse_list(TRP);
+    for (;;) {
       t = tokenize();
-      if (t.type != TRP)
-        return NULL;
+      if (t.type != TNOT) {
+        last_tok = t;
+        break;
+      }
       chkwd |= CHKALIAS | CHKKWD;
-      l = newsubsh(sub, (neg & 1) ? NEG : 0);
-      break;
-    case TTHEN:
-    case TELIF:
-    case TELSE:
-    case TFI:
-    case TDO:
-    case TDONE: // TODO: figure out where to print error message
-      t.type = TWORD;
-      break;
-    default:
-      // TODO: add  for loops
-      break;
-  }
-
-  if (!l) {
-    last_tok = t;
-    if (!(l = parse_simple_cmd(neg)))
-      return NULL;
-  }
-  // parse_pipe
-  for (;;) {
-    t = tokenize();
-    if (t.type == TPIPE) {
-      chkwd |= CHKALIAS | CHKNL | CHKKWD;
-      r = parse_simple_cmd(0);
-      if (!r)
-        return NULL;
-      l = newoppnode(t.type, l, r);
-    } else {
-      last_tok = t;
-      break;
+      neg++;
     }
-  }
 
-  for (;;) {
+    t = tokenize();
+    switch (t.type) {
+      case TIF:
+        if (!(l = parse_if()))
+          return NULL;
+        break;
+      case TWHILE:
+      case TUNTIL:
+        if (!(l = parse_while(t.type)))
+          return NULL;
+        break;
+      case TLP: /* subsh */
+        sub = parse_list(TRP);
+        t = tokenize();
+        if (t.type != TRP)
+          return NULL;
+        chkwd |= CHKALIAS | CHKKWD;
+        l = newsubsh(sub, (neg & 1) ? NEG : 0);
+        neg = 0;
+        break;
+      case TTHEN:
+      case TELIF:
+      case TELSE:
+      case TFI:
+      case TDO:
+      case TDONE:
+        t.type = TWORD;
+        break;
+      default:
+        break;
+    }
+    if (!l) {
+      last_tok = t;
+      if (!(l = parse_simple_cmd(0)))
+        return NULL;
+    }
+
+    /* parse_pipe */
+    for (;;) {
+      t = tokenize();
+      if (t.type == TPIPE) {
+        chkwd |= CHKALIAS | CHKNL | CHKKWD;
+        r = parse_simple_cmd(0);
+        if (!r)
+          return NULL;
+        l = newoppnode(t.type, l, r);
+      } else {
+        last_tok = t;
+        break;
+      }
+    }
+    if (neg & 1)
+      l->flags |= NEG;
+
+    if (!cmb)
+      cmb = l;
+    else {
+      if (eflag) {
+        cmb->flags |= EFLAG_SAFE;
+        if (cmb->right)
+          cmb->right->flags |= EFLAG_SAFE;
+      }
+      cmb = newoppnode(op, cmb, l);
+    }
+
     chkwd |= CHKALIAS | CHKKWD;
     t = tokenize();
     if (t.type == TAND || t.type == TOR) {
       chkwd |= CHKALIAS | CHKNL | CHKKWD;
-      if (!(r = parse_simple_cmd(0)))
-        return NULL;
-      for (;;) {
-        t2 = tokenize();
-        if (t2.type == TPIPE) {
-          chkwd |= CHKALIAS | CHKNL | CHKKWD;
-          if (!(r2 = parse_simple_cmd(0)))
-            return NULL;
-          r = newoppnode(TPIPE, r, r2);
-        } else {
-          last_tok = t2;
-          break;
-        }
-      }
-      if (eflag) {
-        l->flags |= EFLAG_SAFE;
-        if (l->right)
-          l->right->flags |= EFLAG_SAFE;
-      }
-      l = newoppnode(t.type, l, r);
-    } else {
-      last_tok = t;
-      break;
+      op = t.type;
+      continue;
     }
+    last_tok = t;
+    break;
   }
-
-  return l;
+  return cmb;
 }

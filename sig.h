@@ -9,6 +9,7 @@ extern volatile sig_atomic_t neednotify;
 extern sigset_t emptyset;
 extern sigset_t sigchldmask;
 extern sigjmp_buf linejmp;
+extern int tty_fd;
 
 typedef void (*sighandler_t)(int);
 sighandler_t __signal(int sig, sighandler_t handler);

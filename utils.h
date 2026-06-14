@@ -13,7 +13,7 @@
 /* error message macros/funcs */
 
 /* err but it returns instead of exiting */
-#define err(r,s) { warn(s); return r; }
+#define err(r,s) { perror(s); return r; }
 /* errx but it returns instead of exiting */
 #define errx(r,s) { fprintf(stderr, "%s\n", s); return r; }
 /* error (returns doesn't exit) with simpsh: builtin: message: (errno message), format */

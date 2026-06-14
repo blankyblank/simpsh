@@ -13,14 +13,13 @@
 #include "simd.h"
 #include "utils.h"
 
-static wf *wf_chunk = NULL;
-static size_t wf_chunk_left = 0;
+wf *wf_chunk = NULL;
+size_t wf_chunk_left = 0;
 int alias_depth = 0;
 int notclosed = 0;
 sh_tok last_tok = { .type = TNONE };
 int chkwd = 0;
 #define CTX_MAX 8
-#define WF_CHUNK_SIZE 4
 #define NCHR(c) (nchars[(unsigned char)c])
 #define DCHR(c) (dqchars[(unsigned char)c])
 #define SCHR(c) (sqchars[(unsigned char)c])
@@ -57,7 +56,6 @@ static const unsigned char nchars[256] = {
   ['"'] = C_DQUOTE,
   ['\\'] = C_BSLASH,
   ['$'] = C_DOLLAR,
-  ['!'] = C_EXCL,
   ['&'] = C_AMP,
   ['|'] = C_PIPE,
   [';'] = C_SEMI,
@@ -152,37 +150,16 @@ join_wf(wf *wordf)
   char *s, *buf;
   size_t len = 0;
 
-  for (f = wordf; f; f = f->next)
+  for (f = wordf; f && f->word; f = f->next)
     len += f->len;
   buf = st_alloc(len + 1);
   s = buf;
-  for (f = wordf; f; f = f->next) {
+  for (f = wordf; f && f->word; f = f->next) {
     s = mempcpy_(s, f->word, f->len);
     *s = '\0';
   }
 
   return buf;
-}
-
-/**  add word fragment onto the end of the linked list  */
-static inline void
-append_wf(wf **restrict head, wf **restrict tail, char *restrict w, size_t len, int quoted)
-{
-  if (wf_chunk_left == 0) {
-    wf_chunk = st_alloc(WF_CHUNK_SIZE * sizeof(wf));
-    wf_chunk_left = WF_CHUNK_SIZE;
-  }
-  wf *f = wf_chunk++;
-  wf_chunk_left--;
-  f->word = w;
-  f->len = len;
-  f->qs = quoted;
-  f->next = NULL;
-  if (!*head)
-    *head = f;
-  else
-    (*tail)->next = f;
-  *tail = f;
 }
 
 /** Get wf's from input */
@@ -444,7 +421,7 @@ get_wf(int c)
           size_t nlen = 1;
           for (;;) {
             char ch = eatbnl();
-            if (!isalnum_(ch) && ch != '_') { // XXX: might make more sense? than || ch == '_'
+            if (!isalnum_(ch) && ch != '_') {
               shungetc(ch);
               break;
             }
@@ -665,9 +642,6 @@ tokenize(void)
         if (c != '\n' && c != SHEOF)
           shungetc(c);
         return SHTOK(TNL);
-
-      case C_EXCL:
-        return SHTOK(TNOT);
       case C_AMP:
         n = eatbnl();
         if (n == '&')
@@ -708,7 +682,6 @@ tokenize(void)
           shungetc(n);
           return SHREDIR(RDIN);
         }
-
       case C_GT:
         n = eatbnl();
         if (n == '>') {
@@ -754,6 +727,13 @@ tokenize(void)
 
         if (wd & CHKKWD && (f->flags & WFSINGLE)) {
           switch (f->len) {
+            case 1:
+              switch (f->word[0]) {
+                case '!':
+                  KEYW(f, "!", TNOT);
+                  break;
+              }
+              break;
             case 2:
               switch (f->word[0]) {
                 case 'd':

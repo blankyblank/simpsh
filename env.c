@@ -27,6 +27,7 @@ wfdup(wf *s)
   n->len = s->len;
   n->qs = s->qs;
   n->next = wfdup(s->next);
+  n->flags = s->flags;
   return n;
 }
 
@@ -82,14 +83,12 @@ tree_dup(cmd_tree *s)
       for (size_t i = 0; i < cnt; i++)
         CARGS(n)[i] = wfdup(CARGS(s)[i]);
       CARGS(n)[cnt] = NULL;
+      CVARC(n) = CVARC(s);
       if (CVARS(s)) {
-        cnt = 0;
-        for (size_t i = 0; CVARS(s)[i]; i++)
-          cnt++;
-        CVARS(n) = malloc((cnt + 1) * sizeof(wf *));
-        for (size_t i = 0; i < cnt; i++)
+        CVARS(n) = malloc((CVARC(s) + 1) * sizeof(wf *));
+        for (size_t i = 0; i < CVARC(s); i++)
           CVARS(n)[i] = wfdup(CVARS(s)[i]);
-        CVARS(n)[cnt] = NULL;
+        CVARS(n)[CVARC(s)] = NULL;
       } else {
         CVARS(n) = NULL;
       }

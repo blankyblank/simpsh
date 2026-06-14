@@ -144,6 +144,9 @@ main(int argc, char **argv)
       fputs(argv[0], stderr);
       fputc('\n', stderr);
     }
+    sh_argv0 = argc > 1 ? argv[1] : argv0;
+    sh_argv = argc > 2 ? argv + 2 : NULL;
+    sh_argc = argc > 2 ? argc - 2 : 0;
     sh_ccmd(argv[0]);
     exit(lstatus);
   } else if (!sflag && *argv) {
@@ -155,11 +158,15 @@ main(int argc, char **argv)
       perror("simpsh");
       exit(1);
     }
+    sh_argv0 = argv0;
+    sh_argv = argv + 1;
+    sh_argc = argc - 1;
     sh_script(fd);
     exit(lstatus);
   } else if (!iflag || sflag) {
+    sh_argv0 = argv0;
     sh_argv = argv;
-    sh_argc = array_len(argv);
+    sh_argc = argc;
     sh_stdin();
     exit(lstatus);
   } else {

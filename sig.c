@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#include <fcntl.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -14,6 +15,7 @@ volatile sig_atomic_t intsig;
 volatile sig_atomic_t neednotify = 0;
 sigset_t emptyset;
 sigset_t sigchldmask;
+int tty_fd = -1;
 
 static void dosighup(int);
 static void dosigterm(int);
@@ -23,11 +25,17 @@ static void dosigint(int);
 void
 init_sig(void)
 {
+  {
+    struct sigaction sa;
+    sa.sa_handler = dosigchld;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    sigaction(SIGCHLD, &sa, NULL);
+  }
   signal(SIGINT, dosigint);
   signal(SIGQUIT, SIG_IGN);
   signal(SIGHUP, dosighup);
   signal(SIGTERM, dosigterm);
-  signal(SIGCHLD, dosigchld);
   sigemptyset(&emptyset);
   sigemptyset(&sigchldmask);
   sigaddset(&sigchldmask, SIGCHLD);
@@ -39,8 +47,20 @@ init_job(void)
   signal(SIGTSTP, SIG_IGN);
   signal(SIGTTIN, SIG_IGN);
   signal(SIGTTOU, SIG_IGN);
-  tcgetattr(STDIN_FILENO, &sh_termios);
-  tcsetattr(STDIN_FILENO, TCSADRAIN, &sh_termios);
+
+  if ((tty_fd = open("/dev/tty", O_RDWR)) < 0)
+    tty_fd = STDIN_FILENO;
+  else {
+    int nfd = fcntl(tty_fd, F_DUPFD, 10);
+    if (nfd >= 0) {
+      close(tty_fd);
+      tty_fd = nfd;
+    }
+    fcntl(tty_fd, F_SETFD, FD_CLOEXEC);
+  }
+
+  tcgetattr(tty_fd, &sh_termios);
+  tcsetattr(tty_fd, TCSADRAIN, &sh_termios);
   sh_pgid = getpgrp();  //
 }
 

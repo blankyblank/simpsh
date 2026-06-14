@@ -9,6 +9,7 @@
 #include "env.h"
 #include "exec.h"
 #include "expand.h"
+#include "glob.h"
 #include "input.h"
 #include "lex.h"
 #include "main.h"
@@ -18,7 +19,7 @@
 #include "utils.h"
 #include "var.h"
 
-static char **splitword(char *restrict, size_t, size_t, ifssect *restrict, size_t *restrict);
+static wf **splitword(wf *restrict, size_t *restrict);
 static char *exp_str(char *restrict, size_t, size_t *restrict);
 
 /** get the pid shell variable */
@@ -348,68 +349,86 @@ expand_ps1(char *p)
 char **
 expand_argv(wf **args, size_t *restrict t)
 {
-  ifssect *ifsexp;
-  size_t ifsn, cap, fargc, tlen;
+  size_t cap, fargc, tlen;
   size_t i, argc, elen;
-  char **fargv, **argv;
+  wf **fargv;
+  char **argv;
   // enum {  };
 
   *t = 0;
-  cap = 0;
+  // cap = 0;
+  cap = 64;
   fargc = 0;
   argc = 0;
   fargv = NULL;
-  ifsexp = NULL;
 
   while (args[argc])
     argc++;
-  for (size_t i = 0; i < argc; i++)
-    cap += args[i]->len;
-  argv = st_alloc((cap + 1) * sizeof(char *));
+  // for (size_t i = 0; i < argc; i++)
+  //   cap += args[i]->len;
+  argv = st_alloc(cap * sizeof(char *));
 
   for (i = 0; i < argc; i++) {
-    char *expanded;
-    if (!(expanded = exp_word(args[i], &ifsn, &ifsexp,  &elen))) {
+    wf *expanded;
+    if (!(expanded = exp_word(args[i], &elen)))
       return NULL;
-    }
-    fargv = splitword(expanded, elen, ifsn, ifsexp, &tlen);
+    fargv = splitword(expanded, &tlen);
     *t += tlen;
-    for (int j = 0; fargv[j]; j++)
-      argv[fargc++] = fargv[j];
+    for (int j = 0; fargv[j]; j++) {
+      if (!fflag) {
+        int glob = 0;
+        for (wf *f = fargv[j]; f; f = f->next)
+          if (f->qs == QNONE && f->word && ismetachar(f->word)) {
+            glob = 1;
+            break;
+          }
+        if (glob) {
+          char *flat = join_wf(fargv[j]);
+          char **match = NULL;
+          int mc = globexpand(flat, &match);
+          if (mc > 0) {
+            for (int k = 0; k < mc; k++) {
+              if (fargc >= cap) {
+                cap *= 2;
+                char **new = st_alloc(cap * sizeof(char *));
+                memcpy(new, argv, fargc * sizeof(char *));
+                argv = new;
+              }
+              argv[fargc++] = match[k];
+            }
+          } else
+            argv[fargc++] = flat;
+        } else {
+          argv[fargc++] = join_wf(fargv[j]);
+        }
+      } else
+        argv[fargc++] = join_wf(fargv[j]);
+    }
   }
   argv[fargc] = NULL;
   return argv;
 }
 
 /** expand word with variable substitution */
-__attribute__((hot)) char *
-exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *restrict rlen)
+__attribute__((hot)) wf *
+exp_word(wf *wordf, size_t * restrict rlen)
 {
-  size_t end = 0, len = 0, si = 0, nsplits = 0;
-  size_t sectstart, i;
-  ifssect *sects;
-  wf *f;
+  size_t end = 0, len = 0;
+  size_t i;
+  wf *f, *head = NULL, *tail = NULL;
   char *expanded, buf[16];
+  wf_chunk = NULL;
+  wf_chunk_left = 0;
 
   for (f = wordf; f; f = f->next) {
-    if (f->qs == QNONE || f->qs == QCMDSUB)
-      nsplits++;
-  }
-  if (nsplits > 0 && ifssects) {
-    sects = st_alloc(nsplits * sizeof(ifssect));
-    *ifssects = sects;
-  } else {
-    sects = NULL;
-    if (ifssects)
-      *ifssects = NULL;
-  }
-
-  for (f = wordf; f; f = f->next) {
-    sectstart = len;
+    char *val = NULL;
+    size_t vlen = 0;
+    shvar *v;
     switch (f->qs) {
       case QDOUBLE:
       case QSINGLE:
-        st_write(f->word, f->len, len);
+        append_wf(&head, &tail, f->word, f->len, f->qs);
+        len += f->len;
         break;
       case QNONE:
         i = 0;
@@ -418,37 +437,40 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *res
             size_t elen = 0;
             expanded = exp_tilde(f->word, i, &end, &elen);
             if (expanded) {
-              st_write(expanded, elen, len);
+              append_wf(&head, &tail, expanded, elen, f->qs);
+              len += elen;
               i = end;
             } else {
-              st_putc('~');
-              len++;
+              size_t r = i;
               i++;
+              while (i < f->len && f->word[i] != '~')
+                i++;
+              append_wf(&head, &tail, f->word + r, i - r, f->qs);
+              len += i - r;
             }
           } else {
-            st_putc(f->word[i]);
-            len++;
+            size_t r = i;
             i++;
+            while (i < f->len && f->word[i] != '~')
+              i++;
+            append_wf(&head, &tail, f->word + r, i - r, f->qs);
+            len += i - r;
           }
         }
-        if (sects)
-          sects[si++] = (ifssect) {
-            sectstart,
-            len - sectstart,
-          };
         break;
       case QARITH:
         {
           long long val;
-          char buf[32];
+          char buf[32], *prsts;
           size_t rlen;
           stmark arithm;
-
           arithm = stack_mark();
           val = arith_eval(f->word, f->len);
           stack_restore(arithm);
           rlen = lltoa(val, buf);
-          st_write(buf, rlen, len);
+          prsts = st_strndup(buf, rlen);
+          append_wf(&head, &tail, prsts, rlen, QARITH);
+          len += rlen;
           break;
         }
       case QCMDSUB:
@@ -477,164 +499,155 @@ exp_word(wf *wordf, size_t *restrict n, ifssect **restrict ifssects, size_t *res
             free_tree(cmdsdup);
             return NULL;
           }
-          len += sublen;
           free_tree(cmdsdup);
-          if (f->qs == QCMDSUB && sects)
-            sects[si++] = (ifssect) {
-              sectstart,
-              len - sectstart,
-            };
+          append_wf(&head, &tail, cmdsubpos, sublen, f->qs);
+          len += sublen;
           break;
         }
-      case QVAR:
-      case QVAR_DQ:
+        /* ${:} parameter expansion
+         * - sets default value if unset or null
+         * = if unset or null we set variable to value in var_tab
+         * ? error and exit if unset or null
+         * + if value is set substitute
+         */
       case QBRACE:
-      case QBRACE_DQ: {
-        char *val = NULL;
-        size_t vlen = 0;
-
-        if (f->len == 1) {
-          switch (f->word[0]) {
-            case '$':
-            val = varpid();
-            vlen = strlen(val);
-            break;
-            case '?':
-            val = varstatus(&vlen);
-            break;
-            case '!':
-            val = varbgpid();
-            vlen = strlen(val);
-            break;
-            case '#': {
-              vlen = lltoa(sh_argc, buf);
-              val  = buf;
+      case QBRACE_DQ:
+        if (f->word[0] == '#') {
+          size_t rlen;
+          if ((v = findvar_n(f->word + 1, f->len - 1))) {
+            rlen = strlen(shvar_val(v));
+            vlen = lltoa(rlen, buf);
+          } else {
+            vlen = 1;
+            buf[0] = '0';
+            buf[1] = '\0';
+          }
+          val = st_strndup(buf, vlen);
+          goto append;
+        }
+        size_t op = 0;
+        for (size_t j = 0; j < f->len; j++) {
+          if (f->word[j] == ':') {
+            char c = f->word[j + 1];
+            if (c == '-' || c == '=' || c == '?' || c == '+') {
+              op = j + 1;
               break;
             }
           }
         }
+        if (op > 0) {
+          int isnull;
+          v = findvar_n(f->word, op - 1);
+          if (v)
+            val = shvar_val(v);
+          else
+            val = NULL;
+          isnull = (val == NULL || *val == '\0');
+
+          switch (f->word[op]) {
+            char *name;
+            case '-':
+              if (isnull) {
+                val = exp_str(f->word + op + 1, f->len - op - 1, &vlen);
+              }
+              break;
+            case '=':
+              if (isnull) {
+                val = exp_str(f->word + op + 1, f->len - op - 1, &vlen);
+                name = st_strndup(f->word, op - 1);
+                setvar(name, val, 0);
+              }
+              break;
+            case '?':
+              if (isnull) {
+                name = st_strndup(f->word, op - 1);
+                shwarnx(name, f->word + op + 1);
+                if (!iflag)
+                  exit(1);
+                return NULL;
+              }
+              break;
+            case '+':
+              if (!isnull) {
+                val = exp_str(f->word + op + 1, f->len - op - 1, &vlen);
+              } else {
+                val = NULL;
+                vlen = 0;
+              }
+              break;
+          }
+          // vlen = v->flen - (v->nlen + 2);
+          if (!vlen && val)
+            vlen = strlen(val);
+          goto append;
+        }
+      /* falls through */
+      case QVAR:
+      case QVAR_DQ:
+        if (f->len == 1) {
+          switch (f->word[0]) {
+            case '$':
+              val = varpid();
+              vlen = strlen(val);
+              break;
+            case '?':
+              val = varstatus(&vlen);
+              break;
+            case '!':
+              val = varbgpid();
+              vlen = strlen(val);
+              break;
+            case '#':
+              vlen = lltoa(sh_argc, buf);
+              val = st_strndup(buf, vlen);
+              break;
+          }
+        }
+
         if (is_posparam(f->word, f->len)) {
           int n = 0;
           for (size_t i = 0; i < f->len; i++)
             n = n * 10 + (f->word[i] - '0');
           val = get_posparam(n);
           vlen = val ? strlen(val) : 0;
-        } else {
-          shvar *v;
-          if (f->word[0] == '#') {
-            size_t rlen;
-            if ((v = findvar_n(f->word + 1, f->len - 1))) {
-              rlen = strlen(shvar_val(v));
-              vlen = lltoa(rlen, buf);
-            } else {
-              vlen = 1;
-              buf[0] = '0';
-              buf[1] = '\0';
-            }
-            val = buf;
-          } else {
-            size_t op = 0;
-            for (size_t j = 0; j < f->len; j++) {
-              if (f->word[j] == ':') {
-                char c = f->word[j + 1];
-                if (c == '-' || c == '=' || c == '?' || c == '+') {
-                  op = j + 1;
-                  break;
-                }
-              }
-            }
-            /*
-             * - sets default value if unset or null
-             * = if unset or null we set variable to value in var_tab
-             * ? error and exit if unset or null
-             * + if value is set substitute
-             */
-            if (op > 0) {
-              int isnull;
-              v = findvar_n(f->word, op - 1);
-              if (v)
-                val = shvar_val(v);
-              else
-                val = NULL;
-              isnull = (val == NULL || *val == '\0');
-
-              switch (f->word[op]) {
-                char *name;
-                case '-':
-                  if (isnull) {
-                    val = exp_str(f->word + op + 1, f->len - op - 1, &vlen);
-                  }
-                  break;
-                case '=':
-                  if (isnull) {
-                    val = exp_str(f->word + op + 1, f->len - op - 1, &vlen);
-                    name = st_strndup(f->word, op - 1);
-                    setvar(name, val, 0);
-                  }
-                  break;
-                case '?':
-                  if (isnull) {
-                    name = st_strndup(f->word, op - 1);
-                    shwarnx(name, f->word + op + 1);
-                    if (!iflag)
-                      exit(1);
-                    return NULL;
-                  }
-                  break;
-                case '+':
-                  if (!isnull) {
-                    val = exp_str(f->word + op + 1, f->len - op - 1, &vlen);
-                  } else {
-                    val = NULL;
-                    vlen = 0;
-                  }
-                  break;
-              }
-              // vlen = v->flen - (v->nlen + 2);
-              if (!vlen && val)
-                vlen = strlen(val);
-
-            } else {
-              v = findvar_n(f->word, f->len);
-              if (v) {
-                val = shvar_val(v);
-                // vlen = v->flen - (v->nlen + 2);
-                vlen = strlen(val);
-              } else if (uflag && f->len > 0) {
-                char name[64];
-                nmemcpy(name, f->word, f->len);
-                UFLAGMSG(name);
-                nounseterr = 1;
-              }
-            }
-          }
+          goto append;
         }
-
+        v = findvar_n(f->word, f->len);
+        if (v) {
+          val = shvar_val(v);
+          // vlen = v->flen - (v->nlen + 2);
+          vlen = strlen(val);
+        } else if (uflag && f->len > 0) {
+          char name[64];
+          nmemcpy(name, f->word, f->len);
+          UFLAGMSG(name);
+          nounseterr = 1;
+        }
+append:
         if (val) {
-          st_write(val, vlen, len);
-          if ((f->qs == QVAR || f->qs == QBRACE) && sects)
-            sects[si++] = (ifssect) { sectstart, len - sectstart };
+          int qs = (f->qs == QVAR || f->qs == QBRACE) ? QNONE : f->qs;
+          append_wf(&head, &tail, val, vlen, qs);
+          len += vlen;
         }
         break;
-        }
+
       case QHEREDOC:
         {
           size_t elen;
           char *exp = exp_str(f->word, f->len, &elen);
-          st_write(exp, elen, len);
+          append_wf(&head, &tail, exp, elen, QHEREDOC);
+          len += elen;
         }
         break;
     }
   }
-  if (n)
-    *n = si;
   if (rlen)
     *rlen = len;
-  return grab_str(len);
+  return head;
 }
 
-static char **
-splitword(char *restrict str, size_t slen, size_t nsect, ifssect *restrict sects, size_t *restrict tlen)
+static wf **
+splitword(wf *f, size_t * restrict tlen)
 {
   enum {
     M_IMMUNE,
@@ -644,9 +657,11 @@ splitword(char *restrict str, size_t slen, size_t nsect, ifssect *restrict sects
   };
 
   char *ifs;
-  char **fargv;
-  size_t fargc;
-  int mode;
+  wf **fargv;
+  wf *chead, *ctail, *cf;
+  size_t fpos, cap, fargc;
+  wf_chunk = NULL;
+  wf_chunk_left = 0;
 
   ifs = getvar("IFS");
   if (!ifs)
@@ -654,80 +669,103 @@ splitword(char *restrict str, size_t slen, size_t nsect, ifssect *restrict sects
   if (tlen)
     *tlen = 0;
 
-  if (!*ifs || !nsect) {
-    fargv = st_alloc(2 * sizeof(char *));
-    fargv[0] = str;
+  if (!*ifs || !f) {
+    fargv = st_alloc(2 * sizeof(wf *));
+    fargv[0] = f;
     fargv[1] = NULL;
     return fargv;
   }
-  fargv = st_alloc((slen + 1) * sizeof(char *));
 
-  size_t sidx, pos;
-  char *field;
-
+  cap = 16;
+  fargv = st_alloc(cap * sizeof(wf *));
   fargc = 0;
-  sidx = 0;
-  pos = 0;
-  field = NULL;
+  chead = NULL;
+  ctail = NULL;
+  cf = f;
+  fpos = 0;
+  // field = NULL;
 
-  while (pos < slen) {
-    int insect;
+  while (cf) {
+    size_t s = fpos;
 
-    while (sidx < nsect && pos >= sects[sidx].start + sects[sidx].len)
-      sidx++;
-    insect = (sidx < nsect && pos >= sects[sidx].start);
-    if (!insect)
-      mode = M_IMMUNE;
-    else if (is_ws(str[pos]))
-      mode = M_IFSWS;
-    else if (is_ifs_nws(str[pos], ifs))
-      mode = M_IFSN;
-    else
-      mode = M_NORMAL;
+    // TODO: add in simd
+    while (fpos < cf->len) {
+      int insect = (cf->qs == QNONE || cf->qs == QCMDSUB);
+      char c = cf->word[fpos];
+      int mode;
 
-    switch (mode) {
-      case M_IMMUNE:
-        if (!field)
-          field = str + pos;
-        pos++;
-        continue;
-      case M_IFSWS:
-        if (field) {
-          str[pos++] = '\0';
-          if (tlen)
-            *tlen += (str + pos) - field;
-          fargv[fargc++] = field;
-          field = NULL;
-        } else {
-          pos++;
-        }
-        continue;
-      case M_IFSN:
-        str[pos] = '\0';
-        if (field) {
-          if (tlen)
-            *tlen += (str + pos) - field;
-          fargv[fargc++] = field;
-        } else
-          fargv[fargc++] = str + pos;
-        pos++;
-        field = NULL;
-        continue;
-      case M_NORMAL:
-      if (!field) {
-          field = str + pos;
+      if (!insect)
+        mode = M_IMMUNE;
+      else if (is_ws(c))
+        mode = M_IFSWS;
+      else if (is_ifs_nws(c, ifs))
+        mode = M_IFSN;
+      else
+        mode = M_NORMAL;
+
+      switch (mode) {
+        case M_IMMUNE:
+          fpos++;
+          continue;
+        case M_IFSWS:
+          if (fpos > s) {
+            append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
+          }
+          if (chead) {
+            if (fargc >= cap) {
+              cap *= 2;
+              wf **new = st_alloc(cap * sizeof(wf *));
+              memcpy(new, fargv, fargc * sizeof(wf *));
+              fargv = new;
+            }
+            append_wf(&chead, &ctail, NULL, 0, QNONE);
+            fargv[fargc++] = chead;
+            chead = NULL;
+            ctail = NULL;
+          }
+          fpos++;
+          s = fpos;
+          continue;
+        case M_IFSN:
+          if (fpos > s)
+            append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
+          append_wf(&chead, &ctail, NULL, 0, QNONE);
+          if (fargc >= cap) {
+            cap *= 2;
+            wf **new = st_alloc(cap * sizeof(wf *));
+            memcpy(new, fargv, fargc * sizeof(wf *));
+            fargv = new;
+          }
+          fargv[fargc++] = chead;
+          chead = NULL;
+          ctail = NULL;
+          fpos++;
+          s = fpos;
+          continue;
+        case M_NORMAL:
+          fpos++;
+          continue;
       }
-      pos++;
-      continue;
     }
+    if (cf->qs != QNONE && cf->qs != QCMDSUB)
+      append_wf(&chead, &ctail, cf->word, cf->len, cf->qs);
+    else if (fpos > s)
+      append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
+    cf = cf->next;
+    fpos = 0;
   }
 
-  if (field) {
-    if (tlen)
-      *tlen += slen - (field - str);
-    fargv[fargc++] = field;
+  if (chead) {
+    append_wf(&chead, &ctail, NULL, 0, QNONE);
+    if (fargc >= cap) {
+      cap *= 2;
+      wf **new = st_alloc(cap * sizeof(wf *));
+      memcpy(new, fargv, fargc * sizeof(wf *));
+      fargv = new;
+    }
+    fargv[fargc++] = chead;
   }
+
   fargv[fargc] = NULL;
   return fargv;
 }
-

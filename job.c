@@ -116,7 +116,7 @@ killjob(void)
 int
 startjob(pid_t pgid)
 {
-  if (tcsetpgrp(STDIN_FILENO, pgid) < 0 && !iflag)
+  if (tcsetpgrp(tty_fd, pgid) < 0 && !iflag)
     err(-1, "tcset");
   return 0;
 }
@@ -205,6 +205,8 @@ child_setup_fg(pid_t pgid)
   sigemptyset(&set);
   sigaddset(&set, SIGINT);
   sigprocmask(SIG_UNBLOCK, &set, NULL);
+  if (tty_fd > 2)
+    close(tty_fd);
 }
 
 void
@@ -218,6 +220,8 @@ child_setup_bg(void)
   if (mflag)
     if (setpgid(0, 0) < 0)
       warn("simpsh: setpgid");
+  if (tty_fd > 2)
+    close(tty_fd);
   close(0);
   open("/dev/null", O_RDONLY);
   sigset_t set;
@@ -309,6 +313,10 @@ fgcmd(char **argv)
     return 1;
   }
 
+  j->flags |= JFG;
+  if (j->flags & JSAVEDTTY)
+    tcsetattr(tty_fd, TCSADRAIN, &j->ttystate);
+  startjob(j->pgid);
   if (j->state == JSTP) {
     if (kill(-j->pgid, SIGCONT) != 0) {
       job_unlock(&old);
@@ -316,10 +324,6 @@ fgcmd(char **argv)
     }
     j->state = JRUN;
   }
-  j->flags |= JFG;
-  if (j->flags & JSAVEDTTY)
-    tcsetattr(STDIN_FILENO, TCSADRAIN, &j->ttystate);
-  startjob(j->pgid);
   job_unlock(&old);
   return fgwait(j);
 }
