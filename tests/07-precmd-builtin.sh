@@ -1,8 +1,7 @@
 #!/bin/sh
-# shellcheck disable=2015
 # shellcheck disable=2016
 
-[ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
+[ -f ./funcs ] && . ./funcs
 
 msg_run '"TMPDIR=/tmp cd; pwd"'
 if ../simpsh -c "TMPDIR=/tmp cd; pwd" >/dev/null; then

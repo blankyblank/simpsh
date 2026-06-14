@@ -11,7 +11,7 @@ msg_res() {
 }
 
 msg_run() {
-  printf "running: %s...\n" "$@"
+  printf "\trunning: %s...\n" "$@"
 }
 
   # bold/green
@@ -20,12 +20,12 @@ test_pass() {
   desc=$2
   res=$3
   eval value="\$${varn}"
-  printf "\033[1m\033[32m   %s=%s %s '%s': passed \033[m\n"  "$varn" "$value"  "$desc" "$res"
+  printf "\033[1m\033[32m   \t%s=%s %s '%s': passed \033[m\n"  "$varn" "$value"  "$desc" "$res"
 }
 
 msg_pass() {
   # bold/green
-  printf "\033[1m\033[32m   %s: passed \033[m\n" "$@"
+  printf "\033[1m\033[32m   \t%s: passed \033[m\n" "$@"
 }
 
 test_fail() {
@@ -34,10 +34,10 @@ test_fail() {
   res=$3
   eval value="\$${varn}"
   # bold/red
-  printf "\033[1m\033[31m      %s=%s %s '%s': failed \033[m\n"   "$varn" "$value"  "$desc" "$res" >&2
+  printf "\033[1m\033[31m    \t%s=%s %s '%s': failed \033[m\n"   "$varn" "$value"  "$desc" "$res" >&2
 }
 
 msg_fail() {
   # bold/red
-  printf "\033[1m\033[31m   %s\033[m\n" "$@" >&2
+  printf "\033[1m\033[31m   \t%s\033[m\n" "$@" >&2
 }

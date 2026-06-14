@@ -2,7 +2,7 @@
 # shellcheck disable=2015
 # shellcheck disable=2016
 
-[ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
+[ -f ./funcs ] && . ./funcs
 
 msg_run '"echo Test test!"'
 out=$(../simpsh -c "echo Test test!")

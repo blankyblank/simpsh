@@ -1,7 +1,6 @@
 #!/bin/sh
-# shellcheck disable=2015
 
-[ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
+[ -f ./funcs ] && . ./funcs
 
 
 msg_run '"false; echo $?"'

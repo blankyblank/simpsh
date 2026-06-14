@@ -1,9 +1,8 @@
 #!/bin/sh
-# shellcheck disable=2015
 # shellcheck disable=2016
 # shellcheck disable=2181
 
-[ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
+[ -f ./funcs ] && . ./funcs
 
 msg_run '"exit 0"; echo $?'
 zero=$(../simpsh -c "exit 0"; echo $?)
