@@ -56,14 +56,11 @@ extern int jobscmd(char **);
 #define job_unlock(old) sigprocmask(SIG_SETMASK, old, NULL)
 #define init_pgrp() sh_pgid = getpgrp()
 
-/*
- * return term back to shell
- */
-static inline void
-ttyrestore(void)
-{
-  tcsetpgrp(tty_fd, sh_pgid);
-  tcsetattr(tty_fd, TCSADRAIN, &sh_termios);
-}
+/* return term back to process group */
+#define ttyreclaim() tcsetpgrp(tty_fd, sh_pgid)
+
+/* return term back to shell, reseting attributes */
+#define ttyrestore() \
+  (tcsetpgrp(tty_fd, sh_pgid), tcsetattr(tty_fd, TCSADRAIN, &sh_termios))
 
 #endif /* JOB_H */

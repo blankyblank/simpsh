@@ -296,7 +296,7 @@ sh_interactive(void)
       handle_interrupt(base);
       continue;
     }
-    ttyrestore();
+    ttyreclaim();
     if (neednotify || !bflag)
       jobnotify();
     neednotify = 0;

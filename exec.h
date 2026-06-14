@@ -79,7 +79,7 @@ fgwait(job *j)
     return 128 + WSTOPSIG(j->wstatus);
   }
 
-  ttyrestore();
+  ttyreclaim();
   j->flags &= ~(JFG | JCHANGED);
   wsig = WIFSIGNALED(j->wstatus) ? WTERMSIG(j->wstatus) : 0;
   wstatus = WIFEXITED(j->wstatus) ? WEXITSTATUS(j->wstatus) : 1;

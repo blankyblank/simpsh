@@ -1,9 +1,11 @@
 #define _POSIX_C_SOURCE 200809L
+
+#include <err.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <err.h>
-#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -97,6 +99,9 @@ killjob(void)
         j->nlive--;
       }
     }
+
+    if (pid == -1 && errno == ECHILD && j->nlive > 0 && j->state != JSTP)
+      j->nlive = 0;
 
     if (pipeflag && j->nlive <= 0 && j->state == JRUN) {
       int rstatus, cmb;
@@ -255,6 +260,7 @@ bgcmd(char **argv)
     j->flags |= JCHANGED;
     job_unlock(&old);
     jobmsg(j);
+    j->flags &= ~JCHANGED;
     return 0;
   } else {
     for (size_t i = 1; i < argc; i++) {
@@ -312,6 +318,11 @@ fgcmd(char **argv)
     job_unlock(&old);
     return 1;
   }
+  if (kill(-j->pgid, SIGCONT) != 0) {
+    job_unlock(&old);
+    err(1, "kill");
+  }
+  j->state = JRUN;
 
   j->flags |= JFG;
   if (j->flags & JSAVEDTTY)
