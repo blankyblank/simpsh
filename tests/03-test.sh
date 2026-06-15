@@ -30,7 +30,7 @@ out=$(../simpsh -c "[ -z \"\$empty\" ] && echo y || echo n")
 test_pass "out" "matches" "y"
 
 # === test -flag thing syntax (instead of [ ... ]) ===
-msg_run 'test syntax: test -r /etc/passwd'
+msg_run 'test [-flag] syntax: test -r /etc/passwd'
 out=$(../simpsh -c 'test -r /etc/passwd && echo y || echo n')
 [ "$out" = "y" ] || { msg_fail "test -r: got '$out'"; exit 1; }
 test_pass "out" "matches" "y"

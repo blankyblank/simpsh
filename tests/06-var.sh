@@ -3,9 +3,8 @@
 
 [ -f ./funcs ] && . ./funcs
 
-msg_run 'export test1=1 ; env | grep "test1=1"'
+msg_run 'export test: export test1=1 ; env | grep "test1=1"'
 out=$(../simpsh -c "export test1=1 ; env" | grep "test1=1")
-
 if [ "$out" != "test1=1" ]; then
   test_fail "out" "expected" "test1=1"
   exit 1
@@ -98,5 +97,14 @@ printf '%s\n' \
 
 msg_pass  "all 80 variables were set"
 
+msg_run 'variable expansion test: echo foo=bar; echo $foo | ../simpsh'
+out=$(echo 'foo=bar; echo $foo' | ../simpsh )
+
+if  [ "$out" = "bar" ]; then
+  test_pass  "out" "matches" "bar"
+else
+  test_fail  "out" "expected" "bar"
+  exit 1
+fi
 
 exit 0

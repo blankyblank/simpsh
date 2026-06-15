@@ -5,7 +5,7 @@
 
 [ -f ./while.txt ] && rm ./while.txt
 
-msg_run "while loop appending to file"
+msg_run 'while loop test: i=0; while [ $i -lt 4 ]; do i=$((i+1)); echo $i >> ./while.txt; done'
 ../simpsh -c 'i=0; while [ $i -lt 4 ]; do i=$((i+1)); echo $i >> ./while.txt; done'
 out1=$(tr -d '\n' < while.txt)
 if [ "$out1" -eq 1234 ]; then
@@ -16,7 +16,7 @@ else
 fi
 rm ./while.txt
 
-msg_run "until loop appending to file"
+msg_run 'until loop test: i=0; until [ $i -eq 4 ]; do i=$((i+1)); echo $i >> ./while.txt; done'
 ../simpsh -c 'i=0; until [ $i -eq 4 ]; do i=$((i+1)); echo $i >> ./while.txt; done'
 out2=$(tr -d '\n' < while.txt)
 if [ "$out2" -eq 1234 ]; then

@@ -3,7 +3,7 @@
 [ -f ./funcs ] && . ./funcs
 
 
-msg_run "running (echo test123)"
+msg_run "shell function test: (echo test123)"
 out=$(../simpsh -c "f() { echo test123; } ; f")
 if [ "$out" != "test123" ]; then
   test_fail "out" "expected" "test123"

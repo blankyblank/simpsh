@@ -3,7 +3,7 @@
 [ -f ./funcs ] && . ./funcs
 
 
-msg_run '"false; echo $?"'
+msg_run 'nonzero status: "false; echo $?"'
 _fail_s=$(../simpsh -c 'false; echo $?')
 if [ "$_fail_s" -eq 0 ]; then
   msg_fail "\$_fail_s: $_fail_s should be nonzero"
@@ -12,7 +12,7 @@ else
   msg_pass "\$_fail_s=$_fail_s exit status is nonzero"
 fi
 
-msg_run '"true; echo $?"'
+msg_run 'zero status: "true; echo $?"'
 _suc_s=$(../simpsh -c 'true; echo $?')
 if [ "$_suc_s" -ne 0 ]; then
   msg_fail "\$_suc_s: $_suc_s should be zero"

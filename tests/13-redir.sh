@@ -9,7 +9,7 @@ trap 'rm -f "$f" "$errf"' EXIT
 
 # === Basic redirections ===
 
-msg_run "echo test123 > $f ; cat $f"
+msg_run "redir truncate test: echo test123 > $f ; cat $f"
 out1=$(printf '%s\n' "echo test123 > $f" "cat $f" | ../simpsh)
 if [ "$out1" != "test123" ]; then
   test_fail "out1" "differs from" "test123"
@@ -18,7 +18,7 @@ else
   test_pass "out1" "matches" "test123"
 fi
 
-msg_run ">> append twice"
+msg_run "redir >> test: echo hello >> $f"
 ../simpsh -c "echo hello >> $f"
 out2=$(cat "$f")
 if [ "$out2" != "test123
@@ -30,7 +30,7 @@ else
 fi
 rm -f "$f"
 
-msg_run ">> to non-existent file creates it"
+msg_run "redir >> file creation test: echo first >> $f"
 rm -f "$f"
 ../simpsh -c "echo first >> $f"
 content=$(cat "$f")
@@ -42,7 +42,7 @@ else
 fi
 rm -f "$f"
 
-msg_run "cat < $f (input redirection)"
+msg_run "redir < test: cat < $f"
 echo "input_test" > "$f"
 out=$(../simpsh -c "cat < $f")
 if [ "$out" != "input_test" ]; then
@@ -53,7 +53,7 @@ else
 fi
 rm -f "$f"
 
-msg_run "echo err >&2 ; 2> $errf"
+msg_run "redir >&2 test: echo err >&2 ; 2> $errf"
 rm -f "$errf"
 ../simpsh -c "echo err >&2" > /dev/null 2> "$errf"
 content=$(cat "$errf")
@@ -65,7 +65,20 @@ else
 fi
 rm -f "$errf"
 
-msg_run "set -C; echo new >| $f (clobber override)"
+msg_run "redir > noclobber test: set -C; echo new > $f"
+echo "original" > "$f"
+../simpsh -c "set -C; echo new > $f" 2>/dev/null || true
+content=$(cat "$f")
+if [ "$content" != "original" ]; then
+  test_fail "content" "differs from" "original"
+  exit 1
+else
+  test_pass "content" "matches" "original"
+fi
+rm -f "$f"
+
+
+msg_run "redir >| clobber test: set -C; echo new >| $f (clobber override)"
 echo "original" > "$f"
 ../simpsh -c "set -C; echo new >| $f"
 content=$(cat "$f")
@@ -77,6 +90,7 @@ else
 fi
 rm -f "$f"
 
+# i can probably get rid of one or two of these.
 msg_run "echo out >&2 (dup stdout to stderr)"
 out=$(../simpsh -c "echo out >&2" 2>&1 >/dev/null)
 if [ "$out" != "out" ]; then
@@ -103,7 +117,7 @@ fi
 
 # === Close-FD (>&- / <&- ) ===
 
-msg_run "echo >&- (close stdout)"
+msg_run "redir >&- close stdout test: echo >&-"
 rm -f "$errf"
 ../simpsh -c 'echo >&-' 2> "$errf"
 rc=$?
@@ -115,7 +129,7 @@ else
 fi
 rm -f "$errf"
 
-msg_run "cat <&- (close stdin)"
+msg_run "redir <&- close stdin: cat <&-"
 rm -f "$errf"
 ../simpsh -c 'cat <&-' 2> "$errf"
 rc=$?
@@ -128,8 +142,8 @@ fi
 rm -f "$errf"
 
 # === Redirect ordering ===
-
-msg_run ">out 2>err (separated)"
+# i should definitely be able to get rid of some of these.
+msg_run "redir seperate test: >out 2>err"
 rm -f "$f" "$errf"
 ../simpsh -c "echo to_stdout; echo to_stderr >&2" > "$f" 2> "$errf"
 if [ "$(cat "$f")" = "to_stdout" ] && [ "$(cat "$errf")" = "to_stderr" ]; then
@@ -140,7 +154,8 @@ else
 fi
 rm -f "$f" "$errf"
 
-msg_run ">out 2>&1 (combine, both to file)"
+
+msg_run ">out 2>&1"
 rm -f "$f"
 ../simpsh -c "echo to_stdout; echo to_stderr >&2" > "$f" 2>&1
 if [ "$(cat "$f")" = "to_stdout
@@ -152,7 +167,7 @@ else
 fi
 rm -f "$f"
 
-msg_run "2>&1 >out (POSIX ordering: stderr stays at terminal)"
+msg_run "POSIX ordering test: 2>&1 >out"
 rm -f "$f" "$errf"
 ../simpsh -c "echo to_stdout; echo to_stderr >&2" 2> "$errf" > "$f"
 # 2>&1 dups stderr to current stdout (terminal) BEFORE >out redirects stdout
@@ -165,23 +180,8 @@ else
 fi
 rm -f "$f" "$errf"
 
-# === Cflag / noclobber ===
-
-msg_run "set -C; echo new > $f (blocked)"
-echo "original" > "$f"
-../simpsh -c "set -C; echo new > $f" 2>/dev/null || true
-content=$(cat "$f")
-if [ "$content" != "original" ]; then
-  test_fail "content" "differs from" "original"
-  exit 1
-else
-  test_pass "content" "matches" "original"
-fi
-rm -f "$f"
-
 # === Heredocs ===
-
-msg_run "cat << EOF (basic)"
+msg_run "heredoc << test: cat << EOF (basic)"
 out=$(../simpsh -c 'cat << EOF
 hello world
 EOF')
@@ -192,7 +192,7 @@ else
   test_pass "out" "matches" "hello world"
 fi
 
-msg_run "cat << EOF (multi-line preserves newlines)"
+msg_run "heredoc << multi-line test: cat << EOF"
 out=$(../simpsh -c 'cat << EOF
 a
 b
@@ -207,7 +207,7 @@ else
   exit 1
 fi
 
-msg_run "cat << EOF (no trailing newline in input)"
+msg_run "heredoc << no trailing newline test: cat << EOF"
 out=$(../simpsh -c 'cat << EOF
 single
 EOF')
@@ -218,7 +218,7 @@ else
   test_pass "out" "matches" "single"
 fi
 
-msg_run "cat <<- EOF (tab-stripped)"
+msg_run "heredo <<- tab strip test: cat <<- EOF"
 out=$(../simpsh -c 'cat <<- EOF
 	indented
 		moreindented
@@ -231,7 +231,7 @@ else
   exit 1
 fi
 
-msg_run "cat <<'EOF' (quoted, no expansion)"
+msg_run "heredoc <<'EOF' var noexpand test: cat <<'EOF'"
 out=$(env tmpvar=expanded ../simpsh -c "cat << 'EOF'
 \$tmpvar
 EOF")
@@ -242,7 +242,7 @@ else
   test_pass "out" "matches" '$tmpvar'
 fi
 
-msg_run "cat <<EOF (unquoted, expansion)"
+msg_run "heredoc <<EOF var expansion test: cat <<EOF"
 out=$(env tmpvar=expanded ../simpsh -c 'cat << EOF
 $tmpvar
 EOF')

@@ -2,7 +2,7 @@
 
 [ -f ./funcs ] && . ./funcs
 
-msg_run '"printf '%s' a; printf '%s' b; printf '%s' c"'
+msg_run '; separated command test: "printf '%s' a; printf '%s' b; printf '%s' c"'
 out=$(../simpsh -c "printf '%s' a; printf '%s' b; printf '%s' c")
 
 if [ "$out" != abc ]; then
