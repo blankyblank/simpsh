@@ -378,7 +378,9 @@ expand_argv(wf **args, size_t *restrict t)
       if (!fflag) {
         int glob = 0;
         for (wf *f = fargv[j]; f; f = f->next)
-          if (f->qs == QNONE && f->word && ismetachar(f->word)) {
+          if (f->qs == QNONE && f->word &&
+              !(f->word[0] == '[' && f->word[1] == '\0') &&
+              ismetachar(f->word, f->len)) {
             glob = 1;
             break;
           }
@@ -417,8 +419,6 @@ exp_word(wf *wordf, size_t * restrict rlen)
   size_t i;
   wf *f, *head = NULL, *tail = NULL;
   char *expanded, buf[16];
-  wf_chunk = NULL;
-  wf_chunk_left = 0;
 
   for (f = wordf; f; f = f->next) {
     char *val = NULL;
@@ -660,8 +660,6 @@ splitword(wf *f, size_t * restrict tlen)
   wf **fargv;
   wf *chead, *ctail, *cf;
   size_t fpos, cap, fargc;
-  wf_chunk = NULL;
-  wf_chunk_left = 0;
 
   ifs = getvar("IFS");
   if (!ifs)

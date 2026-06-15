@@ -13,10 +13,34 @@
 #define GLOB_CAP 64
 
 int
-ismetachar(const char *s)
+ismetachar(const char *str, size_t len)
 {
-  size_t len = strlen(s);
-  return simd_scan_delim(s, len, "*?[", 3) < len;
+  size_t pos = 0;
+  while (pos < len) {
+    char c;
+    size_t s, e;
+
+    size_t dlm = simd_scan_delim(str + pos, len - pos, "*?[", 3);
+    if (dlm >= len - pos) 
+      break;
+
+    c = str[pos + dlm];
+    if (c == '*' || c == '?')
+      return 1;
+
+    s = pos + dlm + 1;
+    if (s < len && str[s] == ']')
+      s++;
+    if (s < len && (str[s] == '!' || str[s] == '^'))
+      s++;
+    if (s < len) {
+      e = simd_scan_delim(str + s, len - s, "]", 1);
+      if (e < len - s)
+        return 1;
+    }
+    pos = pos + dlm + 1;
+  }
+  return 0;
 }
 
 int
