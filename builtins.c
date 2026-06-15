@@ -1,7 +1,9 @@
 /* builtins.c - builtin shell commands */
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
+
 #include <err.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -14,11 +16,14 @@
 
 #include "arg.h"
 #include "builtins.h"
-#include "path.h"
-#include "job.h"
 #include "env.h"
+#include "input.h"
+#include "job.h"
 #include "main.h"
+#include "malloc.h"
 #include "opts.h"
+#include "path.h"
+#include "simpsh.h"
 #include "test.h"
 #include "utils.h"
 #include "var.h"
@@ -27,6 +32,7 @@ static char *pwdpath(char *);
 
 /* the array of builtin commands */ /* clang-format off */
 const char *builtins[] = {
+  ".",
   "[",
   ":",
   "alias",
@@ -51,6 +57,7 @@ const char *builtins[] = {
   "unset",
 };
 int (* const builtin_funcs[])(char **) = {
+  &dotcmd,
   &testcmd,
   &truecmd,
   &aliascmd,
@@ -156,16 +163,110 @@ pwdpath(char *path) {
 }
 
 int
+dotcmd(char **argv)
+{
+  size_t argc = 0;
+  char *o_argv0 = NULL, **o_argv = NULL;
+  char *file;
+  int o_argc = 0, st = 0, fd;
+
+  array_len(argv, argc);
+
+  if (argc < 2) {
+    shwarn(argv[0], "filename arguement require");
+    return 1;
+  }
+
+  if (strchr(argv[1], '/')) {
+    if (access(argv[1], R_OK) < 0) {
+      st = 1;
+      goto restore;
+    }
+    file = argv[1];
+  } else {
+    char *fpath, *path;
+    if ((path = getvar("PATH")))
+      fpath = chkpath(path, argv[1], R_OK, 0);
+    else
+      fpath = chkpath(defpath, argv[1], R_OK, 0);
+    if (fpath) {
+      file = fpath;
+    } else {
+      if (access(argv[1], R_OK) < 0) {
+        st = 1;
+        goto restore;
+      }
+      file = argv[1];
+    }
+  }
+  if (!file) {
+    st = 1;
+    goto restore;
+  }
+  if ((fd = open(file, O_RDONLY)) < 0) {
+    st = 1;
+    goto restore;
+  }
+  setinputf(fd);
+
+  if (argc == 2) {
+    o_argv0 = strdup_(sh_argv0);
+    sh_argv0 = strdup_(file);
+  } else {
+    o_argc = sh_argc;
+    sh_argc = argc - 2;
+    o_argv0 = strdup_(sh_argv0);
+    sh_argv0 = strdup_(file);
+
+    o_argv = malloc(sizeof(char *) * (o_argc + 1));
+    for (int i = 0; i < o_argc; i++)
+      o_argv[i] = strdup_(sh_argv[i]);
+    o_argv[o_argc] = NULL;
+    if (alloc_sh_argv && sh_argv) {
+      for (int i = 0; i < o_argc; i++)
+        free(sh_argv[i]);
+      free(sh_argv);
+    }
+    sh_argv = malloc(sizeof(char *) * (argc + 1));
+    size_t j = 0;
+    for (size_t i = 2; argv[i]; i++)
+      sh_argv[j++] = strdup_(argv[i]);
+    sh_argv[sh_argc] = NULL;
+    alloc_sh_argv = 1;
+  }
+
+  simpsh_run();
+  popinput();
+
+restore:
+  if (o_argv) {
+    for (size_t i = 0; sh_argv[i]; i++)
+      free(sh_argv[i]);
+    free(sh_argv);
+    sh_argv = o_argv;
+  }
+  if (o_argv0) {
+    free(sh_argv0);
+    sh_argv0 = o_argv0;
+  }
+  if (o_argc)
+    sh_argc = o_argc;
+  if (st)
+    perror(argv[1]);
+  return st ? st : lstatus;
+}
+
+int
 cdcmd(char **argv)
 {
-  unsigned int argc, prnt;
+  unsigned int prnt, argc = 0;
   char *bargv0, *dest, *end, *pwdval;
   char flag = '\0', respath[PATH_MAX];
   const char *dir;
   shvar *pwd, *oldpwd, *cdpth;
 
   prnt = 0;
-  argc = array_len(argv);
+  array_len(argv, argc);
   bargv0 = argv[0];
   ARGBEGIN
   {
@@ -198,7 +299,7 @@ cdcmd(char **argv)
         !(argv[0][0] == '.' && argv[0][1] == '\0') &&
         !(argv[0][0] == '.' && argv[0][1] == '/') &&
         !(argv[0][0] == '.' && argv[0][1] == '.')) {
-      if ((dir = chkpath(shvar_val(cdpth), *argv, 1))) {
+      if ((dir = chkpath(shvar_val(cdpth), *argv, X_OK, 1))) {
         if (!(dir[0] == '.' && dir[1] == '/'))
           prnt = 1;
       } else {
@@ -273,11 +374,11 @@ int
 echocmd(char *argv[])
 {
   int nf = 0;
-  size_t argc;
+  size_t argc = 0;
   char *bargv0;
 
   bargv0 = argv[0];
-  argc = array_len(argv);
+  array_len(argv, argc);
   ARGBEGIN
   {
     case 'n':
@@ -336,11 +437,11 @@ fail:
 int
 exitcmd(char **argv)
 {
-  size_t argc;
+  size_t argc = 0;
   int exnum;
 
   exnum = 0;
-  argc = array_len(argv);
+  array_len(argv, argc);
   if (argc > 2) {
     shwarnx(argv[0], "too many arguements"); /*NOLINT*/
     return 1;

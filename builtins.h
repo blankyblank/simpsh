@@ -12,6 +12,7 @@ extern int nbuiltins(void);
 extern void init_builtins(void);
 
 /* builtins */
+extern int dotcmd(char **);
 extern int cdcmd(char **);
 extern int echocmd(char **);
 extern int execcmd(char **);
