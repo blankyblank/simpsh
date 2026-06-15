@@ -353,7 +353,7 @@ testcmd(char **argv) {
   int res;
   testvar tv, fasttv;
 
-  argc = array_len(argv);
+  array_len(argv, argc);
   if (*argv[0] == '[' && argv[0][1] == '\0') {
     if (argv[argc - 1][0] != ']' || argv[argc - 1][1] != '\0') {
       shwarnx("[", "missing ']'");

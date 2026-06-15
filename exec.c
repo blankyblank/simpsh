@@ -372,7 +372,9 @@ run_func(const cmd_tree *n, char **args)
   oldargc = sh_argc;
   oldargv = sh_argv;
   oldalloced = alloc_sh_argv;
-  sh_argc = array_len(args) - 1;
+  sh_argc = 0;
+  array_len(args, sh_argc);
+  sh_argc--;
   sh_argv = args + 1;
   alloc_sh_argv = 0;
 

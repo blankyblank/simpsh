@@ -167,26 +167,21 @@ strdup_(const char *s)
 /* various small helpers */
 
 /**  get length of char* array  */
-static inline size_t
-array_len(char **arr)
-{
-  size_t n = 0;
-  while (arr[n])
-    n++;
-  return n;
-}
+#define array_len(a, c) \
+  while (a[c]) \
+    c++;
 
 /** join char** array into single string */
 static inline char *
 join_strn(char **arr, size_t t)
 {
   char *p, *buf;
-  size_t ac;
+  size_t ac = 0;
 
   if (!arr)
     return NULL;
 
-  ac = array_len(arr);
+  array_len(arr, ac);
   buf = st_alloc(t + ac);
   p = buf;
 

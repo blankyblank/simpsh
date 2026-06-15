@@ -81,7 +81,7 @@ tildepath(const char *restrict s, size_t dirlen, size_t *restrict seg)
 /** check in path for name stop at the first one with proper permissions if
  * cdmode 1 check for dir */
 char *
-chkpath(const char *restrict path, const char *restrict name, unsigned int cdmode)
+chkpath(const char *restrict path, const char *restrict name, int mode, unsigned int cdmode)
 {
   size_t flen, seg;
   char *e, buf[PATH_MAX], expbuf[PATH_MAX];
@@ -113,10 +113,10 @@ chkpath(const char *restrict path, const char *restrict name, unsigned int cdmod
       }
     }
 
-    end = mempcpy_(buf, comp, complen); /* copy current path segment from s to e */
-    *end++ = '/';                    /* add / and then file to the end of it */
+    end = mempcpy_(buf, comp, complen);
+    *end++ = '/';
     memcpy(end, name, flen + 1);
-    if (access(buf, X_OK) == 0) {
+    if (access(buf, mode) == 0) {
       if (cdmode) {
         if (!stat(buf, &statbuf) && S_ISDIR(statbuf.st_mode))
           return st_strdup(buf);
@@ -137,19 +137,18 @@ getpath(char *file)
 {
   char *fullpath;
 
-  if ((strchr(file, '/')) && access(file, X_OK) == 0) {
+  // XXX: consider hashing full paths
+  if ((strchr(file, '/')) && access(file, X_OK) == 0)
     return (st_strdup(file));
-    // XXX: consider hashing full paths
-  }
 
   if (hflag && (fullpath = findchash(file)))
     return st_strdup(fullpath);
 
   const char *path = getvar("PATH");
   if (path)
-    fullpath = chkpath(path, file, 0);
+    fullpath = chkpath(path, file, X_OK, 0);
   else
-    fullpath = chkpath(defpath, file, 0);
+    fullpath = chkpath(defpath, file, X_OK, 0);
 
   if (!fullpath)
     return NULL;
@@ -161,11 +160,11 @@ getpath(char *file)
 int
 hashcmd(char **argv)
 {
-  size_t argc;
+  size_t argc = 0;
   int flags;
   char *bargv0;
 
-  argc = array_len(argv);
+  array_len(argv, argc);
   bargv0 = argv[0];
   flags = 0;
 
@@ -192,7 +191,7 @@ hashcmd(char **argv)
     if (!(path = getvar("PATH")))
       path = defpath;
     for (size_t i = 0; i < argc; i++) {
-      if (!(fpath = chkpath(path, argv[i], 0))) {
+      if (!(fpath = chkpath(path, argv[i], X_OK, 0))) {
         shwarn_arg(bargv0, argv[i], "not found");
         return 1;
       }

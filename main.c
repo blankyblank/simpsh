@@ -19,7 +19,6 @@
 #include "opts.h"
 #include "sig.h"
 #include "simpsh.h"
-#include "utils.h"
 #include "var.h"
 
 char histfile[256];

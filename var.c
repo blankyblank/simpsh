@@ -251,7 +251,7 @@ rebuild_env(char **sh_env)
   skipc = 0;
 
   if (sh_env) {
-    sh_c = array_len(sh_env);
+    array_len(sh_env, sh_c);
     for (size_t i = 0; i < sh_c; i++) {
       char *eq;
       lenarr[c] = strlen(sh_env[i]) + 1;
@@ -354,11 +354,11 @@ build_env(char **sh_env)
 void
 init_env(void)
 {
-  size_t i, env_c;
+  size_t i, env_c = 0;
   shvar *p;
 
   var_count = 0;
-  env_c = array_len(environ);
+  array_len(environ, env_c);
   for (i = 0; i < env_c; i++) {
     char *name, *val;
     read_assn(environ[i], &name, &val);
@@ -383,8 +383,8 @@ init_env(void)
 int
 exportcmd(char **args)
 {
-  size_t argc;
-  argc = array_len(args);
+  size_t argc = 0;
+  array_len(args, argc);
 
   if (argc > 1) {
     for (size_t i = 1; i < argc; i++) {
@@ -415,9 +415,8 @@ exportcmd(char **args)
 int
 localcmd(char **argv)
 {
-  size_t argc;
-
-  argc = array_len(argv);
+  size_t argc = 0;
+  array_len(argv, argc);
 
   if (func_depth == 0) {
     fprintf(stderr, "simpsh: local: can only be used in a function\n"); /*NOLINT*/
@@ -445,8 +444,8 @@ localcmd(char **argv)
 int
 readonlycmd(char **argv)
 {
-  int argc, i;
-  argc = array_len(argv);
+  size_t i, argc = 0;
+  array_len(argv,argc);
 
   if (argc > 1) {
     for (i = 1; i < argc; i++) {
@@ -477,10 +476,10 @@ int
 unsetcmd(char **argv)
 {
   shvar *v;
-  size_t argc, c;
+  size_t argc = 0, c;
   unsigned int err;
   char *bargv0;
-  argc = array_len(argv);
+  array_len(argv, argc);
   enum {
     VARS,
     FUNC,

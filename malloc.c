@@ -7,8 +7,10 @@
 #include <sys/types.h>
 
 #include "malloc.h"
+#include "lex.h"
 
-/*@NOTE:
+/*
+ * NOTE:
  *      this stack allocator is directly inspired by dash's stack allocator
  *      I don't know if anyone will ever use this shell but I felt like I should
  *      give credit to them for it. I'm mostly doing this to learn. Because I
@@ -16,15 +18,16 @@
  *      write optimized code like dash.
  */
 
-/* TODO:
+/*
+ * TODO:
  *      test different sizes, and see what impact
  *      they have on performance if any
  */
+
 stack_seg stackbase;
 stack_seg *current = &stackbase;
 char *stnext = stackbase.buf;
 size_t stleft = MINSTACK_S;
-char *stend;
 
 void
 stunalloc(void *p)
@@ -47,51 +50,28 @@ stack_restore(stmark m)
   current = m.current;
   stnext = m.next;
   stleft = m.stleft;
-  stend = stnext + stleft;
+  wf_chunk = NULL;
+  wf_chunk_left = 0;
 }
 
-/**  allocate new stack block  */
-__attribute__((hot)) void *
-st_alloc(size_t dsize)
+void *
+st_grow(size_t asize)
 {
-  size_t asize = align_mem(dsize);
-  size_t align_offset, pad;
-  size_t len, need;
- 
-  char *rp;
-  if (asize >= stleft) {
-    stack_seg *nseg;
-    need = asize;
-    if (need < MINSTACK_S)
-      need = MINSTACK_S;
-    len = sizeof(stack_seg) - MINSTACK_S + need;
-    if (!(nseg = malloc(len)))
-      return NULL;
-    nseg->prev = current;
-    stnext = nseg->buf;
-    stleft = need;
-    current = nseg;
-    stend = stnext + stleft;
-  }
-
-  align_offset = ((size_t)stnext & (sizeof(void *) - 1));
-  if (align_offset) {
-     pad = sizeof(void *) - align_offset;
-    if (pad > stleft) {
-      stnext = grow_stack(asize);
-      if (!stnext)
-        return NULL;
-    }
-    stnext += pad;
-    stleft -= pad;
-  }
-
-  rp = stnext;
+  size_t need = asize < MINSTACK_S ? MINSTACK_S : asize;
+  size_t len = sizeof(stack_seg) - MINSTACK_S + need;
+  stack_seg *nseg = malloc(len);
+  if (nseg)
+    return NULL;
+  nseg->prev = current;
+  stnext = nseg->buf;
+  stleft = need;
+  current = nseg;
+  char *rp = stnext;
   stnext += asize;
   stleft -= asize;
-  stend = stnext + stleft;
   return rp;
 }
+
 
 /**  grow the stack allocation  */
 __attribute__((hot)) void *
@@ -116,7 +96,6 @@ grow_stack(size_t msize)
     memcpy(nb->buf, oldbuf, used);
   stnext = nb->buf + used;
   stleft = nsize - used;
-  stend = nb->buf + nsize;
   return stnext;
 }
 
@@ -133,7 +112,6 @@ stack_clear(void)
   current = &stackbase;
   stnext = stackbase.buf;
   stleft = MINSTACK_S;
-  stend = stnext + stleft;
 }
 
 /**  initialize the stack  */
@@ -143,5 +121,4 @@ init_stack(void)
   current = &stackbase;
   stnext = stackbase.buf;
   stleft = MINSTACK_S;
-  stend = stnext + stleft;
 }

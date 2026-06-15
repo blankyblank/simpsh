@@ -240,11 +240,11 @@ child_setup_bg(void)
 int
 bgcmd(char **argv)
 {
-  size_t argc;
+  size_t argc = 0;
   job *j;
   sigset_t old;
 
-  argc = array_len(argv);
+  array_len(argv, argc);
   if (argc < 2) {
     job_lock(&old);
     j = findjob(NULL);
@@ -290,11 +290,11 @@ bgcmd(char **argv)
 int
 fgcmd(char **argv)
 {
-  size_t argc;
+  size_t argc = 0;
   job *j;
   sigset_t old;
 
-  argc = array_len(argv);
+  array_len(argv, argc);
   if (argc < 2) {
     job_lock(&old);
     j = findjob(NULL);
@@ -343,11 +343,11 @@ int
 jobscmd(char **argv)
 {
   job *j;
-  size_t argc;
+  size_t argc = 0;
   sigset_t old;
 
   j = job_list;
-  argc = array_len(argv);
+  array_len(argv, argc);
 
   job_lock(&old);
   if (argc < 2) {

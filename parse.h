@@ -38,6 +38,7 @@ struct cmd_tree {
     WHILE,
     FOR,
   } type;
+  int flags;
   union {
     struct { wf **args; size_t vc; wf **sh_vars; } cmd;
     struct { token op_t; } op;
@@ -46,7 +47,6 @@ struct cmd_tree {
     struct { cmd_tree *else_; } if_;
     struct { wf *name; wf **words; } for_;
   } t;
-  int flags;
 };
 
 enum {

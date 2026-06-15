@@ -195,8 +195,8 @@ cmpname(const void *va, const void *vb)
 int
 setcmd(char **argv)
 {
-  size_t argc;
-  argc = array_len(argv);
+  size_t argc = 0;
+  array_len(argv, argc);
 
   if (argc < 2) {
     char **enva;

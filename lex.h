@@ -88,8 +88,8 @@ typedef struct wf wf;
 struct wf {
   wf *next;
   char *word;
-  quoted qs;
   size_t len;
+  quoted qs;
   int flags;
 };
 
