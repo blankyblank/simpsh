@@ -94,7 +94,7 @@ OBJ 	 	   := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
 TARGET		   := simpsh
 CFLAGS		   := $(CFLAGS)
 
-.PHONY: all clean test install uninstall analyze examine
+.PHONY: all clean test install uninstall analyze examine bench
 
 all: $(TARGET)
 
@@ -123,3 +123,5 @@ examine:
 	gcc -O2 -g -fopt-info-all=report.txt $(SRC)
 test:
 	cd tests && ./runtests.sh
+bench:
+	hyperfine './simpsh tests/bench.sh'
