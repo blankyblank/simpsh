@@ -12,7 +12,8 @@
 
 sigjmp_buf linejmp;
 volatile sig_atomic_t intsig;
-volatile sig_atomic_t neednotify = 0;
+volatile sig_atomic_t ndnotify = 0;
+volatile sig_atomic_t ndreap = 0;
 sigset_t emptyset;
 sigset_t sigchldmask;
 int tty_fd = -1;
@@ -80,10 +81,9 @@ static void
 dosigchld(int _)
 {
   (void)_;
-  if (mflag)
-    killjob();
+  ndreap = 1;
   if (bflag)
-    neednotify = 1;
+    ndnotify = 1;
 }
 
 void

@@ -65,6 +65,7 @@ fgwait(job *j)
       kill(-j->pgid, SIGINT);
     }
     sigsuspend(&emptyset);
+    killjob();
   }
 
   if (j->state == JSTP) {
