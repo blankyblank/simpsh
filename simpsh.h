@@ -18,7 +18,7 @@ extern void simpsh_run(void);
 extern int sh_interactive(void);
 
 #define sh_ccmd(s) setinputstrn(s, strlen(s)); simpsh_run(); popinput();
-#define sh_stdin() setinputf(STDIN_FILENO); simpsh_run(); popinput();
-#define sh_script(i) setinputf(i); simpsh_run(); popinput();
+#define sh_stdin() setinputf(STDIN_FILENO, 0); simpsh_run(); popinput();
+#define sh_script(i) setinputf(i, 0); simpsh_run(); popinput();
 
 #endif /* SIMP_H */

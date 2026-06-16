@@ -131,7 +131,7 @@ eatbnl(void)
 
   while ((c = shgetchar()) == '\\') {
     if ((n = shgetchar()) == '\n') {
-      cur_shinpt->linenum++;
+      shinpt->linenum++;
       continue;
     }
     if (n != SHEOF) {
@@ -224,7 +224,7 @@ get_wf(int c)
 
       case C_BSLASH:
         if ((n = shgetchar()) == '\n') {
-          cur_shinpt->linenum++;
+          shinpt->linenum++;
           break;
         }
         if (n == SHEOF)
@@ -624,14 +624,14 @@ tokenize(void)
       case C_NL:
         if (wd & CHKNL)
           continue;
-        cur_shinpt->linenum++;
+        shinpt->linenum++;
         {
           const char *buf;
           size_t avail;
           while ((avail = shpeek(&buf)) > 0) {
             size_t skip;
             skip = simd_skip_nl(buf, avail);
-            cur_shinpt->linenum += skip;
+            shinpt->linenum += skip;
             if (skip > 0)
               shadvance(skip);
             if (skip < avail)
@@ -697,7 +697,7 @@ tokenize(void)
 
       case C_BSLASH:
         if ((n = shgetchar()) == '\n') {
-          cur_shinpt->linenum++;
+          shinpt->linenum++;
           continue;
         }
         if (c != SHEOF)

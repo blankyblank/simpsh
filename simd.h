@@ -144,7 +144,7 @@ simd_scan_delim(const char *restrict buf, size_t len, const char *restrict delim
 }
 
 static inline size_t
-simd_memchr_eq(const char *buf, size_t len, char c)
+memchr_(const char *buf, size_t len, char c)
 {
   __m128i input, target, cmp;
   int mask;

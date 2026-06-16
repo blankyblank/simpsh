@@ -1,4 +1,4 @@
-/*  malloc.c - stack arena allocator and otther malloc functions */
+/*  alloc.c - stack arena allocator and otther malloc functions */
 #define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
 #include <stdlib.h>
@@ -48,8 +48,7 @@ stack_restore(stmark m)
     current = tmp;
   }
   current = m.current;
-  stnext = m.next;
-  stleft = m.stleft;
+  stnext = m.next, stleft = m.stleft;
   wf_chunk = NULL;
   wf_chunk_left = 0;
 }
@@ -102,5 +101,4 @@ init_stack(void)
   current = &stackbase;
   stnext = stackbase.buf;
   stleft = MINSTACK_S;
-  mallopt(M_TOP_PAD, 262144);
 }
