@@ -10,7 +10,9 @@ typedef struct {
   size_t len;
 } ifssect;
 
+extern int ifsnull;
 
+extern void ifsupdt(const char *);
 extern char *exp_tilde(char *restrict, size_t, size_t *restrict, size_t *restrict);
 extern char *homedir(char *);
 extern char **expand_argv(wf **, size_t *restrict);

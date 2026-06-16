@@ -26,6 +26,8 @@ int builtin_tab[BUILTIN_BUCKETS];
 /* global shell variables */
 int sh_argc;
 pid_t sh_pid;
+pid_t sh_ppid;
+char *sh_ppid_s = NULL;
 char *sh_pid_s = NULL;
 char *sh_bgpid_s = NULL;
 pid_t sh_bgpid;
@@ -37,6 +39,8 @@ char **sh_argv;
 int alloc_sh_argv = 0;
 char *home;
 int lstatus;
+int retval = 0;
+int retnow = 0;
 
 /** shell entry point */
 int
@@ -168,6 +172,7 @@ main(int argc, char **argv)
     sh_stdin();
     exit(lstatus);
   } else {
+    sh_argv0 = argv0;
     /* run the main loop */
     exit(sh_interactive());
   }

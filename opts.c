@@ -216,6 +216,8 @@ setcmd(char **argv)
     f = 0;
     for (size_t i = 0; i < var_tab_size; i++) {
       v = &var_tab[i];
+      if (!v->var || v->var == TOMBSTONE)
+        continue;
       enva[f++] = v->var;
     }
     enva[c] = NULL;

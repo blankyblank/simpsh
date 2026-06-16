@@ -2,13 +2,16 @@
 
 #include <err.h>
 #include <limits.h>
+#include <linux/limits.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "alloc.h"
 #include "arg.h"
 #include "env.h"
 #include "exec.h"
+#include "expand.h"
 #include "main.h"
 #include "opts.h"
 #include "path.h"
@@ -175,7 +178,7 @@ callback:
   ci = hash_n(name, nlen, VAR_CACHE_S);
   var_cache[ci] = v;
   if (v->func)
-    v->func(name);
+    v->func(val);
   return;
 }
 
@@ -355,7 +358,9 @@ void
 init_env(void)
 {
   size_t i, env_c = 0;
-  shvar *p;
+  shvar *p, *ifs;
+  int shlvl;
+  char *shlvl_s, pwd[PATH_MAX];
 
   var_count = 0;
   array_len(environ, env_c);
@@ -367,16 +372,37 @@ init_env(void)
     free(val);
   }
 
-  if ((p = findvar("PATH")))
+  if ((p = findvar_n("PATH", 4)))
     p->func = rmchash;
-  sh_argv0 = "simpsh";
+  if (!(ifs = findvar_n("IFS", 3))) {
+    setvar("IFS", " \t\n", 0);
+    ifs = findvar_n("IFS", 3);
+  }
+  ifs->func = ifsupdt;
+  ifsupdt(shvar_val(ifs));
+
   sh_pid_s = malloc(16);
   sh_bgpid_s = malloc(16);
+  sh_ppid_s = malloc(16);
+  if (!sh_pid_s || !sh_bgpid_s || !sh_ppid_s) {
+    warn("malloc failed");
+    exit(1);
+  }
+  if (!getcwd(pwd, PATH_MAX))
+    shwarnx("getcwd", "couldn't get PWD");
+  else
+    setvar("PWD", pwd, VEXPRT);
+
+  sh_ppid = getppid();
   sh_pid = getpid();
-  sh_argc = 0;
-  sh_argv = NULL;
-  sh_bgpid = 0;
+  shlvl_s = getvar("SHLVL");
+  shlvl = (shlvl_s) ? atoi_(shlvl_s) : 0;
+  shlvl++;
+  lltoa(shlvl, shlvl_s);
   lltoa(sh_pid, sh_pid_s);
+  lltoa(sh_ppid, sh_ppid_s);
+  setvar("PPID", sh_ppid_s, VREADONLY);
+  setvar("SHLVL", shlvl_s, VEXPRT);
   home = getenv("HOME");
 }
 

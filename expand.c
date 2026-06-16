@@ -19,6 +19,9 @@
 #include "utils.h"
 #include "var.h"
 
+int ifsnull = 0;
+static char ifschar[256];
+
 static wf **splitword(wf *restrict, size_t *restrict);
 static char *exp_str(char *restrict, size_t, size_t *restrict);
 
@@ -81,6 +84,18 @@ is_posparam(const char *var, size_t var_l)
       return 0;
   }
   return 1;
+}
+
+void
+ifsupdt(const char *ifs)
+{
+  memset(ifschar, 0, 256);
+  if (!ifs)
+    ifs = " \t\n";
+  ifsnull = !*ifs;
+  for (; *ifs; ifs++)
+    if (!is_ws(*ifs))
+      ifschar[(unsigned char)*ifs] = 1;
 }
 
 char *
@@ -655,19 +670,14 @@ splitword(wf *f, size_t * restrict tlen)
     M_IFSN,
     M_NORMAL
   };
-
-  char *ifs;
   wf **fargv;
   wf *chead, *ctail, *cf;
   size_t fpos, cap, fargc;
 
-  ifs = getvar("IFS");
-  if (!ifs)
-    ifs = " \t\n";
   if (tlen)
     *tlen = 0;
 
-  if (!*ifs || !f) {
+  if (ifsnull || !f) {
     fargv = st_alloc(2 * sizeof(wf *));
     fargv[0] = f;
     fargv[1] = NULL;
@@ -696,7 +706,7 @@ splitword(wf *f, size_t * restrict tlen)
         mode = M_IMMUNE;
       else if (is_ws(c))
         mode = M_IFSWS;
-      else if (is_ifs_nws(c, ifs))
+      else if (ifschar[(unsigned char)c])
         mode = M_IFSN;
       else
         mode = M_NORMAL;

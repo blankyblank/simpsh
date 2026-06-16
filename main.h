@@ -37,11 +37,15 @@ extern char *sh_ps2; /* continuation prompt string */
 extern char *sh_ps4;
 extern int sh_argc; /* shell arg count */
 extern int lstatus; /* last exit status */
-extern pid_t sh_pid; /* the shell's pid */
-extern pid_t sh_bgpid; /* the last background processes pid */
-extern char *sh_pid_s;
-extern char *sh_bgpid_s;
-extern int alloc_sh_argv;
+extern int retval; /* return builtins value */
+extern int retnow; /* if set return from func or . file */
+extern pid_t sh_pid;
+extern pid_t sh_ppid;
+extern pid_t sh_bgpid;
+extern char *sh_pid_s; /* the shell's pid */
+extern char *sh_ppid_s; /* the shell's ppid */
+extern char *sh_bgpid_s; /* the last background processes pid */
+extern int alloc_sh_argv; /* if sh_argv was alloced */
 extern char *home;
 
 extern char histfile[256];
