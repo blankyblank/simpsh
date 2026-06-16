@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "glob.h"
-#include "malloc.h"
+#include "alloc.h"
 #include "simd.h"
 #include "utils.h"
 

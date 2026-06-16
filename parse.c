@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "malloc.h"
+#include "alloc.h"
 #include "parse.h"
 #include "input.h"
 #include "lex.h"

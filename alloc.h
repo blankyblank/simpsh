@@ -1,5 +1,5 @@
-#ifndef MALLOC_H
-#define MALLOC_H
+#ifndef ALLOC_H
+#define ALLOC_H
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -8,8 +8,8 @@
 /* clang-format off */
 #define SHELL_SIZE (sizeof(union {int i; char *cp; double d; }) - 1)
 /* clang-format on */
-#define align_mem(n) (((n) + SHELL_SIZE) & ~(sizeof(void *) - 1))
-#define MINSTACK_S align_mem(8000)
+#define align_mem(n) (((n) + sizeof(void *) - 1) & ~(sizeof(void *) - 1))
+#define MINSTACK_S align_mem(8192)
 /* so far 8000 seems pretty good for performance, but it seems large which can have it's own drawbacks
  * test more sized */
 /**  set mark to reset allocator back to  */
@@ -48,7 +48,6 @@ extern stack_seg *current;
 extern void stack_restore(stmark);
 extern void stack_clear(void);
 extern void *grow_stack(size_t);
-extern void *st_grow(size_t);
 extern void init_stack(void);
 extern void stunalloc(void *p);
 
@@ -65,13 +64,41 @@ grab_str(size_t len)
   return start;
 }
 
+static inline void *
+st_grow(size_t asize)
+{
+  size_t need = asize < MINSTACK_S ? MINSTACK_S : asize;
+  size_t len = sizeof(stack_seg) - MINSTACK_S + need;
+  stack_seg *nseg = malloc(len);
+  if (!nseg)
+    return NULL;
+  nseg->prev = current;
+  stnext = nseg->buf;
+  stleft = need;
+  current = nseg;
+  char *rp = stnext;
+  stnext += asize;
+  stleft -= asize;
+  return rp;
+}
+
 /**  allocate new stack block  */
 static inline __attribute__((always_inline)) void *
 st_alloc(size_t dsize)
 {
+  size_t pad;
   size_t asize = align_mem(dsize);
   if (__builtin_expect(asize >= stleft, 0))
-    st_grow(asize);
+   return  st_grow(asize);
+
+  pad = (-(size_t)stnext) & (sizeof(void *) - 1);
+  if (pad > stleft) {
+    stnext = grow_stack(asize);
+    if (!stnext)
+      return NULL;
+  }
+  stnext += pad;
+  stleft -= pad;
   char *rp = stnext;
   stnext += asize;
   stleft -= asize;
@@ -89,4 +116,4 @@ st_strndup(const char *s, size_t len)
   return d;
 }
 
-#endif /* !MALLOC_H */
+#endif /* !ALLOC_H */

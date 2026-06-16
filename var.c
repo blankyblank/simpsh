@@ -5,11 +5,11 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "alloc.h"
 #include "arg.h"
 #include "env.h"
 #include "exec.h"
 #include "main.h"
-#include "malloc.h"
 #include "opts.h"
 #include "path.h"
 #include "utils.h"
@@ -70,7 +70,7 @@ findvar_n(const char *restrict name, size_t nlen)
     return cv;
 
   end = var_tab + var_tab_size;
-  v = var_tab + (bucket & (var_tab_size - 1));
+  v = var_tab + bucket;
   for (;;) {
     if (!v->var)
       return NULL;
@@ -98,7 +98,7 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
   vlen = val ? strlen(val) : 0;
   flen = nlen + vlen + 2;
   end = var_tab + var_tab_size;
-  v = var_tab + (hash_n(name, nlen, var_tab_size) & (var_tab_size - 1));
+  v = var_tab + hash_n(name, nlen, var_tab_size);
   n = NULL;
 
   for (;;) {
@@ -161,7 +161,7 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
   if (var_count > var_tab_size * 7 / 10) {
     resize_var_tab();
     end = var_tab + var_tab_size;
-    v = var_tab + (hash_n(name, nlen, var_tab_size) & (var_tab_size - 1));
+    v = var_tab + hash_n(name, nlen, var_tab_size);
     for (;;) {
       if (v->var && v->var != TOMBSTONE && v->nlen == nlen &&
           memcmp(v->var, name, nlen) == 0)
@@ -189,7 +189,7 @@ rmvar(const char *name)
 
   nlen = strlen(name);
   end = var_tab + var_tab_size;
-  v = var_tab + (hash_n(name, nlen, var_tab_size) & (var_tab_size - 1));
+  v = var_tab + hash_n(name, nlen, var_tab_size);
 
   for (;;) {
     if (!v->var)

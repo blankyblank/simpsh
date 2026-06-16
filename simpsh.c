@@ -17,13 +17,13 @@
 #include "utils.h"
 #endif /* ifdef READLINE */
 
-#include "parse.h"
+#include "alloc.h"
 #include "exec.h"
 #include "expand.h"
 #include "job.h"
 #include "lex.h"
 #include "main.h"
-#include "malloc.h"
+#include "parse.h"
 #include "simpsh.h"
 #include "var.h"
 
@@ -87,8 +87,12 @@ simpsh_run(void)
       run_commands(c, 0);
     stack_restore(mark);
     last_tok = SHTOK(TNONE);
-    if (neednotify) {
-      neednotify = 0;
+    if (ndreap) {
+      ndreap = 0;
+      killjob();
+    }
+    if (ndnotify) {
+      ndnotify = 0;
       jobnotify();
     }
   }
@@ -297,9 +301,15 @@ sh_interactive(void)
       continue;
     }
     ttyreclaim();
-    if (neednotify || !bflag)
+    if (ndreap) {
+      ndreap = 0;
+      killjob();
+    }
+    if (ndnotify || !bflag) {
+      ndnotify = 0;
       jobnotify();
-    neednotify = 0;
+    }
+    ndnotify = 0;
     mark = stack_mark();
     
     r = read_cmd(&lines, &lineslen);
@@ -336,8 +346,8 @@ sh_interactive(void)
 static int
 bg_notify(void)
 {
-  if (neednotify) {
-    neednotify = 0;
+  if (ndnotify) {
+    ndnotify = 0;
     jobnotify();
     rl_on_new_line_with_prompt();
     rl_redisplay();
@@ -409,8 +419,12 @@ lineread(char *prompt)
     if (!fgets(buf, sizeof(buf), stdin)) {
       if (errno == EINTR) {
         clearerr(stdin);
-        if (neednotify) {
-          neednotify = 0;
+        if (ndreap) {
+          ndreap = 0;
+          killjob();
+        }
+        if (ndnotify) {
+          ndnotify = 0;
           jobnotify();
           fputs(prompt, stdout);
           fflush(stdout);

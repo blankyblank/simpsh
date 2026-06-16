@@ -4,7 +4,8 @@
 
 #include <stdlib.h>
 #include <stddef.h>
-#include "malloc.h"
+
+#include "alloc.h"
 
 enum chars {
   C_WORD,

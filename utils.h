@@ -8,7 +8,7 @@
 #include <string.h>
 #include <stddef.h>
 
-#include "malloc.h"
+#include "alloc.h"
 
 /* error message macros/funcs */
 
@@ -253,7 +253,7 @@ hash(const char *s, unsigned int buckets)
     h ^= h >> 47;
     s++;
   }
-  return h % buckets;
+  return h & (buckets - 1);
 }
 
 /**  hash string with known length  */
@@ -265,7 +265,7 @@ hash_n(const char *s, size_t n, unsigned int buckets) {
     h *= 0x5bd1e9955bd1e995;
     h ^= h >> 47;
   }
-  return h % buckets;
+  return h & (buckets - 1);
 }
 
 /* quote string handling shell escaping */

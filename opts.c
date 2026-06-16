@@ -6,8 +6,8 @@
 #include <strings.h>
 #include <unistd.h>
 
+#include "alloc.h"
 #include "main.h"
-#include "malloc.h"
 #include "opts.h"
 #include "utils.h"
 #include "var.h"

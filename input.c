@@ -6,8 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "alloc.h"
 #include "input.h"
-#include "malloc.h"
 #include "lex.h"
 #include "simpsh.h"
 
@@ -112,6 +112,7 @@ setinputf(int fd)
   if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
     map = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (map != MAP_FAILED) {
+      posix_madvise(map, st.st_size, POSIX_MADV_SEQUENTIAL);
       close(fd);
       shinput *new;
       new = st_alloc(sizeof(shinput));

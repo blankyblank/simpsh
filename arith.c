@@ -5,7 +5,7 @@
 #include "arith.h"
 #include "var.h"
 #include "main.h"
-#include "malloc.h"
+#include "alloc.h"
 #include "simd.h"
 #include "utils.h"
 

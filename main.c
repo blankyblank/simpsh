@@ -9,13 +9,12 @@
   #include <readline/history.h>
 #endif /* ifdef READLINE */
 
-/* XXX: not sure all these are needed */
+#include "alloc.h"
 #include "arg.h"
 #include "builtins.h"
 #include "input.h"
 #include "job.h"
 #include "main.h"
-#include "malloc.h"
 #include "opts.h"
 #include "sig.h"
 #include "simpsh.h"

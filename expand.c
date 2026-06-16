@@ -13,7 +13,7 @@
 #include "input.h"
 #include "lex.h"
 #include "main.h"
-#include "malloc.h"
+#include "alloc.h"
 #include "opts.h"
 #include "parse.h"
 #include "utils.h"

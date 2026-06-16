@@ -4,11 +4,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "alloc.h"
 #include "arith.h"
 #include "env.h"
 #include "input.h"
 #include "lex.h"
-#include "malloc.h"
 #include "main.h"
 #include "simd.h"
 #include "utils.h"

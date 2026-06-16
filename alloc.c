@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "malloc.h"
+#include "alloc.h"
 #include "lex.h"
 
 /*
@@ -54,27 +54,8 @@ stack_restore(stmark m)
   wf_chunk_left = 0;
 }
 
-void *
-st_grow(size_t asize)
-{
-  size_t need = asize < MINSTACK_S ? MINSTACK_S : asize;
-  size_t len = sizeof(stack_seg) - MINSTACK_S + need;
-  stack_seg *nseg = malloc(len);
-  if (nseg)
-    return NULL;
-  nseg->prev = current;
-  stnext = nseg->buf;
-  stleft = need;
-  current = nseg;
-  char *rp = stnext;
-  stnext += asize;
-  stleft -= asize;
-  return rp;
-}
-
-
 /**  grow the stack allocation  */
-__attribute__((hot)) void *
+void *
 grow_stack(size_t msize)
 {
   size_t nsize;
@@ -121,4 +102,5 @@ init_stack(void)
   current = &stackbase;
   stnext = stackbase.buf;
   stleft = MINSTACK_S;
+  mallopt(M_TOP_PAD, 262144);
 }
