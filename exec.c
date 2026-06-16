@@ -338,6 +338,8 @@ run_while(const cmd_tree *n)
   stmark w;
   status = 0;
   for (;;) {
+    if (retnow)
+      break;
     w = stack_mark();
     cond = run_commands(n->left, 0);
     if ((n->flags & UNTIL) ? cond == 0 : cond != 0)
@@ -388,6 +390,10 @@ run_func(const cmd_tree *n, char **args)
 
   status = run_commands(n, 0);
   func_depth--;
+  if (retnow) {
+    retnow = 0;
+    status = retval;
+  }
   goto done;
 
 done:
@@ -849,10 +855,12 @@ run_commands(const cmd_tree *n, int nchld)
 
   if (!n)
     return 0;
+  if (retnow)
+    return lstatus = retval;
 
   while (n->type == OP && (COPP(n) == TSEMI || COPP(n) == TNL)) {
     lstatus = run_commands(n->left, 0);
-    if (!n->right)
+    if (retnow || !n->right)
       return lstatus;
     n = n->right;
   }

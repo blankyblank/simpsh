@@ -49,6 +49,7 @@ const char *builtins[] = {
   "local",
   "pwd",
   "readonly",
+  "return",
   "set",
   "test",
   "true",
@@ -75,6 +76,7 @@ int (* const builtin_funcs[])(char **) = {
   &localcmd,
   &pwdcmd,
   &readonlycmd,
+  &returncmd,
   &setcmd,
   &testcmd,
   &truecmd,
@@ -208,7 +210,7 @@ dotcmd(char **argv)
     st = 1;
     goto restore;
   }
-  setinputf(fd);
+  setinputf(fd, 0);
 
   if (argc == 2) {
     o_argv0 = strdup_(sh_argv0);
@@ -536,16 +538,42 @@ physical:
 }
 
 int
+returncmd(char **argv)
+{
+  size_t argc = 0;
+  int status = 0;
+  array_len(argv, argc);
+
+  if (argc > 2) {
+    shwarnx(argv[0], "too many arguements");
+    return 1;
+  }
+
+  if (argc == 2) {
+    for (size_t i = 0; argv[1][i]; i++) {
+      if (!isdigit_(argv[1][i])) {
+        shwarn_arg(argv[0], argv[1], "a numeric arguement is required");
+        return 1;
+      }
+    }
+    status = atoi_(argv[1]);
+    // status = (status < 256) ? status : lstatus;
+  }
+  retval = status, retnow = 1;
+  return status;
+}
+
+int
 truecmd(char **args)
 {
   (void)args;
   return 0;
 }
 
-int umaskcmd(char **argv)
+int
+umaskcmd(char **argv)
 {
-  int symb = 0, status = 0;
-  mode_t mask;
+  int symb = 0;
   size_t argc = 0;
 
   array_len(argv, argc);
@@ -560,18 +588,130 @@ int umaskcmd(char **argv)
   }
   ARGEND
 
-  mask = umask(0);
-  umask(mask);
+  mode_t mask = umask(0);
+  int usrp, grpp, othp;
+  const char ugo[] = { 'u', 'g', 'o', '\0' };
 
-  if (!argc) {
+  umask(mask);
+  if (!argv[0]) {
     if (!symb) {
       printf("%.4o\n", mask);
       return 0;
     } else {
-      return 1;
+      mask = (~mask) & 0777;
+      usrp = (mask >> 6) & 07;
+      grpp = (mask >> 3) & 07;
+      othp = mask & 07;
+
+      int val[] = { usrp, grpp, othp };
+
+      for (int i = 0; i <= 2; i++) {
+        putc(ugo[i], stdout);
+        putc('=', stdout);
+        if (val[i] & 4)
+          putc('r', stdout);
+        if (val[i] & 2)
+          putc('w', stdout);
+        if (val[i] & 1)
+          putc('x', stdout);
+        if (i < 2)
+          putc(',', stdout);
+      }
+      putc('\n', stdout);
+      return 0;
+    }
+  } else {
+    if (!symb) {
+      mode_t val = 0;
+
+      for (int i = 0; argv[0][i]; i++) {
+        char c = argv[0][i];
+        if (c < '0' || c > '7') {
+          shwarn_arg(argv0, argv[0], "octal number out of range");
+          return 1;
+        }
+        val = (val << 3) | (c - '0');
+      }
+      umask(val);
+      return 0;
+    } else {
+      mask = (~mask) & 0777;
+
+      for (char *c = argv[0]; *c; c++) {
+        mode_t pos = 0, perms = 0, nm = 0;
+        char op = '\0';
+
+        while (*c == 'u' || *c == 'g' || *c == 'o' || *c == 'a') {
+          if (*c == 'u')
+            pos |= 1 << 6;
+          else if (*c == 'g')
+            pos |= 1 << 3;
+          else if (*c == 'o')
+            pos |= 1 << 0;
+          else if (*c == 'a')
+            pos |= 0111;
+          c++;
+        }
+
+        op = *c;
+        if (*c != '=' && *c != '+' && *c != '-') {
+          fprintf(stderr, "%s: %s: %c:  not a valid operator \n", sh_argv0, argv0, *c);
+          return 1;
+        }
+        if (!pos)
+          pos = 0111;
+        c++;
+
+
+        while (*c == 'r' || *c == 'w' || *c == 'x' || *c == 'u' || *c == 'g' ||
+               *c == 'o' || *c == 'X' || *c == 's') {
+          switch (*c) {
+            case 'r':
+              perms |= 04, c++;
+              continue;
+            case 'w':
+              perms |= 02, c++;
+              continue;
+            case 'X':
+            case 'x':
+              perms |= 01, c++;
+              continue;
+            case 'u':
+              perms |= (mask >> 6) & 07, c++;
+              continue;
+            case 'g':
+              perms |= (mask >> 3) & 07, c++;
+              continue;
+            case 'o':
+              perms |= mask & 07, c++;
+              continue;
+            case 's':
+              c++;
+              continue;
+            default:
+              break;
+          }
+        }
+
+        nm = perms * pos;
+
+        if (op == '=') {
+          mask = nm | (mask & ~(pos * 07));
+        } else if (op == '+') {
+          mask |= nm;
+        } else if (op == '-') {
+          mask &= ~nm;
+        }
+
+        if (*c == ',') {
+          continue;
+        } else if (*c == '\0') {
+          break;
+        }
+      }
+      umask((~mask) & 0777);
+      return 0;
     }
   }
-
-  return status;
 }
 

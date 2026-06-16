@@ -85,6 +85,11 @@ simpsh_run(void)
     }
     if (!nflag)
       run_commands(c, 0);
+    if (retnow) {
+      retnow = 0;
+      stack_restore(mark);
+      break;
+    }
     stack_restore(mark);
     last_tok = SHTOK(TNONE);
     if (ndreap) {

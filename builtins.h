@@ -20,6 +20,7 @@ extern int exitcmd(char **);
 extern int falsecmd(char **);
 extern int helpcmd(char **);
 extern int pwdcmd(char **);
+extern int returncmd(char **);
 extern int truecmd(char **);
 extern int umaskcmd(char **);
 
