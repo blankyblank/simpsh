@@ -20,7 +20,6 @@
 #include "input.h"
 #include "job.h"
 #include "main.h"
-#include "malloc.h"
 #include "opts.h"
 #include "path.h"
 #include "simpsh.h"
@@ -53,6 +52,7 @@ const char *builtins[] = {
   "set",
   "test",
   "true",
+  "umask",
   "unalias",
   "unset",
 };
@@ -78,6 +78,7 @@ int (* const builtin_funcs[])(char **) = {
   &setcmd,
   &testcmd,
   &truecmd,
+  &umaskcmd,
   &unaliascmd,
   &unsetcmd,
 };
@@ -539,5 +540,38 @@ truecmd(char **args)
 {
   (void)args;
   return 0;
+}
+
+int umaskcmd(char **argv)
+{
+  int symb = 0, status = 0;
+  mode_t mask;
+  size_t argc = 0;
+
+  array_len(argv, argc);
+  ARGBEGIN
+  {
+    case 'S':
+      symb = 1;
+      break;
+    default:
+      bad_opt(sh_argv0, argv0, ARGC());
+      return 1;
+  }
+  ARGEND
+
+  mask = umask(0);
+  umask(mask);
+
+  if (!argc) {
+    if (!symb) {
+      printf("%.4o\n", mask);
+      return 0;
+    } else {
+      return 1;
+    }
+  }
+
+  return status;
 }
 
