@@ -35,7 +35,7 @@ resize_var_tab(void)
   shvar *n;
 
   ns = var_tab_size * 2;
-  if (!(n = calloc(ns, sizeof(shvar))))
+  if (!(n = slcalloc(ns, sizeof(shvar))))
     return;
 
   for (size_t i = 0; i < var_tab_size; i++) {
@@ -87,7 +87,7 @@ findvar_n(const char *restrict name, size_t nlen)
 
 /** set variable value */
 void
-setvar(char *restrict name, char *restrict val, shvar_flags flags)
+setvar(const char *restrict name, char *restrict val, shvar_flags flags)
 {
   if (aflag)
     flags |= VEXPRT;
@@ -111,7 +111,7 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
     if (v->var == TOMBSTONE) {
       if (!n)
         n = v;
-    } else if (v->nlen == nlen) {
+    } else if (v->nlen == nlen && smemcmp(v->var, name, nlen)) {
       if (v->flags & VREADONLY)
         return;
       if (v->flen >= flen) {
@@ -373,11 +373,11 @@ init_env(void)
     slfree(val);
   }
 
-  if ((p = findvar_n("PATH", 4)))
+  if ((p = findvar_n(pathn, 4)))
     p->func = rmchash;
-  if (!(ifs = findvar_n("IFS", 3))) {
-    setvar("IFS", " \t\n", 0);
-    ifs = findvar_n("IFS", 3);
+  if (!(ifs = findvar_n(ifsn, 3))) {
+    setvar(ifsn, " \t\n", 0);
+    ifs = findvar_n(ifsn, 3);
   }
   ifs->func = ifsupdt;
   ifsupdt(shvar_val(ifs));
@@ -392,19 +392,20 @@ init_env(void)
   if (!getcwd(pwd, PATH_MAX))
     shwarnx("getcwd", "couldn't get PWD");
   else
-    setvar("PWD", pwd, VEXPRT);
+    setvar(pwdn, pwd, VEXPRT);
+
 
   sh_ppid = getppid();
   sh_pid = getpid();
-  shlvl_s = getvar("SHLVL");
+  shlvl_s = getvar(shlvln);
   shlvl = (shlvl_s) ? atoi_(shlvl_s) : 0;
   shlvl++;
   lltoa(shlvl, shlvl_s);
   lltoa(sh_pid, sh_pid_s);
   lltoa(sh_ppid, sh_ppid_s);
-  setvar("PPID", sh_ppid_s, VREADONLY);
-  setvar("SHLVL", shlvl_s, VEXPRT);
-  home = getenv("HOME");
+  setvar(ppidn, sh_ppid_s, VREADONLY);
+  setvar(shlvln, shlvl_s, VEXPRT);
+  home = getenv(homen);
   homelen = strlen(home);
 }
 

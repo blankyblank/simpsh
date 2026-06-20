@@ -43,7 +43,7 @@ extern size_t localsp;
 
 extern char **build_env(char **);
 extern void init_env(void);
-extern void setvar(char * restrict, char * restrict, shvar_flags);
+extern void setvar(const char * restrict, char * restrict, shvar_flags);
 extern tmp_var grabvar(char *);
 extern shvar *findvar_n(const char *restrict, size_t);
 extern void rmvar(const char *);

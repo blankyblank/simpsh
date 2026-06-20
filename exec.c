@@ -584,7 +584,7 @@ run_cmdsub(const cmd_tree *n)
         while ((n = read(pipefd[0], buf, sizeof(buf)))) {
           if (n > 0) {
             if (stleft <= (size_t)n)
-              grow_stack(2048);
+              grow_stack(n);
             memcpy(stnext, buf, n);
             len += n;
             stnext += n;

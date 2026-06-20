@@ -28,6 +28,16 @@ enum {
 
 #define usage() fprintf(stderr, "Usage: simpsh [-abCefhiImnosvVx] [-o longopt] [-c 'cmd']\n")
 
+extern const char pwdn[16];
+extern const char ifsn[16];
+extern const char oldpwdn[16];
+extern const char homen[16];
+extern const char pathn[16];
+extern const char ppidn[16];
+extern const char shlvln[16];
+extern const char cdpthn[16];
+extern const char ps1n[16];
+
 /* shell variables */
 extern char **environ;
 extern char *sh_argv0; /* the shells first arguement */

@@ -148,7 +148,7 @@ getpath(char *file)
   if (hflag && (fullpath = findchash(file)))
     return st_strdup(fullpath);
 
-  const char *path = getvar("PATH");
+  const char *path = getvar(pathn);
   if (path)
     fullpath = chkpath(path, file, X_OK, 0);
   else
@@ -192,7 +192,7 @@ hashcmd(char **argv)
     return 0;
   } else {
     char *path, *fpath;
-    if (!(path = getvar("PATH")))
+    if (!(path = getvar(pathn)))
       path = defpath;
     for (size_t i = 0; i < argc; i++) {
       if (!(fpath = chkpath(path, argv[i], X_OK, 0))) {

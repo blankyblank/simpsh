@@ -192,7 +192,7 @@ dotcmd(char **argv)
     file = argv[1];
   } else {
     char *fpath, *path;
-    if ((path = getvar("PATH")))
+    if ((path = getvar(pathn)))
       fpath = chkpath(path, argv[1], R_OK, 0);
     else
       fpath = chkpath(defpath, argv[1], R_OK, 0);
@@ -294,13 +294,13 @@ cdcmd(char **argv)
     return 1;
   }
 
-  oldpwd = findvar("OLDPWD");
-  pwd = findvar("PWD");
+  oldpwd = findvar(oldpwdn);
+  pwd = findvar(pwdn);
   if (pwd)
     pwdval = shvar_val(pwd);
   else
     pwdval = getcwd(respath, PATH_MAX);
-  cdpth = findvar("CDPATH");
+  cdpth = findvar(cdpthn);
   if (cdpth) {
     if (*argv && argv[0][0] != '/' &&
         !(argv[0][0] == '-' && argv[0][1] == '\0') &&
@@ -377,8 +377,8 @@ cdcmd(char **argv)
       return 1;
     }
   }
-  setvar("OLDPWD", pwdval, VEXPRT);
-  setvar("PWD", respath, VEXPRT);
+  setvar(oldpwdn, pwdval, VEXPRT);
+  setvar(pwdn, respath, VEXPRT);
   return 0;
 }
 
@@ -518,7 +518,7 @@ pwdcmd(char **argv)
   ARGEND;
 
   if (flag != FLAG_P) {
-    char *pwd = getvar("PWD");
+    char *pwd = getvar(pwdn);
     struct stat sbuf, cwdsbuf;
 
     if (!pwd) {

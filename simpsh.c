@@ -77,7 +77,7 @@ simpsh_run(void)
       last_tok = SHTOK(TNONE);  // from previous command
     
     mark = stack_mark();
-    chkwd = CHKALIAS | CHKNL;
+    chkwd = CHKKWD | CHKALIAS | CHKNL;
     c = parse_list(TEOF);
     if (!c) {
       stack_restore(mark);
@@ -235,7 +235,7 @@ read_cmd(char **restrict cmd, size_t *restrict len)
   size_t n, lineslen;
   stmark mark;
   
-  ps1 = expand_ps1(getvar("PS1"));
+  ps1 = expand_ps1(getvar(ps1n));
   line = lineread(ps1 ? ps1 : " $ ");
   if (!line)
     return 0;

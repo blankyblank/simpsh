@@ -235,7 +235,7 @@ exp_tilde(char *restrict word, size_t s, size_t *restrict e, size_t *restrict ol
   if (word[s] != '~')
     return NULL;
   if (s == 0 && (word[s + 1] == '\0' || word[s + 1] == '/')) {
-    if (!(hm = getvar("HOME")))
+    if (!(hm = getvar(homen)))
       return NULL;
     *e = s + 1;
     *olen = strlen(hm);
@@ -425,6 +425,12 @@ expand_argv(wf **args, size_t *restrict t)
           } else
             argv[fargc++] = flat;
         } else {
+          if (fargc >= cap) {
+            cap *= 2;
+            char **new = st_alloc(cap * sizeof(char *));
+            memcpy(new, argv, fargc * sizeof(char *));
+            argv = new;
+          }
           argv[fargc++] = join_wf(fargv[j]);
         }
       } else
@@ -439,10 +445,10 @@ expand_argv(wf **args, size_t *restrict t)
 __attribute__((hot)) wf *
 exp_word(wf *wordf, size_t * restrict rlen)
 {
-  size_t len = 0;
+  size_t end = 0, len = 0;
   size_t i;
   wf *f, *head = NULL, *tail = NULL;
-  char buf[16];
+  char *expanded, buf[16];
 
   for (f = wordf; f; f = f->next) {
     char *val = NULL;
@@ -456,12 +462,9 @@ exp_word(wf *wordf, size_t * restrict rlen)
         break;
       case QNONE:
         i = 0;
-        char *expanded;
         while (i < f->len) {
-          size_t end = 0;
           if (f->word[i] == '~') {
             size_t elen = 0;
-            end = 0, 
             expanded = exp_tilde(f->word, i, &end, &elen);
             if (expanded) {
               append_wf(&head, &tail, expanded, elen, f->qs);
@@ -507,9 +510,11 @@ exp_word(wf *wordf, size_t * restrict rlen)
           int sublen;
           char *cmdsubpos;
           size_t savesl;
+          stmark csmark;
 
           savesl = stleft;
           cmdsubpos = stnext;
+          csmark = stack_mark();
           setinputstrn(f->word, f->len);
           last_tok = SHTOK(TNONE);
           chkwd = 0;
@@ -518,6 +523,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
 
           popinput();
           cmdsdup = tree_dup(cmdsub);
+          stack_restore(csmark);
           if (!cmdsdup)
             return NULL;
           stnext = cmdsubpos;
@@ -526,6 +532,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
             free_tree(cmdsdup);
             return NULL;
           }
+          cmdsubpos = current->buf + (cmdsubpos - csmark.current->buf);
           free_tree(cmdsdup);
           append_wf(&head, &tail, cmdsubpos, sublen, f->qs);
           len += sublen;
@@ -684,7 +691,7 @@ splitword(wf *f, size_t * restrict tlen)
   };
   wf **fargv;
   wf *chead, *ctail, *cf;
-  size_t fpos, cap, fargc;
+  size_t fpos, cap, fargc, ttl = 0;
 
   if (tlen)
     *tlen = 0;
@@ -730,6 +737,7 @@ splitword(wf *f, size_t * restrict tlen)
         case M_IFSWS:
           if (fpos > s) {
             append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
+            ttl += fpos - s;
           }
           if (chead) {
             if (fargc >= cap) {
@@ -747,8 +755,10 @@ splitword(wf *f, size_t * restrict tlen)
           s = fpos;
           continue;
         case M_IFSN:
-          if (fpos > s)
+          if (fpos > s) {
             append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
+            ttl += fpos - s;
+          }
           append_wf(&chead, &ctail, NULL, 0, QNONE);
           if (fargc >= cap) {
             cap *= 2;
@@ -767,10 +777,13 @@ splitword(wf *f, size_t * restrict tlen)
           continue;
       }
     }
-    if (cf->qs != QNONE && cf->qs != QCMDSUB)
+    if (cf->qs != QNONE && cf->qs != QCMDSUB) {
       append_wf(&chead, &ctail, cf->word, cf->len, cf->qs);
-    else if (fpos > s)
+      ttl = cf->len;
+    } else if (fpos > s) {
       append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
+      ttl += fpos - s;
+    }
     cf = cf->next;
     fpos = 0;
   }
@@ -786,6 +799,8 @@ splitword(wf *f, size_t * restrict tlen)
     fargv[fargc++] = chead;
   }
 
+  if (tlen)
+    *tlen = ttl;
   fargv[fargc] = NULL;
   return fargv;
 }

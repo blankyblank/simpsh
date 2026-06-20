@@ -23,6 +23,16 @@
 
 char histfile[256];
 int builtin_tab[BUILTIN_BUCKETS];
+const char ifsn[16] = "IFS";
+const char pwdn[16] = "PWD";
+const char oldpwdn[16] = "OLDPWD";
+const char homen[16] = "HOME";
+const char pathn[16] = "PATH";
+const char ppidn[16] = "PPID";
+const char shlvln[16] = "SHLVL";
+const char cdpthn[16] = "CDPATH";
+const char ps1n[16] = "PS1";
+
 
 /* global shell variables */
 int sh_argc;
