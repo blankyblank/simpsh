@@ -1,9 +1,11 @@
 #ifndef SIMD_H
 #define SIMD_H
 
-#include <emmintrin.h>
 #include <stddef.h>
 #include <string.h>
+
+#ifdef __SSE2__
+#include <emmintrin.h>
 
 /* simd integer. long long */
 typedef __m128i sint;
@@ -218,6 +220,82 @@ smemcmp(const char *restrict a, const char *restrict b, size_t nlen)
     return 0;
   return nlen <= 16 || memcmp(a + 16, b + 16, nlen - 16) == 0;
 }
+#else
+
+static inline size_t
+sscnword(const char *buf, size_t len)
+{
+  for (size_t i = 0; i < len; i++) {
+    unsigned char c = buf[i];
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+          (c >= '0' && c <= '9') || c == '_'))
+      return i;
+  }
+  return len;
+}
+
+static inline size_t
+sskipspace(const char *buf, size_t len)
+{
+  for (size_t i = 0; i < len; i++) {
+    char c = buf[i];
+    if (c != ' ' && c != '\t')
+      return i;
+  }
+  return len;
+}
+
+static inline size_t
+sskipnl(const char *buf, size_t len)
+{
+  for (size_t i = 0; i < len; i++) {
+    if (buf[i] != '\n')
+      return i;
+  }
+  return len;
+}
+
+static inline size_t
+sscndelim(const char * restrict buf, size_t len, const char * restrict delims,
+          int ndelims)
+{
+  for (size_t i = 0; i < len; i++) {
+    for (int d = 0; d < ndelims; d++) {
+      if (buf[i] == delims[d])
+        return i;
+    }
+  }
+  return len;
+}
+
+static inline size_t
+sskipdelims(const char * restrict buf, size_t len, const char * restrict delims,
+            int ndelims)
+{
+  for (size_t i = 0; i < len; i++) {
+    int is_delim = 0;
+    for (int d = 0; d < ndelims; d++) {
+      if (buf[i] == delims[d]) {
+        is_delim = 1;
+        break;
+      }
+    }
+    if (!is_delim)
+      return i;
+  }
+  return len;
+}
+
+static inline __attribute__((always_inline)) size_t
+memchr_(const char *buf, size_t len, char c)
+{
+  const void *p = memchr(buf, c, len);
+  return p ? (size_t)((const char *)p - buf) : len;
+}
+
+  #define smemcmp(a, b, l) (memcmp((a), (b), (l)) == 0)
+
+#endif /* __SSE2__ */
 
 #endif /* SIMD_H */
 

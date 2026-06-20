@@ -1,7 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <err.h>
-#include <emmintrin.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdlib.h>
