@@ -2,7 +2,6 @@
 
 #define _POSIX_C_SOURCE 200809L
 #include <err.h>
-#include <linux/limits.h>
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,6 +56,7 @@ handle_interrupt(stmark base)
   putchar('\n');
 }
 
+#ifndef MUSL
 void
 getbuildinfo(void) {
   printf("%s build info:\n"
@@ -64,6 +64,7 @@ getbuildinfo(void) {
          "ansi C standard conformance: %ld\n",
          sh_argv0, __DATE__, __TIME__, __STDC_ISO_10646__);
 }
+#endif /* ifndef MUSL */
 
 void
 simpsh_run(void)

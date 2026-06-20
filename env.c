@@ -2,7 +2,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
 #include <limits.h>
-#include <linux/limits.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -22,7 +21,7 @@ wfdup(wf *s)
 
   if (!s)
     return NULL;
-  n = malloc(sizeof(wf));
+  n = slalloc(sizeof(wf));
   n->word = strndup_(s->word, s->len);
   n->len = s->len;
   n->qs = s->qs;
@@ -40,7 +39,7 @@ tree_dup(cmd_tree *s)
   if (!s)
     return NULL;
 
-  n = malloc(sizeof(cmd_tree));
+  n = slalloc(sizeof(cmd_tree));
   if (!n)
     return NULL;
   n->type = s->type;
@@ -73,19 +72,19 @@ tree_dup(cmd_tree *s)
       CELSE(n) = tree_dup(CELSE(s));
       break;
     default:
-      free(n);
+      slfree(n);
       return NULL;
     case CMD:
       cnt = 0;
       for (size_t i = 0; CARGS(s)[i]; i++)
         cnt++;
-      CARGS(n) = malloc((cnt + 1) * sizeof(wf *));
+      CARGS(n) = slalloc((cnt + 1) * sizeof(wf *));
       for (size_t i = 0; i < cnt; i++)
         CARGS(n)[i] = wfdup(CARGS(s)[i]);
       CARGS(n)[cnt] = NULL;
       CVARC(n) = CVARC(s);
       if (CVARS(s)) {
-        CVARS(n) = malloc((CVARC(s) + 1) * sizeof(wf *));
+        CVARS(n) = slalloc((CVARC(s) + 1) * sizeof(wf *));
         for (size_t i = 0; i < CVARC(s); i++)
           CVARS(n)[i] = wfdup(CVARS(s)[i]);
         CVARS(n)[CVARC(s)] = NULL;
@@ -122,12 +121,12 @@ setfunc(const char *restrict name, cmd_tree *restrict body)
   f = findfunc(name);
   if (f) {
     free_tree(f->body);
-    free(f->name);
+    slfree(f->name);
     f->name = strdup_(name);
     f->body = tree_dup(body);
   } else {
     i = hash(name, ENV_BUCKETS);
-    n = malloc(sizeof(shfunc));
+    n = slalloc(sizeof(shfunc));
     if (!n)
       return;
     n->name = strdup_(name);
@@ -163,10 +162,10 @@ setalias(const char *restrict name, const char *restrict val)
   alias *a;
 
   if ((a = findalias(name))) {
-    free(a->value);
+    slfree(a->value);
     a->value = strdup_(val);
   } else {
-    if (!(a = malloc(sizeof(alias))))
+    if (!(a = slalloc(sizeof(alias))))
       return;
     a->name = strdup_(name);
     a->value = strdup_(val);
@@ -191,9 +190,9 @@ rmfunc(const char *name)
     if (f->name[0] == name[0])
       if (strcmp(f->name, name) == 0) {
         *prev = f->next;
-        free(f->name);
+        slfree(f->name);
         free_tree(f->body);
-        free(f);
+        slfree(f);
         return;
       }
     prev = &f->next;
@@ -216,9 +215,9 @@ rmalias(const char *name)
     if (a->name[0] == name[0])
       if (strcmp(a->name, name) == 0) {
         *prev = a->next;
-        free(a->name);
-        free(a->value);
-        free(a);
+        slfree(a->name);
+        slfree(a->value);
+        slfree(a);
         return;
       }
     prev = &a->next;
@@ -255,8 +254,8 @@ aliascmd(char **args)
     n = strndup_(args[1], strlen(args[1]) - strlen(delem));
     v = strdup_(delem + 1);
     setalias(n, v);
-    free(n);
-    free(v);
+    slfree(n);
+    slfree(v);
   }
 
   return 0;

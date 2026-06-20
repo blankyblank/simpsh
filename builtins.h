@@ -2,7 +2,7 @@
 #ifndef BUILTIN_H
 #define BUILTIN_H
 
-#define BUILTIN_BUCKETS 32
+#define BUILTIN_BUCKETS 64
 
 extern const char *builtins[];
 extern int (* const builtin_funcs[])(char **);
@@ -20,6 +20,7 @@ extern int exitcmd(char **);
 extern int falsecmd(char **);
 extern int helpcmd(char **);
 extern int pwdcmd(char **);
+extern int readcmd(char **);
 extern int returncmd(char **);
 extern int truecmd(char **);
 extern int umaskcmd(char **);

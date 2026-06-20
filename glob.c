@@ -12,6 +12,8 @@
 
 #define GLOB_CAP 64
 
+// BUG: something is breaking globbing. * works but *.c doesn't (or anything besides * by itself)
+
 int
 ismetachar(const char *str, size_t len)
 {
@@ -20,7 +22,7 @@ ismetachar(const char *str, size_t len)
     char c;
     size_t s, e;
 
-    size_t dlm = simd_scan_delim(str + pos, len - pos, "*?[", 3);
+    size_t dlm = sscndelim(str + pos, len - pos, "*?[", 3);
     if (dlm >= len - pos) 
       break;
 
@@ -34,7 +36,7 @@ ismetachar(const char *str, size_t len)
     if (s < len && (str[s] == '!' || str[s] == '^'))
       s++;
     if (s < len) {
-      e = simd_scan_delim(str + s, len - s, "]", 1);
+      e = sscndelim(str + s, len - s, "]", 1);
       if (e < len - s)
         return 1;
     }

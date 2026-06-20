@@ -226,7 +226,6 @@ exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
   return grab_str(tlen);
 }
 
-
 char *
 exp_tilde(char *restrict word, size_t s, size_t *restrict e, size_t *restrict olen)
 {
@@ -264,7 +263,7 @@ expand_ps1(char *p)
 {
   size_t i, varlen, cbrace, flen;
   char *s, *val = NULL;
-  char f[4096], vcpy[256];
+  static char f[4096], vcpy[256];
 
   if (!p)
     return NULL;
@@ -346,15 +345,25 @@ expand_ps1(char *p)
       }
 
       if (val) {
-        for (s = val; *s; s++)
+        for (s = val; *s; s++) {
+          if (flen >= sizeof(f) - 1) {
+            nts(f, sizeof(f) - 1);
+            goto done;
+          }
           f[flen++] = *s;
+        }
       }
       i += varlen;
     } else {
+      if (flen >= sizeof(f) - 1) {
+        nts(f, sizeof(f) - 1);
+        goto done;
+      }
       f[flen++] = p[i++];
     }
   }
   f[flen] = '\0';
+done:
   s = st_alloc(flen + 1);
   memcpy(s, f, flen + 1);
   return s;
@@ -430,10 +439,10 @@ expand_argv(wf **args, size_t *restrict t)
 __attribute__((hot)) wf *
 exp_word(wf *wordf, size_t * restrict rlen)
 {
-  size_t end = 0, len = 0;
+  size_t len = 0;
   size_t i;
   wf *f, *head = NULL, *tail = NULL;
-  char *expanded, buf[16];
+  char buf[16];
 
   for (f = wordf; f; f = f->next) {
     char *val = NULL;
@@ -447,9 +456,12 @@ exp_word(wf *wordf, size_t * restrict rlen)
         break;
       case QNONE:
         i = 0;
+        char *expanded;
         while (i < f->len) {
+          size_t end = 0;
           if (f->word[i] == '~') {
             size_t elen = 0;
+            end = 0, 
             expanded = exp_tilde(f->word, i, &end, &elen);
             if (expanded) {
               append_wf(&head, &tail, expanded, elen, f->qs);

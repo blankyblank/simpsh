@@ -6,18 +6,18 @@
 typedef int shvar_flags;
 typedef struct shvar shvar;
 struct shvar {
-  char *var;
-  size_t nlen;
-  size_t flen;
-  shvar_flags flags;
-  void (*func)(const char *);
+  char *var;                  /* Name=value */
+  size_t nlen;                /* name lenght */
+  size_t flen;                /* full length */
+  shvar_flags flags;          /* VEXPRT | VREADONLY | VUNSET */
+  void (*func)(const char *); /* callback func */
 };
 
 typedef struct tmp_var {
   char *name;
   char *val;
   shvar_flags oldflags;
-  int set;
+  int set; /* was it already set? */
 } tmp_var;
 
 enum {
@@ -32,8 +32,6 @@ enum {
 #define VAR_CACHE_S 64
 
 #define shvar_val(v) ((v)->var + (v)->nlen + 1)
-// XXX: probably just remove the namelen macro
-#define shvar_namelen(v) ((v)->nlen)
 #define findvar(v) findvar_n(v, strlen(v))
 
 extern shvar *var_tab;

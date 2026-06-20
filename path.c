@@ -36,8 +36,9 @@ setchash(const char *restrict n, const char *restrict p)
       return;
 
   if (chashn >= CHASH_MAX) {
-    free(chash[CHASH_MAX - 1].name);
-    free(chash[CHASH_MAX - 1].path);
+    slfree(chash[CHASH_MAX - 1].name);
+    slfree(chash[CHASH_MAX - 1].path);
+    chashn = CHASH_MAX - 1;
   }
     memmove(&chash[1], &chash[0], chashn * sizeof(cmdent));
     chash[0].name = strdup_(n);
@@ -51,8 +52,8 @@ rmchash(const char *unused)
 {
   (void)unused;
   for (size_t i = 0; i < chashn; i++) {
-    free(chash[i].name);
-    free(chash[i].path);
+    slfree(chash[i].name);
+    slfree(chash[i].path);
   }
   chashn = 0;
 }
@@ -70,7 +71,7 @@ tildepath(const char *restrict s, size_t dirlen, size_t *restrict seg)
   if (lseg == 1 || (lseg == dirlen && dirlen == 1)) {
     hm = getvar("HOME");
   } else {
-    char tildbuf[PATH_MAX];
+    static char tildbuf[PATH_MAX];
     nmemcpy(tildbuf, s + 1, lseg - 1);
     hm = homedir(tildbuf);
   }
@@ -84,8 +85,9 @@ char *
 chkpath(const char *restrict path, const char *restrict name, int mode, unsigned int cdmode)
 {
   size_t flen, seg;
-  char *e, buf[PATH_MAX], expbuf[PATH_MAX];
+  static char buf[PATH_MAX], expbuf[PATH_MAX];
   const char *s;
+  char *e;
   struct stat statbuf;
 
   flen = strlen(name);
@@ -113,6 +115,8 @@ chkpath(const char *restrict path, const char *restrict name, int mode, unsigned
       }
     }
 
+    // BUG: stack overflow find way to resturcture to continue
+    //
     end = mempcpy_(buf, comp, complen);
     *end++ = '/';
     memcpy(end, name, flen + 1);
@@ -174,7 +178,7 @@ hashcmd(char **argv)
       flags |= FLAG_r;
       break;
     default:
-      bad_opt(sh_argv0, argv0, ARGC());
+      bad_opt(argv0, ARGC());
       return 1;
   }
   ARGEND

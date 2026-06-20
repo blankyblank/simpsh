@@ -47,6 +47,7 @@ extern char *sh_ppid_s; /* the shell's ppid */
 extern char *sh_bgpid_s; /* the last background processes pid */
 extern int alloc_sh_argv; /* if sh_argv was alloced */
 extern char *home;
+extern size_t homelen;
 
 extern char histfile[256];
 #endif /* !MAIN_H */

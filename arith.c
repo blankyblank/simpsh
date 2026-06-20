@@ -100,7 +100,7 @@ next_tok(void)
   char c;
 
   if (alen > 0) {
-    skip = simd_skip_spaces(ap, alen);
+    skip = sskipspace(ap, alen);
     ap += skip;
     alen -= skip;
   }
@@ -140,7 +140,7 @@ next_tok(void)
 
   if (isalpha_(ap[0]) || ap[0] == '_') {
     size_t pos;
-    pos = simd_scan_word(ap, alen);
+    pos = sscnword(ap, alen);
     aname = ap;
     anlen = pos;
     ap += pos;

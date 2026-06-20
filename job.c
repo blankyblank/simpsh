@@ -19,7 +19,6 @@
 pid_t sh_pgid;
 job *job_list;
 struct termios sh_termios;
-static int njn = 1; /* next job num */
 
 /* string for printing job status */
 static const char * const jstates[] = { "Running", "Stopped", "Done" };
@@ -29,8 +28,9 @@ static job *findjob(const char *);
 job *
 newjob(pid_t pgid, const char *cmd)
 {
+  static int njn = 1; /* next job num */
   job *nj;
-  nj = malloc(sizeof(job));
+  nj = slalloc(sizeof(job));
   if (!nj)
     return NULL;
   nj->pgid = pgid;
@@ -63,8 +63,8 @@ rmjob(job *j)
     p = &(*p)->next;
   if (*p)
     *p = n;
-  free(j->cmd);
-  free(j);
+  slfree(j->cmd);
+  slfree(j);
   return n;
 }
 

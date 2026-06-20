@@ -53,6 +53,7 @@ typedef enum {
   TWHILE,
   TUNTIL,
   TFOR,
+  TIN,
   TDO,
   TDONE,
 } token;

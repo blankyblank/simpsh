@@ -112,7 +112,7 @@ setopts(char *arg, int n, char *argv0)
         xflag = n;
         break;
       default:
-        bad_opt(sh_argv0, argv0, arg[i]);
+        bad_opt(argv0, arg[i]);
         return -1;
     }
     i++;
@@ -164,8 +164,8 @@ freeshargv(void)
 {
   if (alloc_sh_argv) {
     for (int i = 0; i < sh_argc; i++)
-      free(sh_argv[i]);
-    free(sh_argv);
+      slfree(sh_argv[i]);
+    slfree(sh_argv);
   }
   sh_argv = NULL;
   sh_argc = 0;
@@ -244,7 +244,7 @@ setcmd(char **argv)
 
     if (pparams) {
       if (!pos)
-        pos = malloc(argc * sizeof(char *));
+        pos = slalloc(argc * sizeof(char *));
       pos[pcnt++] = strdup_(arg);
       continue;
     }
@@ -252,7 +252,7 @@ setcmd(char **argv)
     if (arg[0] != '-' && arg[0] != '+') {
       pparams = 1;
       if (!pos)
-        pos = malloc(argc * sizeof(char *));
+        pos = slalloc(argc * sizeof(char *));
       pos[pcnt++] = strdup_(arg);
       continue;
     }
@@ -289,7 +289,7 @@ setcmd(char **argv)
 
   if (pparams) {
     if (!pos)
-      pos = malloc(argc * sizeof(char *));
+      pos = slalloc(argc * sizeof(char *));
     pos[pcnt] = NULL;
     freeshargv();
     alloc_sh_argv = 1;
@@ -297,15 +297,15 @@ setcmd(char **argv)
     sh_argc = pcnt;
   } else {
     if (pos)
-      free(pos);
+      slfree(pos);
   }
   return 0;
 
 err:
   if (pos) {
     for (int j = 0; j < pcnt; j++)
-      free(pos[j]);
-    free(pos);
+      slfree(pos[j]);
+    slfree(pos);
   }
   return 1;
 }

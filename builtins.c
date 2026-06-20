@@ -14,6 +14,7 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "alloc.h"
 #include "arg.h"
 #include "builtins.h"
 #include "env.h"
@@ -22,6 +23,7 @@
 #include "main.h"
 #include "opts.h"
 #include "path.h"
+#include "simd.h"
 #include "simpsh.h"
 #include "test.h"
 #include "utils.h"
@@ -48,6 +50,7 @@ const char *builtins[] = {
   "jobs",
   "local",
   "pwd",
+  "read",
   "readonly",
   "return",
   "set",
@@ -75,6 +78,7 @@ int (* const builtin_funcs[])(char **) = {
   &jobscmd,
   &localcmd,
   &pwdcmd,
+  &readcmd,
   &readonlycmd,
   &returncmd,
   &setcmd,
@@ -221,16 +225,16 @@ dotcmd(char **argv)
     o_argv0 = strdup_(sh_argv0);
     sh_argv0 = strdup_(file);
 
-    o_argv = malloc(sizeof(char *) * (o_argc + 1));
+    o_argv = slalloc(sizeof(char *) * (o_argc + 1));
     for (int i = 0; i < o_argc; i++)
       o_argv[i] = strdup_(sh_argv[i]);
     o_argv[o_argc] = NULL;
     if (alloc_sh_argv && sh_argv) {
       for (int i = 0; i < o_argc; i++)
-        free(sh_argv[i]);
-      free(sh_argv);
+        slfree(sh_argv[i]);
+      slfree(sh_argv);
     }
-    sh_argv = malloc(sizeof(char *) * (argc + 1));
+    sh_argv = slalloc(sizeof(char *) * (argc + 1));
     size_t j = 0;
     for (size_t i = 2; argv[i]; i++)
       sh_argv[j++] = strdup_(argv[i]);
@@ -244,12 +248,12 @@ dotcmd(char **argv)
 restore:
   if (o_argv) {
     for (size_t i = 0; sh_argv[i]; i++)
-      free(sh_argv[i]);
-    free(sh_argv);
+      slfree(sh_argv[i]);
+    slfree(sh_argv);
     sh_argv = o_argv;
   }
   if (o_argv0) {
-    free(sh_argv0);
+    slfree(sh_argv0);
     sh_argv0 = o_argv0;
   }
   if (o_argc)
@@ -267,6 +271,7 @@ cdcmd(char **argv)
   char flag = '\0', respath[PATH_MAX];
   const char *dir;
   shvar *pwd, *oldpwd, *cdpth;
+  size_t destlen = 0;
 
   prnt = 0;
   array_len(argv, argc);
@@ -280,7 +285,7 @@ cdcmd(char **argv)
       flag = FLAG_P;
       break;
     default:
-      bad_opt(sh_argv0, argv0, ARGC());
+      bad_opt(argv0, ARGC());
       return 1;
   }
   ARGEND;
@@ -317,19 +322,24 @@ cdcmd(char **argv)
 
   if (!dir) {
     dest = home;
+    destlen = homelen;
   } else if (*dir == '-' && dir[1] == '\0') {
     if (!oldpwd) {
       shwarnx(bargv0, "OLDPWD not set"); /*NOLINT*/
       return 1;
     } else {
       dest = shvar_val(oldpwd);
+      destlen = oldpwd->flen;
       prnt = 1;
     }
   } else {
     dest = (char *)dir;
+    destlen = strlen(dest);
   }
 
   if (flag == FLAG_P) {
+    if (destlen >= PATH_MAX)
+      nts(respath, destlen - 1);
     if (!realpath(dest, respath)) {
       sherr(1, bargv0, dest);
     }
@@ -388,7 +398,7 @@ echocmd(char *argv[])
       nf = FLAG_N;
       break;
     default:
-      bad_opt(sh_argv0, argv0, ARGC());
+      bad_opt(argv0, ARGC());
       return 1;
   }
   ARGEND;
@@ -431,9 +441,9 @@ execcmd(char **argv)
 fail:
   perror(argv[0]);
   if (env) {
-    free(env);
+    slfree(env);
   }
-  free(fullpath);
+  slfree(fullpath);
   return 1;
 }
 
@@ -457,6 +467,7 @@ exitcmd(char **argv)
     }
     exnum = atoi_(argv[1]);
   }
+  slclear();
   _exit(exnum);
 }
 
@@ -501,7 +512,7 @@ pwdcmd(char **argv)
       flag = FLAG_P;
       break;
     default:
-      bad_opt(sh_argv0, argv0, ARGC());
+      bad_opt(argv0, ARGC());
       return 1;
   }
   ARGEND;
@@ -535,6 +546,142 @@ physical:
     warn("pwd");
     return 1;
   }
+}
+
+#define rfl 1 << 0
+#define pfl 1 << 1
+
+int
+readcmd(char **argv)
+{
+  size_t argc = 0;
+  int flag = 0;
+  char *prompt = NULL;
+
+  array_len(argv, argc);
+  ARGBEGIN
+  {
+    case 'r':
+      flag |= rfl;
+      break;
+    case 'p':
+      flag |= pfl;
+      prompt = EARGF(no_opt(argv0, ARGC()));
+      break;
+    default:
+      bad_opt(argv0, ARGC());
+      return 1;
+  }
+  ARGEND;
+  if (!argc) {
+    shwarn_arg(argv0, "1", "requires variable name");
+    return 1;
+  }
+
+  stmark rmark;
+  int c, status = 0;
+  size_t len = 0, ifslen, cleft, nws = 0;
+  char *ifs = NULL;
+  char ifsws[4],  *line, *p;
+
+  setinputf(STDIN_FILENO, 1);
+  rmark = stack_mark();
+
+  if ((flag & pfl)) {
+    fputs(prompt, stderr);
+    fflush(stderr);
+  }
+  while ((c = shgetchar())) {
+    switch (c) {
+      case SHEOF:
+        status = 1;
+        goto rend;
+      case '\0':
+        continue;
+      case '\\':
+        if ((c = shgetchar()) == SHEOF) {
+          status = 1;
+          goto rend;
+        }
+        if (flag & rfl) {
+          st_putc('\\'), st_putc(c), len += 2;
+        } else if (c == '\n') {
+          continue;
+        } else {
+          st_putc(c), len++;
+          continue;
+        }
+      case '\n':
+        goto rend;
+      default:
+        st_putc(c), len++;
+    }
+  }
+rend:
+  popinput();
+  if (status) {
+    stack_restore(rmark);
+    return 1;
+  }
+
+
+  line = grab_str(len);
+  ifs = getvar("IFS");
+  if (!ifs) {
+    ifs = " \t\n";
+    ifsws[0] = ' ';
+    ifsws[1] = '\t';
+    ifsws[2] = '\n';
+    ifslen = nws = 3;
+  } else {
+    ifslen = strlen(ifs);
+    if (memchr_(ifs, ifslen, ' ') < ifslen)
+      ifsws[nws++] = ' ';
+    if (memchr_(ifs, ifslen, '\t') < ifslen)
+      ifsws[nws++] = '\t';
+    if (memchr_(ifs, ifslen, '\n') < ifslen)
+      ifsws[nws++] = '\n';
+  }
+
+  p = line;
+  cleft = len;
+  for (size_t i = 0; argv[i]; i++) {
+    size_t skip;
+
+    skip = sskipdelims(p, cleft, ifsws, nws);
+    p += skip, cleft -= skip;
+
+    if (!cleft) {
+      for (size_t j = i; argv[j]; j++)
+        setvar(argv[j], "", 0);
+      break;
+    }
+    if (!argv[i + 1]) {
+      setvar(argv[i], st_strndup(p, cleft), 0);
+      break;
+    }
+    skip = sscndelim(p, cleft, ifs, ifslen);
+    setvar(argv[i], st_strndup(p, skip), 0);
+    p += skip, cleft -= skip;
+
+    if (cleft > 0) {
+      int isws = 0;
+      for (size_t j = 0; j < nws; j++)
+        if (*p == ifsws[j]) {
+          isws = 1;
+          break;
+        }
+      if (isws) {
+        skip = sskipdelims(p, cleft, ifsws, nws);
+        p += skip, cleft -= skip;
+      } else {
+        p++, cleft--;
+      }
+    }
+  }
+
+  stack_restore(rmark);
+  return status;
 }
 
 int
@@ -583,7 +730,7 @@ umaskcmd(char **argv)
       symb = 1;
       break;
     default:
-      bad_opt(sh_argv0, argv0, ARGC());
+      bad_opt(argv0, ARGC());
       return 1;
   }
   ARGEND
@@ -625,7 +772,7 @@ umaskcmd(char **argv)
       mode_t val = 0;
 
       for (int i = 0; argv[0][i]; i++) {
-        char c = argv[0][i];
+        int c = argv[0][i];
         if (c < '0' || c > '7') {
           shwarn_arg(argv0, argv[0], "octal number out of range");
           return 1;

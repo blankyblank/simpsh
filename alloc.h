@@ -5,18 +5,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* clang-format off */
-#define SHELL_SIZE (sizeof(union {int i; char *cp; double d; }) - 1)
-/* clang-format on */
-#define align_mem(n) (((n) + sizeof(void *) - 1) & ~(sizeof(void *) - 1))
+/* so far 8000 for minstack_s seems pretty good for performance, but it seems
+ * large which can have it's own drawbacks test more sized */
+#define align_mem(n) (((n) + 15) & ~15)
 #define MINSTACK_S align_mem(8192)
-/* so far 8000 seems pretty good for performance, but it seems large which can have it's own drawbacks
- * test more sized */
-/**  set mark to reset allocator back to  */
-#define stack_mark() ((stmark){ current, stnext, stleft })
-/** stack allocated strdup */
-#define st_strdup(s) (st_strndup(s, strlen(s)))
+#define SLCLASSN 9
+#define MINSLAB align_mem(4096)
+#define stack_mark() ((stmark) { current, stnext, stleft })
+#define st_strdup(s) (st_strndup(s, strlen(s))) /** stack allocated strdup */
 #define st_putc(c) (void)(stleft == 0 ? grow_stack(1) : (void *)0), *stnext++ = (c), stleft--
+
 #define st_write(src, n, len) \
   do { \
     size_t _n = (n); \
@@ -28,31 +26,157 @@
     len += _n; \
   } while (0)
 
-typedef struct stack_seg stack_seg;
-struct stack_seg {
-  stack_seg *prev;
-  char buf[MINSTACK_S];
+#define getclass(n, i) \
+  do { \
+    size_t _n = (size_t)(n); \
+    int _flr = 63 - __builtin_clzll(_n | 1); \
+    int _ceil = _flr + ((_n & (_n - 1)) != 0); \
+    i = _ceil > 4 ? _ceil - 4 : 0; \
+    if (i > 8) \
+      i = 8; \
+  } while (0)
+
+typedef struct chunk chunk;
+typedef struct stackseg stackseg;
+typedef struct slab slab;
+
+struct chunk {
+  chunk *next;
+  size_t size;
 };
 
+struct stackseg {
+  stackseg *prev;
+  char _pad[8];
+  char buf[MINSTACK_S + 16];
+};
 typedef struct {
-  stack_seg *current;
+  stackseg *current;
   char *next;
   size_t stleft;
 } stmark;
 
+struct slab {
+  slab *next;  /* list for free lookup (linked list) */
+  size_t stsz; /* slot size */
+  void *flist; /* free list */
+  void *p;     /* current position pointer in slot */
+  void *end;   /* beginning of guard page */
+};
+
+typedef struct {
+  size_t stsz;
+  size_t sbsz;
+  slab *slabs;
+} slclass;
+
+extern slclass slclasses[SLCLASSN];
+
 extern char *stnext;
 extern size_t stleft;
-extern stack_seg stackbase;
-extern stack_seg *current;
+extern stackseg stackbase;
+extern stackseg *current;
 
+void *getchunk(size_t);
+void clearchunk(void);
+void *newslab(int);
+/* stack allocator functions */
 extern void stack_restore(stmark);
 extern void stack_clear(void);
+void *st_addseg(size_t);
 extern void *grow_stack(size_t);
 extern void init_stack(void);
-extern void stunalloc(void *p);
+extern void stunalloc(void *);
+/* slab allocator functions */
+extern void slclear(void);
+
+static chunk *freelist;
+
+static inline void
+putchunk(void *p)
+{
+  chunk *c = (chunk *)((char *)p - sizeof(chunk));
+  c->next = freelist;
+  freelist = c;
+}
+
+static inline void *
+slalloc(size_t n)
+{
+  int i;
+  slclass *c;
+  slab *s;
+  void *p;
+
+  if (n >= MINSLAB) {
+    if (!(p = getchunk(align_mem(n))))
+      return NULL;
+    return p;
+  }
+  getclass(n, i);
+
+  c = &slclasses[i];
+  if (!c->slabs) {
+    c->slabs = newslab(i);
+    if (!c->slabs)
+      return NULL;
+  }
+
+  for (;;) {
+    s = c->slabs;
+    if (s->flist) {
+      p = s->flist;
+      s->flist = *(void **)s->flist;
+      return p;
+    }
+    if ((char *)s->p + s->stsz <= (char *)s->end) {
+      p = s->p;
+      s->p = (char *)s->p + s->stsz;
+      return p;
+    }
+    s = newslab(i);
+    if (!s)
+      return NULL;
+  }
+}
+
+static inline void
+slfree(void *p)
+{
+  if (!p)
+    return;
+  for (size_t i = 0; i < SLCLASSN; i++) {
+    for (slab *s = slclasses[i].slabs; s; s = s->next) {
+      if ((char *)p >= (char *)s + sizeof(slab) && (char *)p < (char *)s->end) {
+        *(void **)p = s->flist;
+        s->flist = p;
+        return;
+      }
+    }
+  }
+  putchunk(p);
+}
+
+/**  allocate new stack block  */
+static inline __attribute__((always_inline)) void *
+st_alloc(size_t dsize)
+{
+  size_t pad;
+  size_t asize = align_mem(dsize);
+  if (__builtin_expect(asize >= stleft, 0))
+    return st_addseg(asize);
+
+  pad = (-(size_t)stnext) & (sizeof(void *) - 1);
+  stnext += pad;
+  stleft -= pad;
+  char *rp = stnext;
+  stnext += asize;
+  stleft -= asize;
+  return rp;
+}
 
 /**  grab string from arena  */
-static inline char *
+static inline __attribute__((always_inline)) char *
 grab_str(size_t len)
 {
   if (len >= stleft)
@@ -64,49 +188,8 @@ grab_str(size_t len)
   return start;
 }
 
-static inline void *
-st_grow(size_t asize)
-{
-  size_t need = asize < MINSTACK_S ? MINSTACK_S : asize;
-  size_t len = sizeof(stack_seg) - MINSTACK_S + need;
-  stack_seg *nseg = malloc(len);
-  if (!nseg)
-    return NULL;
-  nseg->prev = current;
-  stnext = nseg->buf;
-  stleft = need;
-  current = nseg;
-  char *rp = stnext;
-  stnext += asize;
-  stleft -= asize;
-  return rp;
-}
-
-/**  allocate new stack block  */
-static inline __attribute__((always_inline)) void *
-st_alloc(size_t dsize)
-{
-  size_t pad;
-  size_t asize = align_mem(dsize);
-  if (__builtin_expect(asize >= stleft, 0))
-   return  st_grow(asize);
-
-  pad = (-(size_t)stnext) & (sizeof(void *) - 1);
-  if (pad > stleft) {
-    stnext = grow_stack(asize);
-    if (!stnext)
-      return NULL;
-  }
-  stnext += pad;
-  stleft -= pad;
-  char *rp = stnext;
-  stnext += asize;
-  stleft -= asize;
-  return rp;
-}
-
 /** stack allocated strndup */
-__attribute__((always_inline)) static inline char *
+static inline __attribute__((always_inline)) char *
 st_strndup(const char *s, size_t len)
 {
   char *d;
@@ -115,5 +198,4 @@ st_strndup(const char *s, size_t len)
   d[len] = '\0';
   return d;
 }
-
 #endif /* !ALLOC_H */

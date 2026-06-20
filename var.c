@@ -1,8 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <err.h>
+#include <emmintrin.h>
 #include <limits.h>
-#include <linux/limits.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +15,7 @@
 #include "main.h"
 #include "opts.h"
 #include "path.h"
+#include "simd.h"
 #include "utils.h"
 #include "var.h"
 
@@ -27,7 +28,6 @@ size_t var_tab_size = VAR_BUCKETS_INIT;
 size_t var_count;
 tmp_var localvars[LOCAL_MAX];
 size_t localsp;
-
 
 void
 resize_var_tab(void)
@@ -52,7 +52,7 @@ resize_var_tab(void)
   }
 
   if (var_tab != var_tab_init)
-    free(var_tab);
+    slfree(var_tab);
   var_tab = n;
   var_tab_size = ns;
   memset(var_cache, 0, sizeof(var_cache));
@@ -69,17 +69,16 @@ findvar_n(const char *restrict name, size_t nlen)
   ci = bucket & (VAR_CACHE_S - 1);
   cv = var_cache[ci];
   if (cv && cv->var && cv->var != TOMBSTONE && cv->nlen == nlen &&
-      memcmp(cv->var, name, nlen) == 0)
+      smemcmp(cv->var, name, nlen)) {
     return cv;
+  }
 
   end = var_tab + var_tab_size;
   v = var_tab + bucket;
   for (;;) {
     if (!v->var)
       return NULL;
-    if (v->var != TOMBSTONE && v->nlen == nlen &&
-        memcmp(v->var, name, nlen) == 0) {
-      var_cache[ci] = v;
+    if (v->var != TOMBSTONE && v->nlen == nlen && smemcmp(v->var, name, nlen)) {
       return v;
     }
     if (++v >= end)
@@ -113,7 +112,7 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
     if (v->var == TOMBSTONE) {
       if (!n)
         n = v;
-    } else if (v->nlen == nlen && memcmp(v->var, name, nlen) == 0) {
+    } else if (v->nlen == nlen) {
       if (v->flags & VREADONLY)
         return;
       if (v->flen >= flen) {
@@ -122,7 +121,7 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
         else
           v->var[nlen + 1] = '\0';
       } else {
-        if (!(nvar = malloc(flen)))
+        if (!(nvar = slalloc(flen)))
           return;
         memcpy(nvar, name, nlen);
         nvar[nlen] = '=';
@@ -130,7 +129,7 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
           memcpy(nvar + nlen + 1, val, vlen + 1);
         else
           nvar[nlen + 1] = '\0';
-        free(v->var);
+        slfree(v->var);
         v->var = nvar;
         v->nlen = nlen;
         v->flen = flen;
@@ -144,7 +143,7 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
       v = var_tab;
   }
 
-  if (!(nvar = malloc(flen)))
+  if (!(nvar = slalloc(flen)))
     return;
   memcpy(nvar, name, nlen);
   nvar[nlen] = '=';
@@ -167,8 +166,9 @@ setvar(char *restrict name, char *restrict val, shvar_flags flags)
     v = var_tab + hash_n(name, nlen, var_tab_size);
     for (;;) {
       if (v->var && v->var != TOMBSTONE && v->nlen == nlen &&
-          memcmp(v->var, name, nlen) == 0)
+          smemcmp(v->var, name, nlen)) {
         break;
+      }
       if (++v >= end)
         v = var_tab;
     }
@@ -198,8 +198,8 @@ rmvar(const char *name)
     if (!v->var)
       return;
     if (v->var != TOMBSTONE && v->nlen == nlen &&
-        memcmp(v->var, name, nlen) == 0) {
-      free(v->var);
+        smemcmp(v->var, name, nlen)) {
+      slfree(v->var);
       v->var = TOMBSTONE;
       v->nlen = 0;
       v->flags = 0;
@@ -240,11 +240,10 @@ grabvar(char *name)
 char **
 rebuild_env(char **sh_env)
 {
-  size_t c, sh_c, j, len, arrsize;
-  size_t lenarr[MAX_ENV], tmplen[MAX_ENV], skipc;
-  char *buf, *tmpname[MAX_ENV], *shadowed[MAX_ENV];
+  static size_t tmplen[MAX_ENV], lenarr[MAX_ENV];
+  size_t c, sh_c, j, len, skipc;
+  static char *tmpname[MAX_ENV], *shadowed[MAX_ENV];
   char **arr, **cmd_env, **mem;
-
 
   cmd_env = NULL;
   c = 0;
@@ -256,6 +255,8 @@ rebuild_env(char **sh_env)
   if (sh_env) {
     array_len(sh_env, sh_c);
     for (size_t i = 0; i < sh_c; i++) {
+      if (c >= MAX_ENV)
+        break;
       char *eq;
       lenarr[c] = strlen(sh_env[i]) + 1;
       eq = strchrnul_(sh_env[i], '=');
@@ -272,11 +273,12 @@ rebuild_env(char **sh_env)
     if (!v->var || v->var == TOMBSTONE)
       continue;
     if (v->flags & VEXPRT) {
+      if (c >= MAX_ENV)
+        break;
       namelen = v->nlen;
       skip = 0;
       for (size_t s = 0; s < sh_c; s++) {
-        if (namelen == tmplen[s] &&
-            (memcmp(v->var, tmpname[s], namelen)) == 0) {
+        if (namelen == tmplen[s] && smemcmp(v->var, tmpname[s], namelen)) {
           shadowed[skipc++] = v->var;
           skip = 1;
           break;
@@ -289,11 +291,11 @@ rebuild_env(char **sh_env)
     }
   }
 
-  arrsize = (c + 1) * sizeof(char *);
-  if (!(mem = malloc(arrsize + (len + 1))))
+  size_t arrsize = (c + 1) * sizeof(char *);
+  if (!(mem = slalloc(arrsize + (len + 1))))
     return NULL;
   cmd_env = (char **)mem;
-  buf = (char *)mem + arrsize;
+  char *buf = (char *)mem + arrsize;
   arr = cmd_env;
 
   if (sh_env) {
@@ -345,7 +347,7 @@ build_env(char **sh_env)
 
   env = rebuild_env(NULL);
   if (env) {
-    free(env_cache);
+    slfree(env_cache);
     env_cache = env;
     env_dirty = 0;
   }
@@ -368,8 +370,8 @@ init_env(void)
     char *name, *val;
     read_assn(environ[i], &name, &val);
     setvar(name, val, VEXPRT);
-    free(name);
-    free(val);
+    slfree(name);
+    slfree(val);
   }
 
   if ((p = findvar_n("PATH", 4)))
@@ -381,9 +383,9 @@ init_env(void)
   ifs->func = ifsupdt;
   ifsupdt(shvar_val(ifs));
 
-  sh_pid_s = malloc(16);
-  sh_bgpid_s = malloc(16);
-  sh_ppid_s = malloc(16);
+  sh_pid_s = slalloc(16);
+  sh_bgpid_s = slalloc(16);
+  sh_ppid_s = slalloc(16);
   if (!sh_pid_s || !sh_bgpid_s || !sh_ppid_s) {
     warn("malloc failed");
     exit(1);
@@ -404,6 +406,7 @@ init_env(void)
   setvar("PPID", sh_ppid_s, VREADONLY);
   setvar("SHLVL", shlvl_s, VEXPRT);
   home = getenv("HOME");
+  homelen = strlen(home);
 }
 
 int
@@ -429,8 +432,8 @@ exportcmd(char **args)
       } else {
         read_assn(args[i], &name, &val);
         setvar(name, val, VEXPRT);
-        free(name);
-        free(val);
+        slfree(name);
+        slfree(val);
       }
     }
   }
@@ -489,8 +492,8 @@ readonlycmd(char **argv)
       } else {
         read_assn(argv[i], &name, &val);
         setvar(name, val, VREADONLY);
-        free(name);
-        free(val);
+        slfree(name);
+        slfree(val);
       }
     }
   }
@@ -522,7 +525,7 @@ unsetcmd(char **argv)
       flag = FUNC;
       break;
     default:
-      bad_opt(sh_argv0, argv0, ARGC());
+      bad_opt(argv0, ARGC());
       return 1;
   }
   ARGEND

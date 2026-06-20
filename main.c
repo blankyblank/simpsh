@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <locale.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #ifdef READLINE
   #include <readline/history.h>
@@ -38,6 +39,7 @@ char *sh_ps4;
 char **sh_argv;
 int alloc_sh_argv = 0;
 char *home;
+size_t homelen;
 int lstatus;
 int retval = 0;
 int retnow = 0;
@@ -110,7 +112,9 @@ main(int argc, char **argv)
       break;
     case 'V':
       Vflag = 1;
+#ifndef MUSL
       getbuildinfo();
+#endif /* ifndef MUSL */
       exit(0);
       break;
     case 'x':
@@ -128,6 +132,7 @@ main(int argc, char **argv)
   /* set up shell variables then */
   /* set up builtin table then */
   /* set up input layer then */
+  // if (strcmp("C", getenv("LC_COLLATE")))
   setlocale(LC_ALL, "");
   init_stack();
   init_env();

@@ -85,8 +85,6 @@ static const unsigned char *ctx_tables[] = {
   [M_SQUOTE] = sqchars,
 };
 
-static tokmode ctx_stack[CTX_MAX] = { M_NORMAL };
-static int ctx_depth;
 static wf *get_wf(int);
 
 
@@ -171,8 +169,11 @@ get_wf(int c)
     indq = (1 << 1),
     esc = (1 << 2),
   };
+
+  static int ctx_depth;
+  static tokmode ctx_stack[CTX_MAX] = { M_NORMAL };
   char n, n2, *w;
-  size_t len, cmdsubd, cmdlen;
+  size_t len,  cmdlen;
   wf *head = NULL;
   wf *tail = NULL;
   wf_chunk = NULL;
@@ -180,21 +181,19 @@ get_wf(int c)
   len = 0;
 
   for (;;) {
-    if (current_ctx == M_NORMAL &&
-        ctx_tables[current_ctx][(unsigned char)c] == C_WORD) {
+    if (current_ctx == M_NORMAL && nchars[(unsigned char)c] == C_WORD) {
       size_t avail;
       const char *buf;
       size_t pos;
 
       if ((avail = shpeek(&buf)) >= 16) {
-        if ((pos = simd_scan_word(buf, avail)) > 0) {
+        if ((pos = sscnword(buf, avail)) > 0) {
           if (stleft < pos)
             grow_stack(pos);
           st_putc(c);
           len++;
           memcpy(stnext, buf, pos);
-          stnext += pos;
-          stleft -= pos;
+          stnext += pos, stleft -= pos;
           len += pos;
           shadvance(pos);
           if ((c = eatbnl()) == SHEOF)
@@ -249,13 +248,13 @@ get_wf(int c)
           n2 = eatbnl();
           if (n2 == '(') {
             /* $(()) */
-            char arbuf[4096];
+            static char arbuf[4096];
             size_t arlen;
             int depth;
             struct {
               size_t pos;
               int depth;
-            } arstack[8];
+            } arstack[MAX_ARITH];
             int arsp = 0;
 
             flushword(&head, &tail, w, len,
@@ -279,9 +278,11 @@ get_wf(int c)
               } else if (ch == '$') {
                 if ((n = shgetchar()) == '(') {
                   if ((n2 = shgetchar()) == '(') {
-                    arstack[arsp].pos = arlen;
-                    arstack[arsp].depth = depth;
-                    arsp++;
+                    if (arsp < MAX_ARITH) {
+                      arstack[arsp].pos = arlen;
+                      arstack[arsp].depth = depth;
+                      arsp++;
+                    }
                     depth = 0;
                     goto startarith;
                   }
@@ -341,7 +342,7 @@ get_wf(int c)
 
           /* $() */
           int cstate;
-          cmdsubd = 1;
+          size_t cmdsubd = 1;
           cstate = 0;
           cmdlen = 0;
           flushword(&head, &tail, w, len,
@@ -597,7 +598,7 @@ tokenize(void)
           const char *buf;
           size_t avail = shpeek(&buf);
           if (avail >= 16) {
-            size_t skip = simd_skip_spaces(buf, avail);
+            size_t skip = sskipspace(buf, avail);
             if (skip > 0)
               shadvance(skip);
           }
@@ -612,7 +613,7 @@ tokenize(void)
             avail = shpeek(&buf);
             if (!avail)
               break;
-            pos = simd_scan_delim(buf, avail, "\n", 1);
+            pos = sscndelim(buf, avail, "\n", 1);
             if (pos > 0)
               shadvance(pos);
             if (pos < avail)
@@ -630,7 +631,7 @@ tokenize(void)
           size_t avail;
           while ((avail = shpeek(&buf)) > 0) {
             size_t skip;
-            skip = simd_skip_nl(buf, avail);
+            skip = sskipnl(buf, avail);
             shinpt->linenum += skip;
             if (skip > 0)
               shadvance(skip);
@@ -700,7 +701,7 @@ tokenize(void)
           shinpt->linenum++;
           continue;
         }
-        if (c != SHEOF)
+        if (n != SHEOF)
           shungetc(n);
       /* falls through */
       default:
@@ -741,6 +742,7 @@ tokenize(void)
                   break;
                 case 'i':
                   KEYW(f, "if", TIF);
+                  KEYW(f, "in", TIN);
                   break;
                 case 'f':
                   KEYW(f, "fi", TFI);

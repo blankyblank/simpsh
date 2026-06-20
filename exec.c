@@ -181,7 +181,7 @@ findbuiltin(char *args)
 {
   size_t idx;
   idx = hash(args, BUILTIN_BUCKETS);
-  for (; builtin_tab[idx] >= 0; idx = (idx + 1) % BUILTIN_BUCKETS)
+  for (; builtin_tab[idx] >= 0; idx = (idx + 1) & (BUILTIN_BUCKETS - 1))
     if (builtins[builtin_tab[idx]][0] == args[0] &&
         strcmp(builtins[builtin_tab[idx]], args) == 0)
       return builtin_tab[idx];
@@ -505,7 +505,7 @@ run_cmdsub(const cmd_tree *n)
   int wstatus, ret, pipefd[2];
   pid_t pid;
   sigset_t old;
-  char buf[MINSTACK_S];
+  static char buf[MINSTACK_S];
   size_t len;
 
   if (!n)
@@ -763,7 +763,7 @@ run_cmd(const cmd_tree *n, int inchld)
       if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
         return 1;
     if (vars && vars[0]) {
-      tmp_var tmp[MAX_TMP_VARS];
+      static tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; vars[i]; i++) {
         char *name, *val;
         st_read_assn(xpnd(vars[i]), &name, &val);
@@ -802,7 +802,7 @@ run_cmd(const cmd_tree *n, int inchld)
     else
       status = shfexec(final, n, env, predir);
     if (evars)
-      free(env);
+      slfree(env);
   }
   if (CNEG(n))
     status = !status;

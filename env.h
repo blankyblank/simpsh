@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "alloc.h"
 #include "parse.h"
 
 typedef struct alias alias;
@@ -46,9 +47,9 @@ free_wf(wf *f)
 {
   if (!f)
     return;
-  free(f->word);
+  slfree(f->word);
   free_wf(f->next);
-  free(f);
+  slfree(f);
 }
 
 static inline void
@@ -59,7 +60,7 @@ free_redir(redir *r)
     tmp = r;
     r = r->next;
     free_wf(tmp->name);
-    free(tmp);
+    slfree(tmp);
   }
   return;
 }
@@ -70,11 +71,13 @@ redirdup(redir *s)
   redir *n;
   if (!s)
     return NULL;
-  n = malloc(sizeof(redir));
+  n = slalloc(sizeof(redir));
   n->fd = s->fd;
   n->name = wfdup(s->name);
   n->type = s->type;
   n->next = redirdup(s->next);
+  n->heredoc = NULL;
+  n->heredoc_next = NULL;
   return n;
 }
 
@@ -88,44 +91,44 @@ free_tree(cmd_tree *n)
     case OP:
       free_tree(n->left);
       free_tree(n->right);
-      free(n);
+      slfree(n);
       break;
     case SUBSHELL:
       free_tree(n->left);
-      free(n);
+      slfree(n);
       break;
     case FUNC:
       free_wf(CARGS(n)[0]);
-      free(CARGS(n));
+      slfree(CARGS(n));
       free_tree(n->left);
-      free(n);
+      slfree(n);
       break;
     case REDIR:
       free_redir(CREDR(n));
       free_tree(n->left);
-      free(n);
+      slfree(n);
       break;
     case WHILE:
       free_tree(n->left);
       free_tree(n->right);
-      free(n);
+      slfree(n);
       break;
     case IF:
       free_tree(n->left);
       free_tree(n->right);
       free_tree(CELSE(n));
-      free(n);
+      slfree(n);
       break;
     case CMD:
       for (size_t i = 0; CARGS(n)[i]; i++)
         free_wf(CARGS(n)[i]);
-      free(CARGS(n));
+      slfree(CARGS(n));
       if (CVARS(n)) {
         for (size_t i = 0; CVARS(n)[i]; i++)
           free_wf(CVARS(n)[i]);
-        free(CVARS(n));
+        slfree(CVARS(n));
       }
-      free(n);
+      slfree(n);
       break;
     default:
       return;
