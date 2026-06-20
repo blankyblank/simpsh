@@ -3,19 +3,24 @@ CC := gcc
 BUILD       ?= release
 # debug | release | sanitize | valgrind | profile
 BUILD_LINK  ?= dynamic
-# dynamic | static
+# dynamic | static | static-musl
 READLINE    := y
 # set to anything to enable, unset to disable
+GCOV := y
+# Build mode presets
 
 # Compiler flags
 CFLAGS  := --std=c99 -I. -Wall -Wextra -pedantic -pipe
 LDFLAGS :=
 LDLIBS  :=
 
-# Build mode presets
 ifeq ($(BUILD),release)
 	CFLAGS += -march=native -O2 -flto=auto
 # -D_FORTIFY_SOURCE=3
+endif
+ifdef GCOV
+	CFLAGS += --coverage -fno-lto
+	LDFLAGS += --coverage
 endif
 ifeq ($(BUILD),debug)
 	CFLAGS += -D_FORTIFY_SOURCE=3 -Og -g3 -fno-omit-frame-pointer
@@ -53,7 +58,6 @@ ifeq ($(BUILD),sanitize)
 endif
 endif
 ifeq ($(BUILD),valgrind)
-	# just use gcc for valgrind
 	CC := gcc
 	CFLAGS += -Og -g3 -ggdb -fno-omit-frame-pointer -DDEBUG -DENABLE_VALGRIND
 	# callgrind flags
@@ -70,20 +74,28 @@ ifeq ($(BUILD),profile)
 		LDFLAGS += -fprofile-instr-generate
   endif
 endif
-# ifeq ($(BUILD),analyze)
-# 	CC := clang
-# 	CFLAGS += -Og -g3 --analyze -Xanalyzer
-# endif
 # Link type
+ifeq ($(BUILD_LINK),static-musl)
+	CLANG_RESOURCE_DIR := $(shell clang -print-resource-dir)
+	LDFLAGS += -static
+endif
 ifeq ($(BUILD_LINK),static)
 	LDFLAGS += -static
 endif
 # Readline
 ifdef READLINE
 	CFLAGS += -DREADLINE
-	LDLIBS += -lreadline
+	ifneq ($(BUILD_LINK),static)
+		ifneq ($(BUILD_LINK),static-musl)
+			LDLIBS += -lreadline
+		endif
+	endif
+  ifeq ($(BUILD_LINK),static-musl)
+		CFLAGS +=  -DMUSL
+		LDLIBS += -lreadline -lhistory -lncurses
+  endif
   ifeq ($(BUILD_LINK),static)
-		LDLIBS += -lncurses
+		LDLIBS += -lreadline -lncurses
   endif
 endif
 
@@ -124,4 +136,4 @@ examine:
 test:
 	cd tests && ./runtests.sh
 bench:
-	hyperfine './simpsh tests/bench.sh'
+	hyperfine --warmup 4 './simpsh tests/bench.sh'
