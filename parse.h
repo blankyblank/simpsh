@@ -62,6 +62,7 @@ enum {
 #define COPP(n) ((n)->t.op.op_t)
 #define CREDR(n) ((n)->t.redir.redirs)
 #define CFUNC(n) ((n)->t.func.name)
+#define CFOR(n) ((n)->t.for_)
 #define CNEG(n) ((n)->flags & NEG)         /* check if NEGATE set */
 #define CSAFE(n) ((n)->flags & EFLAG_SAFE) /* check if NEGATE set */
 #define CELSE(n) ((n)->t.if_.else_)

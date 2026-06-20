@@ -1,4 +1,5 @@
 /* parse.c - parser functions */
+#include "var.h"
 #define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
 #include <string.h>
@@ -31,6 +32,7 @@ static int get_assn(wf **, wf *** restrict);
 static cmd_tree *parse_group(void);
 static cmd_tree *parse_func(void);
 static cmd_tree *parse_cmd(void);
+static cmd_tree *parse_for(void);
 static cmd_tree *parse_while(token);
 static cmd_tree *parse_if(void);
 static cmd_tree *parse_simple_cmd(size_t);
@@ -103,6 +105,19 @@ newoppnode(token opp_t, cmd_tree *l, cmd_tree *r)
   n->right = r;
   n->flags = 0;
   /* opp tree doesn't have a command stored and doesn't use the ! opperator */
+  return n;
+}
+
+static inline cmd_tree *
+newfornode(wf *name, wf **words, cmd_tree *body)
+{
+  cmd_tree *n;
+    n = st_alloc(sizeof(cmd_tree));
+  n->type = FOR;
+  CFOR(n).name = name;
+  CFOR(n).words = words;
+  n->right = body;
+  n->flags = 0;
   return n;
 }
 
@@ -346,6 +361,58 @@ done:
 }
 
 cmd_tree *
+parse_for(void)
+{
+  cmd_tree  *body, *n;
+  size_t wc, cap;
+  wf *name, **words;
+  sh_tok t;
+
+  words = NULL;
+  wc = 0;
+  cap = 0;
+  chkwd |= CHKALIAS | CHKKWD;
+  t = tokenize();
+  if (t.type != TWORD)
+    return NULL;
+  name = t.cmd;
+
+  t = tokenize();
+  if (t.type == TIN) {
+    cap = 8;
+    chkwd = (chkwd & ~CHKALIAS) | CHKNL;
+    words = st_alloc(cap * sizeof(wf *));
+    for (;;) {
+      t = tokenize();
+      if (t.type != TWORD)
+        break;
+      if (wc >= cap) {
+        cap *= 2;
+        wf **new = st_alloc(cap * sizeof(wf *));
+        memcpy(new, words, wc * sizeof(wf *));
+        words = new;
+      }
+      words[wc++] = t.cmd;
+    }
+    words[wc] = NULL;
+  }
+  if (t.type == TSEMI) {
+    t = tokenize();
+    if (t.type != TDO)
+      return NULL;
+  }
+
+  if (!(body = parse_list(TDONE)))
+    return NULL;
+  t = tokenize();
+  if (t.type != TDONE)
+    return NULL;
+  n = newfornode(name, words, body);
+  chkwd |= CHKALIAS | CHKKWD;
+  return n;
+}
+
+cmd_tree *
 parse_while(token tok)
 {
   cmd_tree *condition, *body, *n;
@@ -536,7 +603,6 @@ parse_cmd(void)
   sh_tok t;
   int op;
 
-  
   for (;;) {
     l = NULL;
     neg = 0;
@@ -560,6 +626,10 @@ parse_cmd(void)
       case TWHILE:
       case TUNTIL:
         if (!(l = parse_while(t.type)))
+          return NULL;
+        break;
+      case TFOR:
+        if (!(l = parse_for()))
           return NULL;
         break;
       case TLP: /* subsh */
