@@ -157,6 +157,17 @@ slfree(void *p)
   putchunk(p);
 }
 
+static inline void
+*slcalloc(size_t n, size_t size) {
+    void *p;
+    size_t total = n * size;
+    if ((p = slalloc(total))) {
+        if (total < MINSLAB)
+            memset(p, 0, total);
+    }
+    return p;
+}
+
 /**  allocate new stack block  */
 static inline __attribute__((always_inline)) void *
 st_alloc(size_t dsize)
@@ -167,6 +178,11 @@ st_alloc(size_t dsize)
     return st_addseg(asize);
 
   pad = (-(size_t)stnext) & (sizeof(void *) - 1);
+  if (pad > stleft) {
+    stnext = grow_stack(asize);
+    if (!stnext)
+      return NULL;
+  }
   stnext += pad;
   stleft -= pad;
   char *rp = stnext;

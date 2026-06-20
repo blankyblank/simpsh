@@ -113,6 +113,16 @@ free_tree(cmd_tree *n)
       free_tree(n->right);
       slfree(n);
       break;
+    case FOR:
+      free_tree(n->right);
+      if (CFOR(n).words) {
+        for (size_t i = 0; CFOR(n).words[i]; i++)
+          free_wf(CFOR(n).words[i]);
+        slfree(CFOR(n).words);
+      }
+      free_wf(CFOR(n).name);
+      slfree(n);
+      break;
     case IF:
       free_tree(n->left);
       free_tree(n->right);

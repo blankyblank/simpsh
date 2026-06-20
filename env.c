@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "alloc.h"
 #include "env.h"
 #include "lex.h"
 #include "main.h"
@@ -65,6 +66,22 @@ tree_dup(cmd_tree *s)
     case WHILE:
       n->left = tree_dup(s->left);
       n->right = tree_dup(s->right);
+      break;
+    case FOR:
+      {
+        size_t wrdc = 0;
+        n->right = tree_dup(s->right);
+        CFOR(n).name = wfdup(CFOR(s).name);
+        if (CFOR(s).words) {
+          array_len(CFOR(s).words, wrdc);
+          CFOR(n).words = slalloc((wrdc + 1) * sizeof(wf *));
+          for (size_t i = 0; CFOR(s).words[i]; i++)
+            CFOR(n).words[i] = wfdup(CFOR(s).words[i]);
+          CFOR(n).words[wrdc] = NULL;
+        } else {
+          CFOR(n).words = NULL;
+        }
+      }
       break;
     case IF:
       n->left = tree_dup(s->left);

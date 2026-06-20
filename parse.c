@@ -377,6 +377,7 @@ parse_for(void)
     return NULL;
   name = t.cmd;
 
+  chkwd |= CHKALIAS | CHKKWD;
   t = tokenize();
   if (t.type == TIN) {
     cap = 8;
@@ -398,6 +399,8 @@ parse_for(void)
     if (!wc)
       return NULL;
   }
+
+  chkwd |= CHKALIAS | CHKKWD;
   if (t.type == TSEMI) {
     t = tokenize();
     if (t.type != TDO)
@@ -406,6 +409,7 @@ parse_for(void)
 
   if (!(body = parse_list(TDONE)))
     return NULL;
+  chkwd |= CHKALIAS | CHKKWD;
   t = tokenize();
   if (t.type != TDONE)
     return NULL;

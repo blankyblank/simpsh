@@ -5,7 +5,6 @@
 #include <fcntl.h>
 #include <stddef.h>
 #include <stdio.h>
-// #include <stdnoreturn.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -55,6 +54,7 @@ static int shfexec(char **restrict, const cmd_tree *restrict, char **restrict, r
 static pid_t forkrun(sigset_t *, int);
 static int run_if(const cmd_tree *);
 static int run_while(const cmd_tree *);
+static int run_for(const cmd_tree *);
 static int run_func(const cmd_tree *restrict, char **restrict);
 static int run_pipe(const cmd_tree *);
 static int run_bg(const cmd_tree *);
@@ -329,6 +329,37 @@ run_if(const cmd_tree *n)
     return run_commands(CELSE(n), 0);
   else
     return status;
+}
+
+static int
+run_for(const cmd_tree *n)
+{
+  int status;
+  size_t wrdc;
+  stmark f;
+  char **wrdv;
+
+  status = 0;
+  wrdc = 0;
+  if (CFOR(n).words) {
+    wrdv = expand_argv(CFOR(n).words, &wrdc);
+  } else {
+    wrdc = sh_argc;
+    wrdv = st_alloc((wrdc + 1) * sizeof(char *));
+    for (size_t i = 0; i < wrdc; i++)
+      wrdv[i] = st_strdup(sh_argv[i]);
+    wrdv[wrdc] = NULL;
+  }
+
+  for (size_t i = 0; wrdv[i]; i++) {
+    if (retnow)
+      break;
+    f = stack_mark();
+    setvar(CFOR(n).name->word, wrdv[i], 0);
+    status = run_commands(n->right, 0);
+    stack_restore(f);
+  }
+  return status;
 }
 
 static int
@@ -876,6 +907,8 @@ run_commands(const cmd_tree *n, int nchld)
       return lstatus = run_redir(n, nchld);
     case WHILE:
       return lstatus = run_while(n);
+    case FOR:
+      return lstatus = run_for(n);
     case IF:
       return lstatus = run_if(n);
     case OP:
