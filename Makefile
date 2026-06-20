@@ -6,7 +6,7 @@ BUILD_LINK  ?= dynamic
 # dynamic | static | static-musl
 READLINE    := y
 # set to anything to enable, unset to disable
-GCOV := y
+GCOV :=
 # Build mode presets
 
 # Compiler flags

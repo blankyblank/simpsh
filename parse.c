@@ -395,6 +395,8 @@ parse_for(void)
       words[wc++] = t.cmd;
     }
     words[wc] = NULL;
+    if (!wc)
+      return NULL;
   }
   if (t.type == TSEMI) {
     t = tokenize();

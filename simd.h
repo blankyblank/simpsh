@@ -5,13 +5,15 @@
 #include <stddef.h>
 #include <string.h>
 
+/* simd integer. long long */
+typedef __m128i sint;
 /* simd optimized scan to end of word */
 static inline size_t
 sscnword(const char *buf,size_t len)
 {
-  __m128i input, ge_lo, le_hi;
-  __m128i classmask, wordmask, delimmask, allones;
-  __m128i lv_a, hv_z, lv_A, hv_Z, lv_0, hv_9, v_u;
+  sint input, ge_lo, le_hi;
+  sint classmask, wordmask, delimmask, allones;
+  sint lv_a, hv_z, lv_A, hv_Z, lv_0, hv_9, v_u;
   int mask;
   size_t i;
 
@@ -28,7 +30,7 @@ sscnword(const char *buf,size_t len)
     size_t chunk = len - i;
     if (chunk > 16)
       chunk = 16;
-    input = _mm_loadu_si128((const __m128i *)(buf + i));
+    input = _mm_loadu_si128((const sint *)(buf + i));
 
     wordmask = _mm_setzero_si128();
     ge_lo = _mm_cmpgt_epi8(input, lv_a);
@@ -62,8 +64,8 @@ sscnword(const char *buf,size_t len)
 static inline size_t
 sskipspace(const char *buf, size_t len)
 {
-  __m128i input, spacev, tabv, allones;
-  __m128i spacer, tabr, spacem, notspacem;
+  sint input, spacev, tabv, allones;
+  sint spacer, tabr, spacem, notspacem;
   int mask;
   size_t i;
 
@@ -76,7 +78,7 @@ sskipspace(const char *buf, size_t len)
     size_t chunk = len - i;
     if (chunk > 16)
       chunk = 16;
-    input = _mm_loadu_si128((const __m128i *)(buf + i));
+    input = _mm_loadu_si128((const sint *)(buf + i));
     spacer = _mm_cmpeq_epi8(input, spacev);
     tabr = _mm_cmpeq_epi8(input, tabv);
     spacem = _mm_or_si128(spacer, tabr);
@@ -93,7 +95,7 @@ sskipspace(const char *buf, size_t len)
 static inline size_t
 sskipnl(const char *buf, size_t len)
 {
-  __m128i input, nlv, allones, nlr, notnlm;
+  sint input, nlv, allones, nlr, notnlm;
   int mask;
   size_t i;
 
@@ -105,7 +107,7 @@ sskipnl(const char *buf, size_t len)
     size_t chunk = len - i;
     if (chunk > 16)
       chunk = 16;
-    input = _mm_loadu_si128((const __m128i *)(buf + i));
+    input = _mm_loadu_si128((const sint *)(buf + i));
     nlr = _mm_cmpeq_epi8(input, nlv);
     notnlm = _mm_andnot_si128(nlr, allones);
     mask = _mm_movemask_epi8(notnlm);
@@ -121,7 +123,7 @@ sskipnl(const char *buf, size_t len)
 static inline size_t
 sscndelim(const char *restrict buf, size_t len, const char *restrict delims, int ndelims)
 {
-  __m128i input, match, delim_vec;
+  sint input, match, delim_vec;
   int mask, d;
   size_t i;
 
@@ -130,7 +132,7 @@ sscndelim(const char *restrict buf, size_t len, const char *restrict delims, int
     size_t chunk = len - i;
     if (chunk > 16)
       chunk = 16;
-    input = _mm_loadu_si128((const __m128i *)(buf + i));
+    input = _mm_loadu_si128((const sint *)(buf + i));
     match = _mm_setzero_si128();
 
     for (d = 0; d < ndelims; d++) {
@@ -151,7 +153,7 @@ static inline size_t
 sskipdelims(const char *restrict buf, size_t len,
                  const char *restrict delims, int ndelims)
 {
-  __m128i input, match, delim_vec;
+  sint input, match, delim_vec;
   int mask, d;
   size_t i;
 
@@ -160,7 +162,7 @@ sskipdelims(const char *restrict buf, size_t len,
     size_t chunk = len - i;
     if (chunk > 16)
       chunk = 16;
-    input = _mm_loadu_si128((const __m128i *)(buf + i));
+    input = _mm_loadu_si128((const sint *)(buf + i));
     match = _mm_setzero_si128();
 
     for (d = 0; d < ndelims; d++) {
@@ -180,7 +182,7 @@ sskipdelims(const char *restrict buf, size_t len,
 static inline size_t
 memchr_(const char *buf, size_t len, char c)
 {
-  __m128i input, target, cmp;
+  sint input, target, cmp;
   int mask;
   size_t i;
 
@@ -190,7 +192,7 @@ memchr_(const char *buf, size_t len, char c)
     size_t chunk = len - i;
     if (chunk > 16)
       chunk = 16;
-    input = _mm_loadu_si128((const __m128i *)(buf + i));
+    input = _mm_loadu_si128((const sint *)(buf + i));
     cmp = _mm_cmpeq_epi8(input, target);
     mask = _mm_movemask_epi8(cmp);
     mask &= (1 << chunk) - 1;
@@ -208,8 +210,8 @@ smemcmp(const char *restrict a, const char *restrict b, size_t nlen)
     0x1FF, 0x3FF, 0x7FF, 0xFFF, 0x1FFF, 0x3FFF, 0x7FFF, 0xFFFF
   };
 
-  __m128i va = _mm_loadu_si128((const __m128i *)a);
-  __m128i vb = _mm_loadu_si128((const __m128i *)b);
+  sint va = _mm_loadu_si128((const sint *)a);
+  sint vb = _mm_loadu_si128((const sint *)b);
   int m = _mm_movemask_epi8(_mm_cmpeq_epi8(va, vb));
   int bitmask = _eq_msk[nlen > 16 ? 16 : nlen];
   if ((m & bitmask) != bitmask)
