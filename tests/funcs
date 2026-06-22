@@ -11,7 +11,7 @@ msg_res() {
 }
 
 msg_run() {
-  printf "\trunning: %s...\n" "$@"
+  printf "\trunning: %s...\n" "$1"
 }
 
   # bold/green
