@@ -1,18 +1,16 @@
 /* simpsh.c - functions for running the shell */
-
 #define _POSIX_C_SOURCE 200809L
-#include <err.h>
-#include <setjmp.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <string.h>
 #include <unistd.h>
 #ifdef READLINE
 #include <readline/history.h>
 #include <readline/readline.h>
 #else
-#include <errno.h>
 #include "utils.h"
 #endif /* ifdef READLINE */
 
@@ -23,38 +21,18 @@
 #include "lex.h"
 #include "main.h"
 #include "parse.h"
+#include "sig.h"
 #include "simpsh.h"
 #include "var.h"
+#include "utils.h"
 
-static int inp;
+static char *nxtline;
 #ifdef READLINE
 #define DIRPERMS S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH
 static int pmkdir(char *);
-static inline void handle_interrupt(stmark);
-static int bg_notify(void);
 #endif /* ifdef READLINE */
 
 
-
-static inline void
-handle_interrupt(stmark base)
-{
-  if (intsig)
-    intsig = 0;
-#ifdef READLINE
-  rl_free_line_state();
-  rl_cleanup_after_signal();
-  rl_set_signals();
-#endif /* ifdef READLINE */
-  killjob();
-  tcsetpgrp(STDIN_FILENO, sh_pgid);
-  if (inp) {
-    inp = 0;
-    popinput();
-  }
-  stack_restore(base);
-  putchar('\n');
-}
 
 #ifndef MUSL
 void
@@ -65,6 +43,29 @@ getbuildinfo(void) {
          sh_argv0, __DATE__, __TIME__, __STDC_ISO_10646__);
 }
 #endif /* ifndef MUSL */
+
+static inline void
+stdin_cb(void *data)
+{
+  (void)data;
+#ifdef READLINE
+  rl_callback_read_char();
+#else
+  char buf[4096];
+  ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
+  if (n > 0) {
+    char *nl = memchr(buf, '\n', n);
+    if (nl)
+      *nl = '\0';
+    else
+      buf[n] = '\0';
+    nxtline = st_strdup(buf);
+    stopeventloop(&el);
+  } else if (!n) {
+    stopeventloop(&el);
+  }
+#endif /* READLINE */
+}
 
 void
 simpsh_run(void)
@@ -93,13 +94,15 @@ simpsh_run(void)
     }
     stack_restore(mark);
     last_tok = SHTOK(TNONE);
-    if (ndreap) {
-      ndreap = 0;
-      killjob();
-    }
+    runeventloop(&el, 0);
+    killjob();
     if (ndnotify) {
       ndnotify = 0;
       jobnotify();
+    }
+    if (intsig) {
+      intsig = 0;
+      // putchar('\n');
     }
   }
 }
@@ -250,12 +253,14 @@ read_cmd(char **restrict cmd, size_t *restrict len)
   lines[n] = '\n';
   lines[n + 1] = '\0';
   lineslen = n + 1;
+#ifdef READLINE
   free(line);
-  
+#endif /* READLINE */
+
   mark = stack_mark();
   while (need_more(lines, lineslen)) {
     stack_restore(mark);
-    
+
     line = lineread("> ");
     if (!line)
       return -1;
@@ -270,13 +275,15 @@ read_cmd(char **restrict cmd, size_t *restrict len)
     memcpy(new + lineslen, line, n);
     new[lineslen + n] = '\n';
     new[lineslen + n + 1] = '\0';
+#ifdef READLINE
     free(line);
+#endif /* READLINE */
     lines = new;
     lineslen += n + 1;
     if (!lines)
       return -1;
   }
-  
+
   *cmd = lines;
   *len = lineslen;
   return 1;
@@ -286,7 +293,7 @@ int
 sh_interactive(void)
 {
   char *lines;
-  stmark mark, base;
+  stmark mark;
   size_t lineslen;
   int r;
 
@@ -296,80 +303,90 @@ sh_interactive(void)
   if (tty) {
     setbuf(tty, NULL); /* unbuffered */
     rl_outstream = tty;
-    rl_event_hook = bg_notify;
   }
 #endif /* ifdef READLINE */
 
   for (;;) {
-    base = stack_mark();
-    if (sigsetjmp(linejmp, 1)) {
-      handle_interrupt(base);
-      continue;
-    }
     ttyreclaim();
-    if (ndreap) {
-      ndreap = 0;
-      killjob();
-    }
+    runeventloop(&el, 0);
+    killjob();
     if (ndnotify || !bflag) {
       ndnotify = 0;
       jobnotify();
     }
     ndnotify = 0;
+    if (intsig) {
+      intsig = 0;
+      putchar('\n');
+    }
     mark = stack_mark();
-    
+
     r = read_cmd(&lines, &lineslen);
     if (r == 0) {
-        if (Iflag && iflag) {
-          clearerr(stdin);
-          if ((write(STDOUT_FILENO, "\nUse \"exit\" to leave the shell \n", 33)) < 0)
-            err(1, "write");
-          continue;
-        }
-        break;
-      clearerr(stdin);
+      if (Iflag && iflag) {
+        clearerr(stdin);
+        if ((write(STDOUT_FILENO, "\nUse \"exit\" to leave the shell \n", 33)) < 0)
+          err(1, "write");
+        stack_restore(mark);
+        continue;
+      }
       stack_restore(mark);
-      continue;
+      break;
     } else if (r < 0) {
       stack_restore(mark);
       return 1;
     }
 
     setinputstrn(lines, (int)lineslen);
-    inp = 1;
     simpsh_run();
-    inp = 0;
-    #ifdef READLINE
+#ifdef READLINE
     append_history(1, histfile);
-    #endif /* ifdef READLINE */
+#endif /* READLINE */
     popinput();
     stack_restore(mark);
   }
+  ttyrestore();
   return lstatus;
 }
 
 #ifdef READLINE
-static int
-bg_notify(void)
+
+static inline void
+handle_line(char *line)
 {
-  if (ndnotify) {
-    ndnotify = 0;
-    jobnotify();
-    rl_on_new_line_with_prompt();
-    rl_redisplay();
-  }
-  return 0;
+  nxtline = line;
+  rl_callback_handler_remove();
+  stopeventloop(&el);
 }
 
 /** read line from interactive shell */
 char *
 lineread(char *prompt)
 {
-    char *line;
-    line = readline(prompt);
-    if (line && *line)
-        add_history(line);
-    return line;
+  addeventloop(&el, STDIN_FILENO, POLLIN, stdin_cb, NULL);
+  rl_already_prompted = 1;
+  rl_callback_handler_install(prompt, handle_line);
+  rl_redisplay();
+  nxtline = NULL;
+  el.running = 1;
+  while (el.running) {
+    runeventloop(&el, -1);
+    if (intsig) {
+      intsig = 0;
+      putchar('\n');
+      rl_free_line_state();
+      rl_cleanup_after_signal();
+      rl_already_prompted = 1;
+      rl_callback_handler_install(prompt, handle_line);
+      rl_redisplay();
+      nxtline = NULL;
+      el.running = 1;
+    }
+  }
+  rmeventloop(&el, STDIN_FILENO);
+  if (nxtline && *nxtline)
+    add_history(nxtline);
+  return nxtline;
 }
 
 /** initialize history */
@@ -418,33 +435,26 @@ pmkdir(char *path)
 char *
 lineread(char *prompt)
 {
-  char buf[4096];
+  addeventloop(&el, STDIN_FILENO, POLLIN, stdin_cb, NULL);
   fputs(prompt, stdout);
   fflush(stdout);
-  for (;;) {
-    if (!fgets(buf, sizeof(buf), stdin)) {
-      if (errno == EINTR) {
-        clearerr(stdin);
-        if (ndreap) {
-          ndreap = 0;
-          killjob();
-        }
-        if (ndnotify) {
-          ndnotify = 0;
-          jobnotify();
-          fputs(prompt, stdout);
-          fflush(stdout);
-        }
-        continue;
-      }
-      return NULL;
+  nxtline = NULL;
+  el.running = 1;
+
+  while (el.running) { 
+    runeventloop(&el, -1);
+    if (intsig) {
+      intsig = 0;
+      putchar('\n');
+      fputs(prompt, stdout);
+      fflush(stdout);
+      nxtline = NULL;
+      el.running = 1;
+      continue;
     }
-    break;
   }
-  size_t len = strlen(buf);
-  if (len > 0 && buf[len - 1] == '\n')
-    buf[len - 1] = '\0';
-  return strdup_(buf);
+  rmeventloop(&el, STDIN_FILENO);
+  return nxtline;
 }
 #endif /* ifdef READLINE */
 

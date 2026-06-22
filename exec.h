@@ -5,6 +5,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <sys/wait.h>
+#include <sys/poll.h>
+#include <signal.h>
 
 #include "job.h"
 #include "parse.h"
@@ -33,7 +35,7 @@ extern int run_cmdsub(const cmd_tree *);
     return 1; \
   }
 
-static inline  int
+static inline int
 _wait_(pid_t pid)
 {
   int wstatus;
@@ -41,13 +43,13 @@ _wait_(pid_t pid)
     waitpid(pid, &wstatus, 0);
   } else {
     for (;;) {
+      if (waitpid(pid, &wstatus, WNOHANG) > 0)
+        break;
+      runeventloop(&el, -1);
       if (intsig) {
         intsig = 0;
         kill(pid, SIGINT);
       }
-      if (waitpid(pid, &wstatus, WNOHANG) > 0)
-        break;
-      sigsuspend(&emptyset);
     }
   }
   return WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
@@ -57,14 +59,13 @@ static inline int
 fgwait(job *j)
 {
   int wstatus, wsig;
-  sigset_t old;
 
   while (j->state == JRUN) {
+    runeventloop(&el, -1);
     if (intsig) {
       intsig = 0;
       kill(-j->pgid, SIGINT);
     }
-    sigsuspend(&emptyset);
     killjob();
   }
 
@@ -84,9 +85,7 @@ fgwait(job *j)
   j->flags &= ~(JFG | JCHANGED);
   wsig = WIFSIGNALED(j->wstatus) ? WTERMSIG(j->wstatus) : 0;
   wstatus = WIFEXITED(j->wstatus) ? WEXITSTATUS(j->wstatus) : 1;
-  job_lock(&old);
   rmjob(j);
-  job_unlock(&old);
   if (wsig == SIGINT)
     putchar('\n');
   return wstatus;

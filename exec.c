@@ -51,7 +51,7 @@ static int save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
 static __attribute__((noreturn)) void shexec(char **restrict, char **restrict, redir *);
 static int shfexec(char **restrict, const cmd_tree *restrict, char **restrict, redir *);
-static pid_t forkrun(sigset_t *, int);
+static pid_t forkrun(int);
 static int run_if(const cmd_tree *);
 static int run_while(const cmd_tree *);
 static int run_for(const cmd_tree *);
@@ -216,18 +216,15 @@ save_fd(redir *r, fdlist *sfd, size_t * restrict sfdc)
 }
 
 static pid_t
-forkrun(sigset_t *old, int bg)
+forkrun(int bg)
 {
   pid_t pid;
 
-  job_lock(old);
   switch (pid = fork()) {
     case -1:
       perror("fork");
-      job_unlock(old);
       return -1;
     case 0:
-      job_unlock(old);
       if (bg)
         child_setup_bg();
       else
@@ -279,7 +276,6 @@ static int
 shfexec(char **restrict args, const cmd_tree *restrict n, char **restrict env, redir *r)
 {
   pid_t pid;
-  sigset_t old;
   char *fullpath;
 
   /* get full command path */
@@ -289,15 +285,12 @@ shfexec(char **restrict args, const cmd_tree *restrict n, char **restrict env, r
     return 1;
   }
 
-  job_lock(&old);
   pid = fork();
   switch (pid) {
     case -1:
       perror("failed to create");
-      job_unlock(&old);
       return 1;
     case 0:
-      job_unlock(&old);
       child_setup_fg(0);
       shexec(args, env, r);
     /* fall through */
@@ -309,11 +302,9 @@ shfexec(char **restrict args, const cmd_tree *restrict n, char **restrict env, r
         j = newjob(pid, bg_cmd(n));
         j->flags |= JFG;
         startjob(pid);
-        job_unlock(&old);
         return fgwait(j);
       }
       /* no job control */
-      job_unlock(&old);
       return _wait_(pid);
   }
 }
@@ -354,6 +345,10 @@ run_for(const cmd_tree *n)
   for (size_t i = 0; wrdv[i]; i++) {
     if (retnow)
       break;
+    if (intsig) {
+      intsig = 0;
+      return 130;
+    }
     f = stack_mark();
     setvar(CFOR(n).name->word, wrdv[i], 0);
     status = run_commands(n->right, 0);
@@ -371,6 +366,10 @@ run_while(const cmd_tree *n)
   for (;;) {
     if (retnow)
       break;
+    if (intsig) {
+      intsig = 0;
+      return 130;
+    }
     w = stack_mark();
     cond = run_commands(n->left, 0);
     if ((n->flags & UNTIL) ? cond == 0 : cond != 0)
@@ -449,11 +448,10 @@ static int
 run_bg(const cmd_tree *n)
 {
   pid_t pid;
-  sigset_t sigold;
   job *j;
   int status;
 
-  switch (pid = forkrun(&sigold, 1)) {
+  switch (pid = forkrun(1)) {
     case -1:
       return 1;
     case 0:
@@ -464,7 +462,6 @@ run_bg(const cmd_tree *n)
       if (mflag)
         setpgid(pid, pid);
       j = newjob(pid, bg_cmd(n->left));
-      job_unlock(&sigold);
       jobmsg(j);
       return run_commands(n->right, 0);
   }
@@ -476,7 +473,6 @@ run_subsh(const cmd_tree *n, int chld)
   int status;
   int efl, ifl, mfl;
   pid_t pid;
-  sigset_t old;
 
   if (!n->left) {
     fprintf(stderr, "empty subshell\n");
@@ -494,7 +490,7 @@ run_subsh(const cmd_tree *n, int chld)
   efl = eflag;
   ifl = iflag;
 
-  switch (pid = forkrun(&old, 0)) {
+  switch (pid = forkrun(0)) {
     case -1:
       return 1;
     case 0:
@@ -512,7 +508,6 @@ run_subsh(const cmd_tree *n, int chld)
         j = newjob(pid, bg_cmd(n));
         j->flags |= JFG;
         startjob(pid);
-        job_unlock(&old);
         status = fgwait(j);
         if (CNEG(n))
           status = !status;
@@ -520,7 +515,6 @@ run_subsh(const cmd_tree *n, int chld)
           exit(status);
         return status;
       }
-      job_unlock(&old);
       status = _wait_(pid);
       if (CNEG(n))
         status = !status;
@@ -535,17 +529,14 @@ run_cmdsub(const cmd_tree *n)
 {
   int wstatus, ret, pipefd[2];
   pid_t pid;
-  sigset_t old;
   static char buf[MINSTACK_S];
   size_t len;
 
   if (!n)
     return -1;
-  job_lock(&old);
   pipefd[0] = pipefd[1] = -1;
   if (pipe(pipefd) < 0) {
     perror("pipe");
-    job_unlock(&old);
     ret = -1;
     goto cleanup;
   }
@@ -553,12 +544,10 @@ run_cmdsub(const cmd_tree *n)
   pid = fork();
   switch (pid) {
     case -1:
-      job_unlock(&old);
       warn("fork");
       ret = -1;
       goto cleanup;
     case 0:
-      job_unlock(&old);
       if (close(pipefd[0]) < 0)
         perror("close");
       if (dup2(pipefd[1], STDOUT_FILENO) < 0)
@@ -574,7 +563,6 @@ run_cmdsub(const cmd_tree *n)
         int n;
         len = 0;
 
-        job_unlock(&old);
         if (close(pipefd[1]) < 0) {
           perror("close");
           ret = -1;
@@ -632,11 +620,9 @@ run_pipe(const cmd_tree *n)
   static int pipedepth;
   int mfl;
   pid_t lpid, rpid;
-  sigset_t old;
 
   pipedepth++;
   outer = (pipedepth == 1);
-  job_lock(&old);
   mfl = mflag;
 
   if (pipe(pipefd) < 0)
@@ -646,10 +632,8 @@ run_pipe(const cmd_tree *n)
     case -1:
       CLOSEFD(pipefd[0]);
       CLOSEFD(pipefd[1]);
-      job_unlock(&old);
       err(1, "fork");
     case 0:
-      job_unlock(&old);
       child_setup_fg(0);
       CLOSEFD(pipefd[0]);
       DUPFD(pipefd[1], STDOUT_FILENO);
@@ -669,10 +653,8 @@ run_pipe(const cmd_tree *n)
       CLOSEFD(pipefd[1]);
       kill(lpid, SIGTERM);
       waitpid(lpid, NULL, 0);
-      job_unlock(&old);
       err(1, "fork");
     case 0:
-      job_unlock(&old);
       child_setup_fg(lpid);
       CLOSEFD(pipefd[1]);
       DUPFD(pipefd[0], STDIN_FILENO);
@@ -696,11 +678,9 @@ run_pipe(const cmd_tree *n)
     j->status_pid = rpid;
     j->flags |= JFG;
     startjob(lpid);
-    job_unlock(&old);
     status = fgwait(j);
   } else {
     int wstatus;
-    job_unlock(&old);
     if (!mfl) {
       waitpid(rpid, &wstatus, 0);
       waitpid(lpid, &lwstatus, 0);
@@ -709,14 +689,14 @@ run_pipe(const cmd_tree *n)
       status = pipeflag ? (rstatus ? rstatus : lstatus) : rstatus;
     } else {
       for (;;) {
-        if (intsig) {
-          intsig = 0;
-          kill(lpid, SIGINT);
-          kill(rpid, SIGINT);
-        }
         if (waitpid(rpid, &wstatus, WNOHANG) > 0)
           break;
-        sigsuspend(&emptyset);
+        runeventloop(&el, -1);
+        if (intsig) {
+          intsig = 0;
+          kill(rpid, SIGINT);
+          kill(lpid, SIGINT);
+        }
       }
       waitpid(lpid, &lwstatus, 0);
       rstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
@@ -901,6 +881,8 @@ run_commands(const cmd_tree *n, int nchld)
       return lstatus = run_cmd(n, nchld);
     case SUBSHELL:
       return lstatus = run_subsh(n, nchld);
+    case BRACE:
+      return lstatus = run_commands(n->left, nchld);
     case FUNC:
       return lstatus = run_funcdef(n);
     case REDIR:

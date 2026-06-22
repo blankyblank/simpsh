@@ -6,7 +6,6 @@
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
-#include "sig.h"
 
 typedef struct job job;
 struct job {
@@ -50,10 +49,6 @@ extern int bgcmd(char **);
 extern int fgcmd(char **);
 extern int jobscmd(char **);
 
-/* lock job signal */
-#define job_lock(old) sigprocmask(SIG_BLOCK, &sigchldmask, old)
-/* unblock job signal */
-#define job_unlock(old) sigprocmask(SIG_SETMASK, old, NULL)
 #define init_pgrp() sh_pgid = getpgrp()
 
 /* return term back to process group */

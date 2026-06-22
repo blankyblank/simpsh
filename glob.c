@@ -12,8 +12,6 @@
 
 #define GLOB_CAP 64
 
-// BUG: something is breaking globbing. * works but *.c doesn't (or anything besides * by itself)
-
 int
 ismetachar(const char *str, size_t len)
 {

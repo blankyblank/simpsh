@@ -779,7 +779,7 @@ splitword(wf *f, size_t * restrict tlen)
     }
     if (cf->qs != QNONE && cf->qs != QCMDSUB) {
       append_wf(&chead, &ctail, cf->word, cf->len, cf->qs);
-      ttl = cf->len;
+      ttl += cf->len;
     } else if (fpos > s) {
       append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
       ttl += fpos - s;

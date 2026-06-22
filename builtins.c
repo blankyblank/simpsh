@@ -468,7 +468,7 @@ exitcmd(char **argv)
     exnum = atoi_(argv[1]);
   }
   slclear();
-  _exit(exnum);
+  exit(exnum);
 }
 
 int

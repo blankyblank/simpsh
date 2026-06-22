@@ -74,9 +74,6 @@ killjob(void)
   job *j;
   int wstatus;
   pid_t pid;
-  sigset_t old;
-
-  sigprocmask(SIG_BLOCK, &sigchldmask, &old);
 
   for (j = job_list; j; j = j->next) {
     int oldstate;
@@ -115,7 +112,6 @@ killjob(void)
     if (j->state != oldstate)
       j->flags |= JCHANGED;
   }
-  sigprocmask(SIG_SETMASK, &old, NULL);
 }
 
 int
@@ -149,8 +145,6 @@ void
 jobnotify(void)
 {
 job *j;
-  sigset_t old;
-  job_lock(&old);
   killjob();
   for (j = job_list; j; ) {
     if ((j->flags & JCHANGED) && !(j->flags & JFG)) {
@@ -164,7 +158,6 @@ job *j;
       j = j->next;
     }
   }
-  job_unlock(&old);
 }
 
 job *
@@ -242,29 +235,24 @@ bgcmd(char **argv)
 {
   size_t argc = 0;
   job *j;
-  sigset_t old;
 
   array_len(argv, argc);
   if (argc < 2) {
-    job_lock(&old);
     j = findjob(NULL);
     if (!j) {
       shwarnx(argv[0], "no current job"); /*NOLINT*/
       return 1;
     }
     if (kill(-j->pgid, SIGCONT) < 0) {
-      job_unlock(&old);
       err(1, "kill");
     }
     j->state = JRUN;
     j->flags |= JCHANGED;
-    job_unlock(&old);
     jobmsg(j);
     j->flags &= ~JCHANGED;
     return 0;
   } else {
     for (size_t i = 1; i < argc; i++) {
-      job_lock(&old);
       j = findjob(argv[i]);
       if (!j) {
         shwarn_arg(argv[0], argv[i], "no such job"); /*NOLINT*/
@@ -275,12 +263,10 @@ bgcmd(char **argv)
         return 1;
       }
       if (kill(-j->pgid, SIGCONT) < 0) {
-        job_unlock(&old);
         err(1, "kill");
       }
       j->state = JRUN;
       j->flags |= JCHANGED;
-      job_unlock(&old);
       jobmsg(j);
     }
   }
@@ -292,34 +278,27 @@ fgcmd(char **argv)
 {
   size_t argc = 0;
   job *j;
-  sigset_t old;
 
   array_len(argv, argc);
   if (argc < 2) {
-    job_lock(&old);
     j = findjob(NULL);
     if (!j) {
       shwarnx(argv[0], "no current job"); /*NOLINT*/
-      job_unlock(&old);
       return 1;
     }
   } else {
-    job_lock(&old);
     j = findjob(argv[argc - 1]);
     if (!j) {
       shwarn_arg(argv[0], argv[argc - 1], "no such job"); /*NOLINT*/
-      job_unlock(&old);
       return 1;
     }
   }
 
   if (j->state == JDONE) {
     shwarn_arg(argv[0], argv[argc - 1], "job already completed"); /*NOLINT*/
-    job_unlock(&old);
     return 1;
   }
   if (kill(-j->pgid, SIGCONT) != 0) {
-    job_unlock(&old);
     err(1, "kill");
   }
   j->state = JRUN;
@@ -330,12 +309,10 @@ fgcmd(char **argv)
   startjob(j->pgid);
   if (j->state == JSTP) {
     if (kill(-j->pgid, SIGCONT) != 0) {
-      job_unlock(&old);
       err(1, "kill");
     }
     j->state = JRUN;
   }
-  job_unlock(&old);
   return fgwait(j);
 }
 
@@ -344,12 +321,10 @@ jobscmd(char **argv)
 {
   job *j;
   size_t argc = 0;
-  sigset_t old;
 
   j = job_list;
   array_len(argv, argc);
 
-  job_lock(&old);
   if (argc < 2) {
     for (job *t = j; t;) {
       jobmsg(t);
@@ -371,7 +346,6 @@ jobscmd(char **argv)
     }
   }
 
-  job_unlock(&old);
   return 0;
 }
 
