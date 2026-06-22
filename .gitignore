@@ -11,6 +11,7 @@ bak
 fake
 notes.txt
 tests/bench.sh
+tests/forbench.sh
 tests/script-test.sh
 
 .cache/
