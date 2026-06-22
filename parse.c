@@ -647,6 +647,15 @@ parse_cmd(void)
         l = newsubsh(sub, (neg & 1) ? NEG : 0);
         neg = 0;
         break;
+      case TLB:
+        l = st_alloc(sizeof(cmd_tree));
+        l->type = BRACE;
+        l->left = parse_group();
+        if (!l->left)
+          return NULL;
+        l->flags = (neg & 1) ? NEG : 0;
+        neg = 0;
+        break;
       case TTHEN:
       case TELIF:
       case TELSE:

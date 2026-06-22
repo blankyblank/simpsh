@@ -33,6 +33,7 @@ struct cmd_tree {
     OP,
     FUNC,
     SUBSHELL,
+    BRACE,
     REDIR,
     IF,
     WHILE,
