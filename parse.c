@@ -1,5 +1,4 @@
 /* parse.c - parser functions */
-#include "var.h"
 #define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
 #include <string.h>
@@ -25,7 +24,9 @@ static const char tokendlist[] = {
 
 static redir *heredoc_head;
 static redir **heredoc_tail = &heredoc_head;
+#define WFCAP 8
 
+#define gettok(f, t) (chkwd |= (f), (t) = tokenize())
 static void parse_heredoc(void);
 static int is_assn(wf *);
 static int get_assn(wf **, wf *** restrict);
@@ -35,6 +36,7 @@ static cmd_tree *parse_cmd(void);
 static cmd_tree *parse_for(void);
 static cmd_tree *parse_while(token);
 static cmd_tree *parse_if(void);
+static cmd_tree *parse_case(void);
 static cmd_tree *parse_simple_cmd(size_t);
 
 static inline cmd_tree *
@@ -132,6 +134,17 @@ newwhilenode(cmd_tree *restrict cond, cmd_tree *restrict body, token untilt)
   n->flags = (untilt == TUNTIL) ? UNTIL : 0;
   return n;
 }
+static inline cmd_tree *
+newcasenode(wf *word, clause *clauses)
+{
+  cmd_tree *n;
+  n = st_alloc(sizeof(cmd_tree));
+  n->type = CASE;
+  CCASE(n).word = word;
+  CCASE(n).clauses = clauses;
+  n->flags = 0;
+  return n;
+}
 
 static inline cmd_tree *
 newifnode(cmd_tree *restrict cond, cmd_tree *restrict then, cmd_tree *restrict else_)
@@ -210,8 +223,7 @@ parse_list(token s)
   sh_tok t;
   cmd_tree *l, *r;
 
-  chkwd |= CHKALIAS | CHKKWD | (s != TEOF ? CHKNL : 0);
-  t = tokenize();
+  gettok(CHKALIAS | CHKKWD | (s != TEOF ? CHKNL : 0), t);
   if ((s != TEOF && tokendlist[t.type]) || t.type == TEOF || t.type == TNL) {
     if (t.type != TEOF && t.type != s)
       last_tok = t;
@@ -227,12 +239,10 @@ parse_list(token s)
     parse_heredoc();
 
   for (;;) {
-    chkwd |= CHKALIAS | CHKKWD;
-    t = tokenize();
+    gettok(CHKALIAS | CHKKWD, t);
     if (t.type == TSEMI || (t.type == TNL && s != TEOF) || t.type == TBKGRND) {
-      chkwd |= CHKALIAS | CHKKWD;
       sh_tok t2;
-      t2 = tokenize();
+      gettok(CHKALIAS | CHKKWD, t2);
       if (tokendlist[t2.type]) {
         last_tok = t2;
         break;
@@ -271,9 +281,10 @@ parse_group(void)
     last_tok = t;
     return NULL;  // syntax error
   }
-    chkwd |= CHKALIAS | CHKKWD;
+  chkwd |= CHKALIAS | CHKKWD;
   return body;
 }
+
 static cmd_tree *
 parse_func(void)
 {
@@ -360,6 +371,78 @@ done:
   heredoc_tail = &heredoc_head;
 }
 
+static cmd_tree*
+parse_case(void)
+{
+  clause *clauses, *headcl, *tailcl;
+  wf *word;
+  sh_tok t;
+  size_t cap, pc;
+
+  tailcl = NULL;
+  headcl = NULL;
+  clauses = NULL;
+  gettok(CHKALIAS | CHKKWD, t);
+  if (t.type != TWORD)
+    return NULL;
+  word = t.cmd;
+
+  gettok(CHKALIAS | CHKKWD, t);
+  if (t.type == TIN) {
+    cap = WFCAP;
+    for (;;) {
+      chkwd = CHKNL | CHKKWD;
+      t = tokenize();
+      if (t.type == TESAC)
+        break;
+      if (t.type == TLP)
+        t = tokenize();
+
+      clauses = st_alloc(sizeof(clause));
+      clauses->ptrn= st_alloc(cap * sizeof(wf *));
+      clauses->next = NULL;
+      clauses->body = NULL;
+      pc = 0;
+      while (t.type == TWORD || t.type == TPIPE) {
+        if (pc >= cap) {
+          cap *= 2;
+          wf **new = st_alloc(cap * sizeof(wf *));
+          memcpy(new, clauses->ptrn, pc * sizeof(wf *));
+          clauses->ptrn = new;
+        }
+        if (t.type == TWORD)
+          clauses->ptrn[pc++] = t.cmd;
+        t = tokenize();
+      }
+      if (!pc)
+        return NULL;
+      clauses->ptrn[pc] = NULL;
+      if (t.type != TRP)
+        return NULL;
+
+      chkwd |= CHKALIAS | CHKKWD | CHKNL;
+      clauses->body = parse_list(TDSEMI);
+      if (!headcl)
+        headcl = clauses;
+      else
+        tailcl->next = clauses;
+      tailcl = clauses;
+      t = tokenize();
+      if (t.type == TDSEMI)
+        continue;
+      else if (t.type == TESAC)
+        break;
+      else
+       return NULL;
+    }
+  } else {
+    return NULL;
+  }
+  chkwd |= CHKALIAS | CHKKWD;
+  return newcasenode(word, headcl);
+}
+
+
 cmd_tree *
 parse_for(void)
 {
@@ -370,17 +453,14 @@ parse_for(void)
 
   words = NULL;
   wc = 0;
-  cap = 0;
-  chkwd |= CHKALIAS | CHKKWD;
-  t = tokenize();
+  gettok(CHKALIAS | CHKKWD, t);
   if (t.type != TWORD)
     return NULL;
   name = t.cmd;
 
-  chkwd |= CHKALIAS | CHKKWD;
-  t = tokenize();
+  gettok(CHKALIAS | CHKKWD, t);
   if (t.type == TIN) {
-    cap = 8;
+    cap = WFCAP;
     chkwd = (chkwd & ~CHKALIAS) | CHKNL;
     words = st_alloc(cap * sizeof(wf *));
     for (;;) {
@@ -409,8 +489,7 @@ parse_for(void)
 
   if (!(body = parse_list(TDONE)))
     return NULL;
-  chkwd |= CHKALIAS | CHKKWD;
-  t = tokenize();
+  gettok(CHKALIAS | CHKKWD, t);
   if (t.type != TDONE)
     return NULL;
   n = newfornode(name, words, body);
@@ -421,7 +500,7 @@ parse_for(void)
 cmd_tree *
 parse_while(token tok)
 {
-  cmd_tree *condition, *body, *n;
+  cmd_tree *condition, *body;
   sh_tok t;
 
   if (!(condition = parse_list(TDO)))
@@ -435,9 +514,8 @@ parse_while(token tok)
   if (t.type != TDONE)
     return NULL;
 
-  n = newwhilenode(condition, body, tok);
   chkwd |= CHKALIAS | CHKKWD;
-  return n;
+  return newwhilenode(condition, body, tok);
 }
 
 static cmd_tree *
@@ -487,7 +565,7 @@ parse_simple_cmd(size_t neg)
   redirs = NULL;
   tail = &redirs;
   wc = 0;
-  cap = 8;
+  cap = WFCAP;
   cmdflags = (neg & 1) ? NEG : 0;
 
   for (;;) {
@@ -655,6 +733,10 @@ parse_cmd(void)
           return NULL;
         l->flags = (neg & 1) ? NEG : 0;
         neg = 0;
+        break;
+      case TCASE:
+        if (!(l = parse_case()))
+          return NULL;
         break;
       case TTHEN:
       case TELIF:

@@ -1,4 +1,5 @@
 /* exec.c - functions surrounding running external programs or builtins */
+#include "glob.h"
 #define _POSIX_C_SOURCE 200809L
 #include <err.h>
 #include <errno.h>
@@ -14,6 +15,7 @@
 #include "exec.h"
 #include "expand.h"
 #include "job.h"
+#include "lex.h"
 #include "main.h"
 #include "alloc.h"
 #include "parse.h"
@@ -24,7 +26,7 @@
 
 #define MAX_TMP_VARS 40
 #define xpnd(a) (join_wf(exp_word(a, NULL)))
-#define builtin_launch(i, a) ((*builtin_funcs[i])(a))
+#define builtin_launch(b, a) (b->fn(a))
 
 int func_depth = 0;
 redir *predir = NULL;
@@ -45,7 +47,7 @@ static const struct {
   [RDRW] = { O_RDWR | O_CREAT, 0666 },
 };
 
-static int findbuiltin(char *);
+static const builtin *findbuiltin(char *);
 static void poptmpvars(tmp_var *, size_t);
 static int save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
@@ -176,16 +178,16 @@ dupfall:
 
 
 /**  get builtin command  */
-static inline int
+static inline const builtin *
 findbuiltin(char *args)
 {
   size_t idx;
   idx = hash(args, BUILTIN_BUCKETS);
   for (; builtin_tab[idx] >= 0; idx = (idx + 1) & (BUILTIN_BUCKETS - 1))
-    if (builtins[builtin_tab[idx]][0] == args[0] &&
-        strcmp(builtins[builtin_tab[idx]], args) == 0)
-      return builtin_tab[idx];
-  return -1;
+    if (builtins[builtin_tab[idx]].name[0] == args[0] &&
+        strcmp(builtins[builtin_tab[idx]].name, args) == 0)
+      return &builtins[builtin_tab[idx]];
+  return NULL;
 }
 
 static inline void
@@ -323,6 +325,40 @@ run_if(const cmd_tree *n)
 }
 
 static int
+run_case(const cmd_tree *n)
+{
+  wf *wrd;
+  char *word;
+  size_t wlen = 0, plen = 0;
+  int gl = 0;
+
+  if (!(wrd = exp_word(CCASE(n).word, &wlen)))
+    return 1;
+  word = join_wf(wrd);
+
+  for (clause *cl = CCASE(n).clauses; cl; cl = cl->next) {
+    for (size_t i = 0; cl->ptrn[i]; i++, gl = 0) {
+      wf *pttrn = exp_word(cl->ptrn[i], &plen);
+      if (!pttrn)
+        continue;
+      char *patstr = join_wf(pttrn);
+
+      for (wf *f = pttrn; f; f = f->next)
+        if (f->qs == QNONE && ismetachar(f->word, f->len))
+          gl = 1;
+      if (gl) {
+        if (globmatch(patstr, word, 0)) {
+          return run_commands(cl->body, 0);
+        }
+      } else if (strcmp(patstr, word) == 0) {
+        return run_commands(cl->body, 0);
+      }
+    }
+  }
+  return 0;
+}
+
+static int
 run_for(const cmd_tree *n)
 {
   int status;
@@ -330,6 +366,7 @@ run_for(const cmd_tree *n)
   stmark f;
   char **wrdv;
 
+  loopdepth++;
   status = 0;
   wrdc = 0;
   if (CFOR(n).words) {
@@ -353,7 +390,16 @@ run_for(const cmd_tree *n)
     setvar(CFOR(n).name->word, wrdv[i], 0);
     status = run_commands(n->right, 0);
     stack_restore(f);
+    if (loopbreak)
+      if (--loopbreak >= 0)
+        break;
+    if (loopcontinue) {
+      if (--loopcontinue > 0)
+        break;
+      continue;
+    }
   }
+  loopdepth--;
   return status;
 }
 
@@ -362,6 +408,8 @@ run_while(const cmd_tree *n)
 {
   int status, cond;
   stmark w;
+
+  loopdepth++;
   status = 0;
   for (;;) {
     if (retnow)
@@ -376,7 +424,16 @@ run_while(const cmd_tree *n)
       break;
     status = run_commands(n->right, 0);
     stack_restore(w);
+    if (loopbreak)
+      if (--loopbreak >= 0)
+        break;
+    if (loopcontinue) {
+      if (--loopcontinue > 0)
+        break;
+      continue;
+    }
   }
+  loopdepth--;
   return status;
 }
 
@@ -723,8 +780,8 @@ run_cmd(const cmd_tree *n, int inchld)
   wf **vars;
   shvar *v;
   shfunc *f = NULL;
+  const builtin *b = NULL;
   size_t i, vc, len;
-  int b = 0;
 
   ifl = iflag;
   efl = eflag;
@@ -767,7 +824,7 @@ run_cmd(const cmd_tree *n, int inchld)
     return 0;
   }
 
-  if ((f = findfunc(final[0])) || (b = findbuiltin(*final)) >= 0) {
+  if ((f = findfunc(final[0])) || (b = findbuiltin(*final))) {
     fdlist sfd[10];
     size_t sfdc = 0;
     if (predir)
@@ -893,6 +950,8 @@ run_commands(const cmd_tree *n, int nchld)
       return lstatus = run_for(n);
     case IF:
       return lstatus = run_if(n);
+    case CASE:
+      return lstatus = run_case(n);
     case OP:
       if (COPP(n) != TPIPE && COPP(n) != TBKGRND)
         l_status = run_commands(n->left, 0);

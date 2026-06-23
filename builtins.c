@@ -28,69 +28,64 @@
 #include "test.h"
 #include "utils.h"
 #include "var.h"
+#include "help.h"
+
+/* builtins */
+static int breakcmd(char **);
+static int cdcmd(char **);
+static int continuecmd(char **);
+static int dotcmd(char **);
+static int echocmd(char **);
+static int execcmd(char **);
+static int exitcmd(char **);
+static int falsecmd(char **);
+static int pwdcmd(char **);
+static int readcmd(char **);
+static int returncmd(char **);
+static int truecmd(char **);
+static int umaskcmd(char **);
 
 static char *pwdpath(char *);
 
-/* the array of builtin commands */ /* clang-format off */
-const char *builtins[] = {
-  ".",
-  "[",
-  ":",
-  "alias",
-  "bg",
-  "cd",
-  "echo",
-  "exec",
-  "exit",
-  "export",
-  "false",
-  "fg",
-  "hash",
-  "help",
-  "jobs",
-  "local",
-  "pwd",
-  "read",
-  "readonly",
-  "return",
-  "set",
-  "test",
-  "true",
-  "umask",
-  "unalias",
-  "unset",
+/* the array of builtin commands */ /* clang-format-off */
+const builtin builtins[] = {
+  { ".",        &dotcmd      },
+  { "[",        &testcmd     },
+  { ":",        &truecmd     },
+  { "alias",    &aliascmd    },
+  { "bg",       &bgcmd       },
+  { "break",    &breakcmd    },
+  { "cd",       &cdcmd       },
+  { "continue", &continuecmd },
+  { "echo",     &echocmd     },
+  { "exec",     &execcmd     },
+  { "exit",     &exitcmd     },
+  { "export",   &exportcmd   },
+  { "false",    &falsecmd    },
+  { "fg",       &fgcmd       },
+  { "hash",     &hashcmd     },
+  { "help",     &helpcmd     },
+  { "jobs",     &jobscmd     },
+  { "local",    &localcmd    },
+  { "pwd",      &pwdcmd      },
+  { "read",     &readcmd     },
+  { "readonly", &readonlycmd },
+  { "return",   &returncmd   },
+  { "set",      &setcmd      },
+  { "test",     &testcmd     },
+  { "true",     &truecmd     },
+  { "umask",    &umaskcmd    },
+  { "unalias",  &unaliascmd  },
+  { "unset",    &unsetcmd    },
 };
-int (* const builtin_funcs[])(char **) = {
-  &dotcmd,
-  &testcmd,
-  &truecmd,
-  &aliascmd,
-  &bgcmd,
-  &cdcmd,
-  &echocmd,
-  &execcmd,
-  &exitcmd,
-  &exportcmd,
-  &falsecmd,
-  &fgcmd,
-  &hashcmd,
-  &helpcmd,
-  &jobscmd,
-  &localcmd,
-  &pwdcmd,
-  &readcmd,
-  &readonlycmd,
-  &returncmd,
-  &setcmd,
-  &testcmd,
-  &truecmd,
-  &umaskcmd,
-  &unaliascmd,
-  &unsetcmd,
-};
-int nbuiltins(void) {
-  return sizeof(builtins) / sizeof(char *);
-} /* clang-format on */
+
+#define nbuiltins() (sizeof(builtins) / sizeof(builtin))
+/* int
+nbuiltins(void)
+{
+  return sizeof(builtins) / sizeof(builtin);
+} */
+/* clang-format on */
 
 /**  initialize builtin hash table  */
 void
@@ -104,17 +99,12 @@ init_builtins(void)
     builtin_tab[i] = -1;
 
   for (i = 0; i < n; i++) {
-    idx = hash(builtins[i], BUILTIN_BUCKETS);
+    idx = hash(builtins[i].name, BUILTIN_BUCKETS);
     while (builtin_tab[idx] >= 0)
       idx = (idx + 1) % BUILTIN_BUCKETS;
     builtin_tab[idx] = i;
   }
 }
-
-/**  normalize path to set PWD variable with logical path  */
-static char *
-pwdpath(char *path) {
-  char *res = path, *src = path;
 
   /*
    * INFO:
@@ -129,6 +119,12 @@ pwdpath(char *path) {
    *     up when we need to skip something while res stays in place, or res
    *     moves back when we get rid of a segment.
    */
+
+/**  normalize path to set PWD variable with logical path  */
+static char *
+pwdpath(char *path) {
+  char *res = path, *src = path;
+
   while (*src) {
     switch (*src) {
       case '/':
@@ -169,101 +165,43 @@ pwdpath(char *path) {
   return path;
 }
 
-int
-dotcmd(char **argv)
+static int
+breakcmd(char **argv)
 {
   size_t argc = 0;
-  char *o_argv0 = NULL, **o_argv = NULL;
-  char *file;
-  int o_argc = 0, st = 0, fd;
+  int n;
 
+  if (!loopdepth) {
+    shwarnx(argv[0], "not in a loop");
+    return 1;
+  }
   array_len(argv, argc);
-
   if (argc < 2) {
-    shwarn(argv[0], "filename arguement require");
+    n = 1;
+  } else if (argc == 2) {
+    char *breakn = argv[1];
+    for (size_t i = 0; breakn[i]; i++) {
+      if (!isdigit_(breakn[i])) {
+        shwarn_arg(argv[0], argv[1], "a numeric arguement is required");
+        return 1;
+      }
+    }
+    if ((n = atoi_(argv[1])) <= 0) {
+      shwarn_arg(argv[0], breakn, "must be a positive integer");
+      return 1;
+    }
+  } else {
+    shwarn_arg(argv[0], argv[2], "too many arguements");
     return 1;
   }
 
-  if (strchr(argv[1], '/')) {
-    if (access(argv[1], R_OK) < 0) {
-      st = 1;
-      goto restore;
-    }
-    file = argv[1];
-  } else {
-    char *fpath, *path;
-    if ((path = getvar(pathn)))
-      fpath = chkpath(path, argv[1], R_OK, 0);
-    else
-      fpath = chkpath(defpath, argv[1], R_OK, 0);
-    if (fpath) {
-      file = fpath;
-    } else {
-      if (access(argv[1], R_OK) < 0) {
-        st = 1;
-        goto restore;
-      }
-      file = argv[1];
-    }
-  }
-  if (!file) {
-    st = 1;
-    goto restore;
-  }
-  if ((fd = open(file, O_RDONLY)) < 0) {
-    st = 1;
-    goto restore;
-  }
-  setinputf(fd, 0);
-
-  if (argc == 2) {
-    o_argv0 = strdup_(sh_argv0);
-    sh_argv0 = strdup_(file);
-  } else {
-    o_argc = sh_argc;
-    sh_argc = argc - 2;
-    o_argv0 = strdup_(sh_argv0);
-    sh_argv0 = strdup_(file);
-
-    o_argv = slalloc(sizeof(char *) * (o_argc + 1));
-    for (int i = 0; i < o_argc; i++)
-      o_argv[i] = strdup_(sh_argv[i]);
-    o_argv[o_argc] = NULL;
-    if (alloc_sh_argv && sh_argv) {
-      for (int i = 0; i < o_argc; i++)
-        slfree(sh_argv[i]);
-      slfree(sh_argv);
-    }
-    sh_argv = slalloc(sizeof(char *) * (argc + 1));
-    size_t j = 0;
-    for (size_t i = 2; argv[i]; i++)
-      sh_argv[j++] = strdup_(argv[i]);
-    sh_argv[sh_argc] = NULL;
-    alloc_sh_argv = 1;
-  }
-
-  simpsh_run();
-  popinput();
-
-restore:
-  if (o_argv) {
-    for (size_t i = 0; sh_argv[i]; i++)
-      slfree(sh_argv[i]);
-    slfree(sh_argv);
-    sh_argv = o_argv;
-  }
-  if (o_argv0) {
-    slfree(sh_argv0);
-    sh_argv0 = o_argv0;
-  }
-  if (o_argc)
-    sh_argc = o_argc;
-  if (st)
-    perror(argv[1]);
-  return st ? st : lstatus;
+  if (n > loopdepth)
+    n = loopdepth;
+  loopbreak = n;
+  return 0;
 }
 
-int
+static int
 cdcmd(char **argv)
 {
   unsigned int prnt, argc = 0;
@@ -382,8 +320,138 @@ cdcmd(char **argv)
   return 0;
 }
 
+static int
+continuecmd(char **argv)
+{
+  int n;
+  size_t argc = 0;
 
-int
+  if (!loopdepth) {
+    shwarnx(argv[0], "not in a loop");
+    return 1;
+  }
+  array_len(argv, argc);
+  if (argc < 2) {
+    n = 1;
+  } else if (argc == 2) {
+    char *contn = argv[1];
+    for (size_t i = 0; contn[i]; i++) {
+      if (!isdigit_(contn[i])) {
+        shwarn_arg(argv[0], argv[1], "a numeric arguement is required");
+        return 1;
+      }
+    }
+    if ((n = atoi_(argv[1])) <= 0) {
+      shwarn_arg(argv[0], contn, "must be a positive integer");
+      return 1;
+    }
+  } else {
+    shwarn_arg(argv[0], argv[2], "too many arguements");
+    return 1;
+  }
+
+  if (n > loopdepth)
+    n = loopdepth;
+  loopcontinue = n;
+  return 0;
+}
+
+
+static int
+dotcmd(char **argv)
+{
+  size_t argc = 0;
+  char *o_argv0 = NULL, **o_argv = NULL;
+  char *file;
+  int o_argc = 0, st = 0, fd;
+
+  array_len(argv, argc);
+
+  if (argc < 2) {
+    shwarn(argv[0], "filename arguement require");
+    return 1;
+  }
+
+  if (strchr(argv[1], '/')) {
+    if (access(argv[1], R_OK) < 0) {
+      st = 1;
+      goto restore;
+    }
+    file = argv[1];
+  } else {
+    char *fpath, *path;
+    if ((path = getvar(pathn)))
+      fpath = chkpath(path, argv[1], R_OK, 0);
+    else
+      fpath = chkpath(defpath, argv[1], R_OK, 0);
+    if (fpath) {
+      file = fpath;
+    } else {
+      if (access(argv[1], R_OK) < 0) {
+        st = 1;
+        goto restore;
+      }
+      file = argv[1];
+    }
+  }
+  if (!file) {
+    st = 1;
+    goto restore;
+  }
+  if ((fd = open(file, O_RDONLY)) < 0) {
+    st = 1;
+    goto restore;
+  }
+  setinputf(fd, 0);
+
+  if (argc == 2) {
+    o_argv0 = strdup_(sh_argv0);
+    sh_argv0 = strdup_(file);
+  } else {
+    o_argc = sh_argc;
+    sh_argc = argc - 2;
+    o_argv0 = strdup_(sh_argv0);
+    sh_argv0 = strdup_(file);
+
+    o_argv = slalloc(sizeof(char *) * (o_argc + 1));
+    for (int i = 0; i < o_argc; i++)
+      o_argv[i] = strdup_(sh_argv[i]);
+    o_argv[o_argc] = NULL;
+    if (alloc_sh_argv && sh_argv) {
+      for (int i = 0; i < o_argc; i++)
+        slfree(sh_argv[i]);
+      slfree(sh_argv);
+    }
+    sh_argv = slalloc(sizeof(char *) * (argc + 1));
+    size_t j = 0;
+    for (size_t i = 2; argv[i]; i++)
+      sh_argv[j++] = strdup_(argv[i]);
+    sh_argv[sh_argc] = NULL;
+    alloc_sh_argv = 1;
+  }
+
+  simpsh_run();
+  popinput();
+
+restore:
+  if (o_argv) {
+    for (size_t i = 0; sh_argv[i]; i++)
+      slfree(sh_argv[i]);
+    slfree(sh_argv);
+    sh_argv = o_argv;
+  }
+  if (o_argv0) {
+    slfree(sh_argv0);
+    sh_argv0 = o_argv0;
+  }
+  if (o_argc)
+    sh_argc = o_argc;
+  if (st)
+    perror(argv[1]);
+  return st ? st : lstatus;
+}
+
+static int
 echocmd(char *argv[])
 {
   int nf = 0;
@@ -420,7 +488,7 @@ echocmd(char *argv[])
   return 0;
 }
 
-int
+static int
 execcmd(char **argv)
 {
   if (!argv[1])
@@ -447,7 +515,7 @@ fail:
   return 1;
 }
 
-int
+static int
 exitcmd(char **argv)
 {
   size_t argc = 0;
@@ -471,31 +539,14 @@ exitcmd(char **argv)
   exit(exnum);
 }
 
-int
+static int
 falsecmd(char **args)
 {
   (void)args;
   return 1;
 }
 
-int
-helpcmd(char **args)
-{
-  (void)args;
-  const char **helparray = builtins;
-  int i, n = nbuiltins();
-
-  printf("simpsh version (pre alpha) - "
-         "https://codeberg.org/someoneelse/simpsh.git\n\n"
-         "These are the builtin commands included with simpsh:\n");
-  for (i = 0; i < n; i++) {
-    printf("%s \n", helparray[i]);
-  }
-  printf("\n");
-  return 0;
-}
-
-int
+static int
 pwdcmd(char **argv)
 {
   int argc = 0;
@@ -551,7 +602,7 @@ physical:
 #define rfl 1 << 0
 #define pfl 1 << 1
 
-int
+static int
 readcmd(char **argv)
 {
   size_t argc = 0;
@@ -684,7 +735,7 @@ rend:
   return status;
 }
 
-int
+static int
 returncmd(char **argv)
 {
   size_t argc = 0;
@@ -710,14 +761,14 @@ returncmd(char **argv)
   return status;
 }
 
-int
+static int
 truecmd(char **args)
 {
   (void)args;
   return 0;
 }
 
-int
+static int
 umaskcmd(char **argv)
 {
   int symb = 0;

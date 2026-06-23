@@ -53,6 +53,9 @@ size_t homelen;
 int lstatus;
 int retval = 0;
 int retnow = 0;
+int loopdepth = 0;
+int loopbreak = 0;
+int loopcontinue = 0;
 
 /** shell entry point */
 int

@@ -5,26 +5,10 @@
 #include "lex.h"
 
 typedef struct redir redir;
-struct redir {
-  redir *next;
-  int fd;
-  int type;
-  wf *name;
-  char *heredoc;
-  redir *heredoc_next;
-};
-
-/*
- * AST node for commands
- * @field node left
- * @field node right
- * @field enum node type
- * @field union of ast structs
- * @field enum node type
- * @field word fragment array args
- * @field int flags (bg, negate)
- */
+typedef struct clause clause;
 typedef struct cmd_tree cmd_tree;
+
+/* AST node for commands */
 struct cmd_tree {
   cmd_tree *left;
   cmd_tree *right;
@@ -36,6 +20,7 @@ struct cmd_tree {
     BRACE,
     REDIR,
     IF,
+    CASE,
     WHILE,
     FOR,
   } type;
@@ -46,8 +31,24 @@ struct cmd_tree {
     struct { redir *redirs;} redir;
     struct { wf *name; } func;
     struct { cmd_tree *else_; } if_;
+    struct { wf *word; clause *clauses;} case_;
     struct { wf *name; wf **words; } for_;
   } t;
+};
+
+struct redir {
+  redir *next;
+  int fd;
+  int type;
+  wf *name;
+  char *heredoc;
+  redir *heredoc_next;
+};
+
+struct clause {
+  wf **ptrn;
+  cmd_tree *body;
+  clause *next;
 };
 
 enum {
@@ -63,6 +64,7 @@ enum {
 #define COPP(n) ((n)->t.op.op_t)
 #define CREDR(n) ((n)->t.redir.redirs)
 #define CFUNC(n) ((n)->t.func.name)
+#define CCASE(n) ((n)->t.case_)
 #define CFOR(n) ((n)->t.for_)
 #define CNEG(n) ((n)->flags & NEG)         /* check if NEGATE set */
 #define CSAFE(n) ((n)->flags & EFLAG_SAFE) /* check if NEGATE set */

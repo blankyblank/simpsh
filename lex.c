@@ -658,6 +658,11 @@ tokenize(void)
           shungetc(n);
         return SHTOK(TPIPE);
       case C_SEMI:
+        n = eatbnl();
+        if (n == ';')
+          return SHTOK(TDSEMI);
+        if (n != SHEOF)
+          shungetc(n);
         return SHTOK(TSEMI);
       case C_LP:
         return SHTOK(TLP);
@@ -758,9 +763,13 @@ tokenize(void)
             break;
             case 4:
               switch (f->word[0]) {
+                case 'c':
+                  KEYW(f, "case", TCASE);
+                  break;
                 case 'e':
                   KEYW(f, "else", TELSE);
                   KEYW(f, "elif", TELIF);
+                  KEYW(f, "esac", TESAC);
                   break;
                 case 't':
                   KEYW(f, "then", TTHEN);

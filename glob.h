@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 int ismetachar(const char *, size_t);
-int globmatch(const char *restrict, const char *restrict);
+int globmatch(const char *restrict, const char *restrict, int);
 int globexpand(const char *restrict, char ***);
 
 

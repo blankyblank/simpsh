@@ -4,26 +4,17 @@
 
 #define BUILTIN_BUCKETS 64
 
-extern const char *builtins[];
-extern int (* const builtin_funcs[])(char **);
+typedef struct {
+  char *name;
+  int (*fn)(char **);
+} builtin;
+
+extern const builtin builtins[];
 extern int builtin_tab[BUILTIN_BUCKETS];
 
 extern int nbuiltins(void);
 extern void init_builtins(void);
 
-/* builtins */
-extern int dotcmd(char **);
-extern int cdcmd(char **);
-extern int echocmd(char **);
-extern int execcmd(char **);
-extern int exitcmd(char **);
-extern int falsecmd(char **);
-extern int helpcmd(char **);
-extern int pwdcmd(char **);
-extern int readcmd(char **);
-extern int returncmd(char **);
-extern int truecmd(char **);
-extern int umaskcmd(char **);
-
 /* vim: set filetype=c: */
+
 #endif /* BUILTIN_H */

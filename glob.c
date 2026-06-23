@@ -81,7 +81,7 @@ match_bracket(const char *p, char c, const char **end)
 }
 
 int
-globmatch(const char *restrict p, const char *restrict s)
+globmatch(const char *restrict p, const char *restrict s, int pfl)
 {
   const char *sp = NULL, *ss = NULL;
   const char *send = s + strlen(s);
@@ -99,7 +99,7 @@ globmatch(const char *restrict p, const char *restrict s)
         p++;
         continue;
       case '?':
-        if (!*s || *s == '/')
+        if (pfl && (!*s || *s == '/'))
           goto backtrack;
         p++;
         s++;
@@ -123,7 +123,7 @@ globmatch(const char *restrict p, const char *restrict s)
           s++;
         } else {
 backtrack:
-          if (!sp || ss >= send) 
+          if (!sp || ss >= send)
             return 0;
           p = sp + 1;
           s = ++ss;
@@ -152,7 +152,7 @@ globexpand(const char *restrict pattern, char ***result)
 {
   size_t lsep = 0, len = 0;
   size_t cnt;
-  int sep = 0;
+  int sep = 0, pfl = 0;
   const char *p;
   char *dir;
   DIR *d;
@@ -160,10 +160,10 @@ globexpand(const char *restrict pattern, char ***result)
 
   *result = NULL;
   for (; pattern[len]; len++) {
-    if (pattern[len] == '/') {
-      lsep = len;
-      sep = 1;
-    }
+      if (pattern[len] == '/') {
+        lsep = len;
+        sep = 1;
+      }
   }
   if (sep) {
     p = pattern + lsep + 1;
@@ -182,7 +182,7 @@ globexpand(const char *restrict pattern, char ***result)
       continue;
     if (p[0] != '.' && f->d_name[0] == '.')
       continue;
-    if (!globmatch(p, f->d_name))
+    if (!globmatch(p, f->d_name, pfl))
       continue;
     cnt++;
   }
@@ -197,7 +197,7 @@ globexpand(const char *restrict pattern, char ***result)
       continue;
     if (p[0] != '.' && f->d_name[0] == '.')
       continue;
-    if (!globmatch(p, f->d_name))
+    if (!globmatch(p, f->d_name, pfl))
       continue;
 
     flen = strlen(f->d_name);

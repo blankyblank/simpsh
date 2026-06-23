@@ -49,6 +49,9 @@ extern int sh_argc; /* shell arg count */
 extern int lstatus; /* last exit status */
 extern int retval; /* return builtins value */
 extern int retnow; /* if set return from func or . file */
+extern int loopdepth; /* current loop nesting depth */
+extern int loopbreak; /* remaining break depth */
+extern int loopcontinue; /* remaining continue depth */
 extern pid_t sh_pid;
 extern pid_t sh_ppid;
 extern pid_t sh_bgpid;
