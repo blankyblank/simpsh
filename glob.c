@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdlib.h>
+#include <stdio.h>
 #include <dirent.h>
 #include <limits.h>
 #include <stddef.h>
@@ -7,8 +8,8 @@
 
 #include "glob.h"
 #include "alloc.h"
+#include "error.h"
 #include "simd.h"
-#include "utils.h"
 
 #define GLOB_CAP 64
 
@@ -204,11 +205,11 @@ globexpand(const char *restrict pattern, char ***result)
     if (sep) {
       size_t tlen = flen + lsep + 1;
       char *fpath = st_alloc(tlen + 1);
-      memcpy(fpath, f->d_name, lsep);
+      memcpy(fpath, dir, lsep);
       fpath[lsep] = '/';
       memcpy(fpath + lsep + 1, f->d_name, flen);
-      fpath[flen] = '\0';
-
+      fpath[tlen] = '\0';
+      (*result)[i++] = fpath;
     } else {
       (*result)[i++] = st_strndup(f->d_name, flen);
     }

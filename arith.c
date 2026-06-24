@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <stddef.h>
 #include "arith.h"
+#include "error.h"
 #include "var.h"
 #include "main.h"
 #include "alloc.h"

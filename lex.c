@@ -7,6 +7,7 @@
 #include "alloc.h"
 #include "arith.h"
 #include "env.h"
+#include "error.h"
 #include "input.h"
 #include "lex.h"
 #include "main.h"
@@ -129,7 +130,6 @@ eatbnl(void)
 
   while ((c = shgetchar()) == '\\') {
     if ((n = shgetchar()) == '\n') {
-      shinpt->linenum++;
       continue;
     }
     if (n != SHEOF) {
@@ -144,9 +144,16 @@ eatbnl(void)
 char *
 join_wf(wf *wordf)
 {
-  wf *f;
+  wf *f = wordf;
   char *s, *buf;
   size_t len = 0;
+
+ if (f && !f->next && f->word) {
+    char *buf = st_alloc(f->len + 1);
+    memcpy(buf, f->word, f->len);
+    buf[f->len] = '\0';
+    return buf;
+  }
 
   for (f = wordf; f && f->word; f = f->next)
     len += f->len;
@@ -223,7 +230,6 @@ get_wf(int c)
 
       case C_BSLASH:
         if ((n = shgetchar()) == '\n') {
-          shinpt->linenum++;
           break;
         }
         if (n == SHEOF)
@@ -625,14 +631,12 @@ tokenize(void)
       case C_NL:
         if (wd & CHKNL)
           continue;
-        shinpt->linenum++;
         {
           const char *buf;
           size_t avail;
           while ((avail = shpeek(&buf)) > 0) {
             size_t skip;
             skip = sskipnl(buf, avail);
-            shinpt->linenum += skip;
             if (skip > 0)
               shadvance(skip);
             if (skip < avail)
@@ -702,10 +706,8 @@ tokenize(void)
         }
 
       case C_BSLASH:
-        if ((n = shgetchar()) == '\n') {
-          shinpt->linenum++;
+        if ((n = shgetchar()) == '\n')
           continue;
-        }
         if (n != SHEOF)
           shungetc(n);
       /* falls through */

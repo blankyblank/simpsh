@@ -30,9 +30,5 @@ extern void freeshargv(void);
 extern int chkopt(char *);
 extern int setcmd(char **);
 
-#define UFLAGMSG(v) fprintf(stderr, "%s: %s: unbound variable\n", sh_argv0, v)
-#define bad_opt(p,c) (fprintf(stderr, "%s: %s: bad option %c\n", sh_argv0, p, c))
-#define no_opt(p,c) (fprintf(stderr, "%s: %s: %c: requires arguement\n", sh_argv0, p, c))
-
 #endif /* OPTS_H */
 

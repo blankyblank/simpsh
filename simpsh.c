@@ -2,7 +2,6 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <string.h>
@@ -15,8 +14,10 @@
 #endif /* ifdef READLINE */
 
 #include "alloc.h"
+#include "error.h"
 #include "exec.h"
 #include "expand.h"
+#include "input.h"
 #include "job.h"
 #include "lex.h"
 #include "main.h"
@@ -24,15 +25,12 @@
 #include "sig.h"
 #include "simpsh.h"
 #include "var.h"
-#include "utils.h"
 
 static char *nxtline;
 #ifdef READLINE
 #define DIRPERMS S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH
 static int pmkdir(char *);
 #endif /* ifdef READLINE */
-
-
 
 #ifndef MUSL
 void
@@ -75,8 +73,8 @@ simpsh_run(void)
     stmark mark;
 
     if (last_tok.type == TNL)
-      last_tok = SHTOK(TNONE);  // from previous command
-    
+      last_tok = SHTOK(TNONE);
+
     mark = stack_mark();
     chkwd = CHKKWD | CHKALIAS | CHKNL;
     c = parse_list(TEOF);
@@ -100,19 +98,14 @@ simpsh_run(void)
       ndnotify = 0;
       jobnotify();
     }
-    if (intsig) {
+    if (intsig)
       intsig = 0;
-      // putchar('\n');
-    }
   }
 }
 
-/* Check if accumulated input needs continuation
- * Returns: 1 = needs more, 0 = complete, -1 = error (unclosed quotes) */
 static int
 need_more(const char *lines, size_t lineslen)
 {
-  /* context states */
   enum { NCTX_NORMAL, NCTX_SQUOTE, NCTX_DQUOTE, NCTX_CSUB,
          NCTX_ARITH, NCTX_BTICK };
   int ctx = NCTX_NORMAL;
@@ -126,15 +119,15 @@ need_more(const char *lines, size_t lineslen)
 
     switch (ctx) {
     case NCTX_NORMAL:
-      if (c == '\'') {
+      if (c == '\'')
         ctx = NCTX_SQUOTE;
-      } else if (c == '"') {
+      else if (c == '"')
         ctx = NCTX_DQUOTE;
-      } else if (c == '`') {
+      else if (c == '`')
         ctx = NCTX_BTICK;
-      } else if (c == '\\' && next) {
+      else if (c == '\\' && next)
         i++;
-      } else if (c == '$' && next == '(') {
+      else if (c == '$' && next == '(') {
         i++;
         if (i + 1 < lineslen && lines[i + 1] == '(') {
           i++;
@@ -149,55 +142,37 @@ need_more(const char *lines, size_t lineslen)
         last = c;
       }
       break;
-
     case NCTX_SQUOTE:
       if (c == '\'')
         ctx = NCTX_NORMAL;
       break;
-
     case NCTX_DQUOTE:
       if (c == '"')
         ctx = NCTX_NORMAL;
       else if (c == '\\' && next)
         i++;
       break;
-
     case NCTX_CSUB:
-      if (c == '(') {
-        depth++;
-      } else if (c == ')') {
-        if (--depth <= 0)
-          ctx = NCTX_NORMAL;
+      if (c == '(') depth++;
+      else if (c == ')') {
+        if (--depth <= 0) ctx = NCTX_NORMAL;
       } else if (c == '$' && next == '(') {
-        i++;
-        depth++;
-        if (i + 1 < lineslen && lines[i + 1] == '(') {
-          i++;
-          depth++;
-        }
+        i++; depth++;
+        if (i + 1 < lineslen && lines[i + 1] == '(')
+          { i++; depth++; }
       }
       break;
-
     case NCTX_ARITH:
-      if (c == '(') {
-        depth++;
-      } else if (c == ')') {
-        if (depth > 0) {
-          depth--;
-        } else if (next == ')') {
-          i++;
-          ctx = NCTX_NORMAL;
-        }
+      if (c == '(') depth++;
+      else if (c == ')') {
+        if (depth > 0) depth--;
+        else if (next == ')') { i++; ctx = NCTX_NORMAL; }
       } else if (c == '$' && next == '(') {
-        i++;
-        depth++;
-        if (i + 1 < lineslen && lines[i + 1] == '(') {
-          i++;
-          depth++;
-        }
+        i++; depth++;
+        if (i + 1 < lineslen && lines[i + 1] == '(')
+          { i++; depth++; }
       }
       break;
-
     case NCTX_BTICK:
       if (c == '`')
         ctx = NCTX_NORMAL;
@@ -207,61 +182,44 @@ need_more(const char *lines, size_t lineslen)
     }
   }
 
-  /* still inside an unclosed context */
-  if (ctx != NCTX_NORMAL)
-    return 1;
-
-  /* trailing operator: |, ||, or && */
-  if (last == '|')
-    return 1;
-  if (last == '&' && prev == '&')
-    return 1;
-
-  /* trailing backslash (e.g., "echo hello \\") */
+  if (ctx != NCTX_NORMAL) return 1;
+  if (last == '|') return 1;
+  if (last == '&' && prev == '&') return 1;
   if (lineslen >= 2) {
     i = lineslen - 2;
-    while (i > 0 && (lines[i] == ' ' || lines[i] == '\t'))
-      i--;
-    if (i > 0 && lines[i] == '\\' && lines[i - 1] != '\\')
+    while (i > 0 && (lines[i] == ' ' || lines[i] == '\t')) i--;
+    if (i > 0 && lines[i] == '\\' && lines[i-1] != '\\')
       return 1;
   }
-
   return 0;
 }
 
-/* Read complete command from user, including continuations
- * Returns: 1 = got command (*cmd set), 0 = EOF, -1 = error (continuation EOF) */
 static int
 read_cmd(char **restrict cmd, size_t *restrict len)
 {
-  char *line, *lines, *new, *ps1;
-  size_t n, lineslen;
-  stmark mark;
-  
-  ps1 = expand_ps1(getvar(ps1n));
-  line = lineread(ps1 ? ps1 : " $ ");
+  char *ps1 = expand_ps1(getvar(ps1n));
+  char *line = lineread(ps1 ? ps1 : " $ ");
   if (!line)
     return 0;
   if (vflag) {
     fputs(line, stderr);
     fputc('\n', stderr);
   }
-
-  n = strlen(line);
-  lines = st_alloc(n + 2);
+  size_t n = strlen(line);
+  char *lines = st_alloc(n + 2);
   memcpy(lines, line, n);
   lines[n] = '\n';
   lines[n + 1] = '\0';
-  lineslen = n + 1;
+  size_t lineslen = n + 1;
 #ifdef READLINE
   free(line);
-#endif /* READLINE */
+#endif
 
-  mark = stack_mark();
+  stmark mark = stack_mark();
   while (need_more(lines, lineslen)) {
     stack_restore(mark);
-
-    line = lineread("> ");
+    char *ps2 = expand_ps1(getvar(ps2n));
+    line = lineread(ps2 ? ps2 : "> ");
     if (!line)
       return -1;
     if (vflag) {
@@ -270,18 +228,16 @@ read_cmd(char **restrict cmd, size_t *restrict len)
     }
 
     n = strlen(line);
-    new = st_alloc(lineslen + n + 2);
+    char *new = st_alloc(lineslen + n + 2);
     memcpy(new, lines, lineslen);
     memcpy(new + lineslen, line, n);
     new[lineslen + n] = '\n';
     new[lineslen + n + 1] = '\0';
 #ifdef READLINE
     free(line);
-#endif /* READLINE */
+#endif
     lines = new;
     lineslen += n + 1;
-    if (!lines)
-      return -1;
   }
 
   *cmd = lines;
@@ -294,17 +250,25 @@ sh_interactive(void)
 {
   char *lines;
   stmark mark;
-  size_t lineslen;
+  size_t lineslen, cpylen;
   int r;
+  static shinput *inpt;
 
 #ifdef READLINE
   init_history();
   FILE *tty = fopen("/dev/tty", "w+");
   if (tty) {
-    setbuf(tty, NULL); /* unbuffered */
+    setbuf(tty, NULL);
     rl_outstream = tty;
   }
-#endif /* ifdef READLINE */
+#endif
+
+  inpt = st_alloc(sizeof(shinput));
+  inpt->buf = st_alloc(BUFSIZ);
+  inpt->fd = -1;
+  inpt->nchar = inpt->buf;
+  inpt->prev = shinpt;
+  shinpt = inpt;
 
   for (;;) {
     ttyreclaim();
@@ -337,13 +301,16 @@ sh_interactive(void)
       return 1;
     }
 
-    setinputstrn(lines, (int)lineslen);
+    cpylen = lineslen > BUFSIZ ? BUFSIZ : lineslen;
+    memcpy(inpt->buf, lines, cpylen);
+    inpt->nchar = inpt->buf;
+    inpt->nleft = cpylen;
+    inpt->unget = 0;
     simpsh_run();
 #ifdef READLINE
     append_history(1, histfile);
-#endif /* READLINE */
-    popinput();
-    stack_restore(mark);
+#endif
+    stack_restore(mark);  /* frees lines/parse trees, NOT persist */
   }
   ttyrestore();
   return lstatus;

@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "error.h"
 #include "exec.h"
 #include "job.h"
 #include "main.h"

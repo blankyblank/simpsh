@@ -40,8 +40,8 @@ struct shinput {
 extern shinput *shinpt;
 #define SHEOF -1
 #define BASEBUFSIZE BUFSIZ
-#define shinput_linenum() (shinpt ? shinpt->linenum : 0)
-#define shinput_isfile() (shinpt && shinpt->fd >= 0)
+#define curline (shinpt ? shinpt->linenum : 0)
+#define isfd() (shinpt && shinpt->fd >= 0)
 
 #define popinput() \
   do { \
@@ -66,6 +66,8 @@ shgetchar(void)
     return in->ungetbuf[shinpt->unget];
   }
   if (in->nleft > 0) {
+    if (*in->nchar == '\n')
+      in->linenum++;
     in->nleft--;
     return *in->nchar++;
   }
@@ -162,6 +164,13 @@ shadvance(size_t n)
     }
   }
   shinpt->nchar += n, shinpt->nleft -= n;
+}
+
+static inline int
+shinput_avail(void)
+{
+  return shinpt->unget > 0 || shinpt->nleft > 0 || shinpt->b.lleft > 0
+         || shinpt->strpush;
 }
 
 #endif  // INPUT_H

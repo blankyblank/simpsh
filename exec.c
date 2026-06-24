@@ -1,5 +1,4 @@
 /* exec.c - functions surrounding running external programs or builtins */
-#include "glob.h"
 #define _POSIX_C_SOURCE 200809L
 #include <err.h>
 #include <errno.h>
@@ -10,14 +9,16 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "alloc.h"
 #include "builtins.h"
 #include "env.h"
+#include "error.h"
 #include "exec.h"
 #include "expand.h"
+#include "glob.h"
 #include "job.h"
 #include "lex.h"
 #include "main.h"
-#include "alloc.h"
 #include "parse.h"
 #include "path.h"
 #include "sig.h"
@@ -827,9 +828,11 @@ run_cmd(const cmd_tree *n, int inchld)
   if ((f = findfunc(final[0])) || (b = findbuiltin(*final))) {
     fdlist sfd[10];
     size_t sfdc = 0;
-    if (predir)
+    if (predir) {
+      fflush(stdout);
       if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
         return 1;
+    }
     if (vars && vars[0]) {
       static tmp_var tmp[MAX_TMP_VARS];
       for (vc = 0, i = 0; vars[i]; i++) {
@@ -918,9 +921,6 @@ run_redir(const cmd_tree *n, int nchld)
 __attribute__((hot)) int
 run_commands(const cmd_tree *n, int nchld)
 {
-  int l_status;
-  l_status = lstatus;
-
   if (!n)
     return 0;
   if (retnow)
@@ -954,14 +954,14 @@ run_commands(const cmd_tree *n, int nchld)
       return lstatus = run_case(n);
     case OP:
       if (COPP(n) != TPIPE && COPP(n) != TBKGRND)
-        l_status = run_commands(n->left, 0);
+        lstatus = run_commands(n->left, 0);
       switch (COPP(n)) {
         case TAND:
-          if (l_status != 0)
+          if (lstatus  != 0)
             return lstatus;
           return lstatus = run_commands(n->right, nchld);
         case TOR:
-          if (l_status == 0)
+          if (lstatus  == 0)
             return lstatus;
           return lstatus = run_commands(n->right, nchld);
         case TPIPE:

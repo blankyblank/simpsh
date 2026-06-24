@@ -7,6 +7,7 @@
 
 #include "arith.h"
 #include "env.h"
+#include "error.h"
 #include "exec.h"
 #include "expand.h"
 #include "glob.h"
@@ -162,16 +163,20 @@ exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
     val = NULL;
     switch (str[i + 1]) {
       case '$':
-        val = varpid();
+        val = sh_pid_s;
         vlen = strlen(val);
         end = i + 2;
         break;
       case '?':
-        val = varstatus(&vlen);
-        end = i + 2;
+        {
+          char _buf[16];
+          vlen = lltoa(lstatus, _buf);
+          val = _buf;
+          end = i + 2;
+        }
         break;
       case '!':
-        val = varbgpid();
+        val = sh_bgpid_s;
         vlen = strlen(val);
         end = i + 2;
         break;
@@ -377,10 +382,8 @@ expand_argv(wf **args, size_t *restrict t)
   size_t i, argc, elen;
   wf **fargv;
   char **argv;
-  // enum {  };
 
   *t = 0;
-  // cap = 0;
   cap = 64;
   fargc = 0;
   argc = 0;
@@ -388,11 +391,21 @@ expand_argv(wf **args, size_t *restrict t)
 
   while (args[argc])
     argc++;
-  // for (size_t i = 0; i < argc; i++)
-  //   cap += args[i]->len;
   argv = st_alloc(cap * sizeof(char *));
-
   for (i = 0; i < argc; i++) {
+    wf *w = args[i];
+    if (!w->next && w->qs == QNONE &&
+        sscndelim(w->word, w->len, "$`\\~*?[", 7) >= w->len) {
+      if (fargc >= cap) {
+        cap *= 2;
+        char **new = st_alloc(cap * sizeof(char *));
+        memcpy(new, argv, fargc * sizeof(char *));
+        argv = new;
+      }
+      argv[fargc++] = st_strndup(w->word, w->len);
+      *t += w->len;
+      continue;
+    }
     wf *expanded;
     if (!(expanded = exp_word(args[i], &elen)))
       return NULL;

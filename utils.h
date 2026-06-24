@@ -10,22 +10,6 @@
 
 #include "alloc.h"
 
-/* error message macros/funcs */
-
-/* err but it returns instead of exiting */
-#define err(r,s) { perror(s); return r; }
-/* errx but it returns instead of exiting */
-#define errx(r,s) { fprintf(stderr, "%s\n", s); return r; }
-/* error (returns doesn't exit) with simpsh: builtin: message: (errno message), format */
-/* be careful in if statements */
-#define sherr(r, b, m) warn("%s: %s", b, m); return r
-/* same as sherr  but doesn't return */
-#define shwarn(b, m) warn("%s: %s: %s", sh_argv0, b, m)
-/* warning with simpsh: builtin: message, format */
-#define shwarnx(b, m) fprintf(stderr, "%s: %s: %s\n", sh_argv0, b, m)
-/* warning with simpsh: builtin: arg: message, format */
-#define shwarn_arg(b, a, m) fprintf(stderr, "%s: %s: %s: %s\n", sh_argv0, b, a, m)
-
 /* is_ something checks (some replacing ctypes functions) */
 
 #define isalpha_(c) (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z') || (c) == '_')
@@ -52,7 +36,7 @@
 #define nts(s, l) (s[l] = '\0')
 
 /** null terminated memcpy */
-#define nmemcpy(d,s,l) memcpy(d, s, l), d[l] = '\0'
+#define nmemcpy(d,s,l) memcpy((d), (s), (l)), (d)[l] = '\0'
 
 static inline int
 atoi_(const char *s)
@@ -84,6 +68,7 @@ atoll_(const char *restrict s, long long *restrict res)
   return 0;
 }
 
+/* convert long long to string  */
 static inline size_t
 lltoa(long long val, char *buf)
 {
@@ -114,7 +99,36 @@ lltoa(long long val, char *buf)
   return p - buf;
 }
 
+/* convert int to string  */
+static inline size_t
+itoa(long long val, char *buf)
+{
+  char *p, *start, *end;
+  unsigned int uval;
 
+  p = buf;
+
+  if (val < 0) {
+    *p++ = '-';
+    uval = -val;
+  } else {
+    uval = val;
+  }
+  start = p;
+  do {
+    *p++ = '0' + (uval % 10);
+    uval /= 10;
+  } while (uval);
+  end = p - 1;
+  while (start < end) {
+    char tmp;
+    tmp = *start;
+    *start++ = *end;
+    *end-- = tmp;
+  }
+  *p = '\0';
+  return p - buf;
+}
 /**  replicate strchrnul  */
 static inline char *
 strchrnul_(const char *s, int c)
@@ -153,32 +167,6 @@ mempcpy_(char *restrict dest, const char *restrict src, size_t n)
   memcpy(dest, src, n);
   return dest + n;
 }
-
-/**  strndup using memcpy  */
-/* static inline char *
-strndup_(const char *restrict s, size_t n)
-{
-  char *dup;
-  
-  if ((dup = malloc(n + 1))) {
-    nmemcpy(dup, s, n);
-  }
-  return dup;
-} */
-
-/**  strdup using memcpy  */
-/* static inline char *
-strdup_(const char *s)
-{
-  size_t len;
-  char *dup;
-  len = strlen(s);
-  if ((dup = malloc(len + 1))) {
-    memcpy(dup, s, len);
-    dup[len] = '\0';
-  }
-  return dup;
-} */
 
 /* various small helpers */
 

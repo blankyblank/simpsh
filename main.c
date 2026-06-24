@@ -30,8 +30,10 @@ const char homen[16] = "HOME";
 const char pathn[16] = "PATH";
 const char ppidn[16] = "PPID";
 const char shlvln[16] = "SHLVL";
+const char linen[16] = "LINENO";
 const char cdpthn[16] = "CDPATH";
 const char ps1n[16] = "PS1";
+const char ps2n[16] = "PS2";
 
 
 /* global shell variables */
@@ -42,11 +44,15 @@ char *sh_ppid_s = NULL;
 char *sh_pid_s = NULL;
 char *sh_bgpid_s = NULL;
 pid_t sh_bgpid;
+int sh_lineno;
+char *sh_lineno_s;
 char *sh_argv0;
+char *sh_prompt;
 char *sh_ps1;
 char *sh_ps2;
 char *sh_ps4;
 char **sh_argv;
+int sheof;
 int alloc_sh_argv = 0;
 char *home;
 size_t homelen;
@@ -140,12 +146,7 @@ main(int argc, char **argv)
   ARGEND
 
 
-  /* setup locale then */
-  /* set up allocator then */
-  /* set up shell variables then */
-  /* set up builtin table then */
-  /* set up input layer then */
-  // if (strcmp("C", getenv("LC_COLLATE")))
+  /* all the set up functions for the shell */
   setlocale(LC_ALL, "");
   init_stack();
   init_env();
@@ -163,6 +164,9 @@ main(int argc, char **argv)
     if (vflag) {
       fputs(argv[0], stderr);
       fputc('\n', stderr);
+    } else if (!(flags & FLAG_i)) {
+      iflag = 0;
+      mflag = 0;
     }
     sh_argv0 = argc > 1 ? argv[1] : argv0;
     sh_argv = argc > 2 ? argv + 2 : NULL;

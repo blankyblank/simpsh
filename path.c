@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "arg.h"
+#include "error.h"
 #include "expand.h"
 #include "path.h"
 #include "main.h"

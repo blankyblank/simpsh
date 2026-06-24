@@ -4,10 +4,12 @@
 #include <string.h>
 
 #include "alloc.h"
-#include "parse.h"
+#include "error.h"
 #include "input.h"
 #include "lex.h"
+#include "main.h"
 #include "opts.h"
+#include "parse.h"
 #include "utils.h"
 
 static const char tokendlist[] = {
@@ -21,6 +23,52 @@ static const char tokendlist[] = {
   [TDO]    = 1,
   [TDONE]  = 1,
 };
+
+static const char *
+tokstr(token t)
+{
+  static const char *toks[] = {
+    [TWORD] = "word",   [TEOF] = "end of file",
+    [TIF] = "if",       [TTHEN] = "then",
+    [TELIF] = "elif",   [TELSE] = "else",
+    [TFI] = "fi",       [TCASE] = "case",
+    [TESAC] = "esac",   [TWHILE] = "while",
+    [TUNTIL] = "until", [TFOR] = "for",
+    [TIN] = "in",       [TDO] = "do",
+    [TDONE] = "done",   [TNOT] = "!",
+    [TPIPE] = "|",      [TAND] = "&&",
+    [TOR] = "||",       [TSEMI] = ";",
+    [TNL] = "newline",  [TLP] = "(",
+    [TRP] = ")",        [TLB] = "{",
+    [TRB] = "}",        [TBKGRND] = "&",
+    [TDSEMI] = ";;",    [TREDIR] = "redirection",
+    [TCMDSUB] = "$(",
+  };
+  return (t >= 0 && (size_t)t < arsz(toks, toks[0]) && toks[t]) ? toks[t] : "unknown";
+}
+
+/* syntax warning error */
+void *
+syntxerr(char *msg, token t)
+{
+  fprintf(stderr, "%s: syntax error: %s: \"%s\"\n", shname, msg, tokstr(t));
+  lstatus = 2;
+  return NULL;
+}
+
+/* syntax warning error with line number */
+void *
+lnsyntxerr(int ln, char *msg, token t)
+{
+  char lnbuf[256];
+  size_t l;
+
+  l = lltoa(ln, lnbuf);
+  lnbuf[l] = '\0';
+  fprintf(stderr, "%s: %s: syntax error: %s: \"%s\"\n", shname, lnbuf, msg, tokstr(t));
+  lstatus = 2;
+  return NULL;
+}
 
 static redir *heredoc_head;
 static redir **heredoc_tail = &heredoc_head;
@@ -50,6 +98,7 @@ newcmdnode(wf **restrict args, int flags, wf **restrict sh_vars, size_t vc)
   CVARS(n) = sh_vars;
   CVARC(n) = vc;
   n->flags = flags;
+  n->line = shinpt->linenum;
   /* cmd tree has no children, and doesn't have an operator in it */
   return n;
 }
@@ -63,6 +112,7 @@ newsubsh(cmd_tree *left, int negate)
   n->type = SUBSHELL;
   n->left = left;
   n->flags = negate;
+  n->line = shinpt->linenum;
   return n;
 }
 
@@ -75,6 +125,7 @@ newfuncnode(wf *restrict name, cmd_tree *restrict body)
   n->type = FUNC;
   CFUNC(n) = name;
   n->left = body;
+  n->line = shinpt->linenum;
   /* redir everything else is empty */
   return n;
 }
@@ -91,7 +142,7 @@ newredirnode(cmd_tree *restrict l, redir *restrict r)
   n->left = l;
   CREDR(n) = r;
   n->flags = 0;
-  /* redir everything else is empty */
+  n->line = shinpt->linenum;
   return n;
 }
 
@@ -106,7 +157,7 @@ newoppnode(token opp_t, cmd_tree *l, cmd_tree *r)
   n->left = l;
   n->right = r;
   n->flags = 0;
-  /* opp tree doesn't have a command stored and doesn't use the ! opperator */
+  n->line = shinpt->linenum;
   return n;
 }
 
@@ -120,6 +171,7 @@ newfornode(wf *name, wf **words, cmd_tree *body)
   CFOR(n).words = words;
   n->right = body;
   n->flags = 0;
+  n->line = shinpt->linenum;
   return n;
 }
 
@@ -132,6 +184,7 @@ newwhilenode(cmd_tree *restrict cond, cmd_tree *restrict body, token untilt)
   n->left = cond;
   n->right = body;
   n->flags = (untilt == TUNTIL) ? UNTIL : 0;
+  n->line = shinpt->linenum;
   return n;
 }
 static inline cmd_tree *
@@ -143,6 +196,7 @@ newcasenode(wf *word, clause *clauses)
   CCASE(n).word = word;
   CCASE(n).clauses = clauses;
   n->flags = 0;
+  n->line = shinpt->linenum;
   return n;
 }
 
@@ -156,6 +210,7 @@ newifnode(cmd_tree *restrict cond, cmd_tree *restrict then, cmd_tree *restrict e
   n->right = then;
   CELSE(n) = else_;
   n->flags = 0;
+  n->line = shinpt->linenum;
   return n;
 }
 
@@ -239,6 +294,8 @@ parse_list(token s)
     parse_heredoc();
 
   for (;;) {
+    // if (iflag && !shinput_avail())
+    //     break;
     gettok(CHKALIAS | CHKKWD, t);
     if (t.type == TSEMI || (t.type == TNL && s != TEOF) || t.type == TBKGRND) {
       sh_tok t2;
@@ -279,7 +336,7 @@ parse_group(void)
   t = tokenize();
   if (t.type != TRB) {
     last_tok = t;
-    return NULL;  // syntax error
+    return parserr(curline, "expected", TRB);
   }
   chkwd |= CHKALIAS | CHKKWD;
   return body;
@@ -297,13 +354,13 @@ parse_func(void)
     sub = parse_list(TRP);
     t = tokenize();
     if (t.type != TRP)
-      return NULL;
+      return parserr(curline, "expected", TRP);
     chkwd |= CHKALIAS | CHKKWD;
     return sub;
   }
   // Anything else is a syntax error
   last_tok = t;
-  return NULL;
+  return parserr(curline, "unexpected token", t.type);
 }
 
 /*
@@ -384,7 +441,7 @@ parse_case(void)
   clauses = NULL;
   gettok(CHKALIAS | CHKKWD, t);
   if (t.type != TWORD)
-    return NULL;
+    return parserr(curline, "unexpected token", t.type);
   word = t.cmd;
 
   gettok(CHKALIAS | CHKKWD, t);
@@ -418,7 +475,7 @@ parse_case(void)
         return NULL;
       clauses->ptrn[pc] = NULL;
       if (t.type != TRP)
-        return NULL;
+        return parserr(curline, "expected", TRP);
 
       chkwd |= CHKALIAS | CHKKWD | CHKNL;
       clauses->body = parse_list(TDSEMI);
@@ -433,10 +490,10 @@ parse_case(void)
       else if (t.type == TESAC)
         break;
       else
-       return NULL;
+       return parserr(curline, "expected", TESAC);
     }
   } else {
-    return NULL;
+    return parserr(curline, "expected", TIN);
   }
   chkwd |= CHKALIAS | CHKKWD;
   return newcasenode(word, headcl);
@@ -455,7 +512,7 @@ parse_for(void)
   wc = 0;
   gettok(CHKALIAS | CHKKWD, t);
   if (t.type != TWORD)
-    return NULL;
+    return parserr(curline, "expected", TWORD);
   name = t.cmd;
 
   gettok(CHKALIAS | CHKKWD, t);
@@ -477,21 +534,21 @@ parse_for(void)
     }
     words[wc] = NULL;
     if (!wc)
-      return NULL;
+      return parserr(curline, "expected list before", TSEMI);
   }
 
   chkwd |= CHKALIAS | CHKKWD;
   if (t.type == TSEMI) {
     t = tokenize();
     if (t.type != TDO)
-      return NULL;
+      return parserr(curline, "expected", TDO);
   }
 
   if (!(body = parse_list(TDONE)))
     return NULL;
   gettok(CHKALIAS | CHKKWD, t);
   if (t.type != TDONE)
-    return NULL;
+    return parserr(curline, "expected", TDONE);
   n = newfornode(name, words, body);
   chkwd |= CHKALIAS | CHKKWD;
   return n;
@@ -507,12 +564,12 @@ parse_while(token tok)
     return NULL;
   t = tokenize();
   if (t.type != TDO)
-    return NULL;
+    return parserr(curline, "expected", TDO);
   if (!(body = parse_list(TDONE)))
     return NULL;
   t = tokenize();
   if (t.type != TDONE)
-    return NULL;
+    return parserr(curline, "expected", TDONE);
 
   chkwd |= CHKALIAS | CHKKWD;
   return newwhilenode(condition, body, tok);
@@ -527,7 +584,7 @@ parse_if(void)
   cond = parse_list(TTHEN);
   t = tokenize();
   if (t.type != TTHEN)
-    return NULL;
+    return parserr(curline, "expected", TTHEN);
   then = parse_list(TFI);
   t = tokenize();
 
@@ -539,13 +596,13 @@ parse_if(void)
       else_ = parse_list(TFI);
       t = tokenize();
       if (t.type != TFI)
-        return NULL;
+        return parserr(curline, "expected", TFI);
       break;
     case TFI:
       else_ = NULL;
       break;
     default:
-      return NULL;
+      return parserr(curline, "unexpected token", t.type);
   }
   return newifnode(cond, then, else_);
 }
@@ -560,7 +617,8 @@ parse_simple_cmd(size_t neg)
   cmd_tree *body, *l;
   int cmdflags;
 
-
+  sh_lineno = shinpt->linenum;
+  // sh_lineno = curline;
   args = st_alloc(8 * sizeof(wf *));
   redirs = NULL;
   tail = &redirs;
@@ -578,7 +636,7 @@ parse_simple_cmd(size_t neg)
           redir *r;
           name = tokenize();
           if (name.type != TWORD)
-            return NULL;
+            return parserr(curline, "missing filename for", t.type);
           r = st_alloc(sizeof(redir));
           if (t.sub == RDHERE || t.sub == RDHERE_D) {
             r->fd = 0;
@@ -616,7 +674,7 @@ parse_simple_cmd(size_t neg)
           if (n.type == TREDIR && (t.cmd->flags & WFALLNUM) && adj) {
             sh_tok name = tokenize();
             if (name.type != TWORD)
-              return NULL;
+              return parserr(curline, "missing filename for", t.type);
             redir *r;
             r = st_alloc(sizeof(redir));
             r->type = n.sub;
@@ -720,7 +778,7 @@ parse_cmd(void)
         sub = parse_list(TRP);
         t = tokenize();
         if (t.type != TRP)
-          return NULL;
+          return parserr(curline, "expected", TRP);
         chkwd |= CHKALIAS | CHKKWD;
         l = newsubsh(sub, (neg & 1) ? NEG : 0);
         neg = 0;

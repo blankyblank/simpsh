@@ -36,12 +36,15 @@ extern const char pathn[16];
 extern const char ppidn[16];
 extern const char shlvln[16];
 extern const char cdpthn[16];
+extern const char linen[16];
 extern const char ps1n[16];
+extern const char ps2n[16];
 
 /* shell variables */
 extern char **environ;
 extern char *sh_argv0; /* the shells first arguement */
 extern char **sh_argv; /* shell arguement array */
+extern char *sh_prompt; /* prompt string */
 extern char *sh_ps1; /* prompt string */
 extern char *sh_ps2; /* continuation prompt string */
 extern char *sh_ps4;
@@ -52,9 +55,12 @@ extern int retnow; /* if set return from func or . file */
 extern int loopdepth; /* current loop nesting depth */
 extern int loopbreak; /* remaining break depth */
 extern int loopcontinue; /* remaining continue depth */
+extern int sheof;
+extern int sh_lineno;
 extern pid_t sh_pid;
 extern pid_t sh_ppid;
 extern pid_t sh_bgpid;
+extern char *sh_lineno_s; /* current line number */
 extern char *sh_pid_s; /* the shell's pid */
 extern char *sh_ppid_s; /* the shell's ppid */
 extern char *sh_bgpid_s; /* the last background processes pid */

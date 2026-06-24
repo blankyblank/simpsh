@@ -7,6 +7,7 @@
 
 #include "alloc.h"
 #include "env.h"
+#include "error.h"
 #include "lex.h"
 #include "main.h"
 #include "parse.h"

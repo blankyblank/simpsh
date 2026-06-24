@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "error.h"
 #include "main.h"
 #include "test.h"
 #include "utils.h"

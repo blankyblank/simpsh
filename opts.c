@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "alloc.h"
+#include "error.h"
 #include "main.h"
 #include "opts.h"
 #include "utils.h"

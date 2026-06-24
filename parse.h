@@ -25,6 +25,7 @@ struct cmd_tree {
     FOR,
   } type;
   int flags;
+  int line;
   union {
     struct { wf **args; size_t vc; wf **sh_vars; } cmd;
     struct { token op_t; } op;

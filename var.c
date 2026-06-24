@@ -9,6 +9,7 @@
 #include "alloc.h"
 #include "arg.h"
 #include "env.h"
+#include "error.h"
 #include "exec.h"
 #include "expand.h"
 #include "main.h"
@@ -27,6 +28,9 @@ size_t var_tab_size = VAR_BUCKETS_INIT;
 size_t var_count;
 tmp_var localvars[LOCAL_MAX];
 size_t localsp;
+static shvar linevar;
+// XXX: 256?
+static char linebuf[256];  /* 7 header + some digits */
 
 void
 resize_var_tab(void)
@@ -64,6 +68,17 @@ findvar_n(const char *restrict name, size_t nlen)
   unsigned int ci, bucket;
   shvar *v, *cv, *end;
 
+  if (nlen == 6 && smemcmp(name, linen, nlen)) {
+    size_t ll = lltoa(sh_lineno, linebuf + 7);
+    linebuf[6] = '=';
+    linebuf[7  + ll] = '\0';
+    linevar.var = linebuf;
+    linevar.nlen = 6;
+    linevar.flags = 7 + ll;
+    linevar.flags = VREADONLY;
+    linevar.func = NULL;
+    return &linevar;
+  }
   bucket =  hash_n(name, nlen, var_tab_size);
   ci = bucket & (VAR_CACHE_S - 1);
   cv = var_cache[ci];

@@ -149,3 +149,4 @@ setinputf(int fd, int nmp)
   new->strpush = NULL;
   shinpt = new;
 }
+
