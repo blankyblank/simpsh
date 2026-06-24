@@ -5,6 +5,7 @@
 #include <err.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <sys/uio.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,6 +19,7 @@
 #include "arg.h"
 #include "builtins.h"
 #include "env.h"
+#include "error.h"
 #include "input.h"
 #include "job.h"
 #include "main.h"
@@ -471,6 +473,9 @@ echocmd(char *argv[])
   }
   ARGEND;
 
+  if (fcntl(STDOUT_FILENO, F_GETFD) < 0) {
+    sherr(1, bargv0, "could not write to stdout");
+  }
   for (size_t i = 0; i < argc; i++) {
     if (fputs(argv[i], stdout) == EOF) {
       sherr(1, bargv0, "could not write to stdout");
@@ -481,10 +486,10 @@ echocmd(char *argv[])
     }
   }
   if (!(nf & FLAG_N))
-    fputc('\n', stdout);
-  if (fflush(stdout) == EOF) {
-    sherr(1, bargv0, "could not write to stdout");
-  }
+    if (fputc('\n', stdout) == EOF) {
+      warn("%s: %s", bargv0, "could not write to stdout");
+      return 1;
+    }
   return 0;
 }
 
