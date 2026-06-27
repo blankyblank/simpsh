@@ -10,6 +10,9 @@
 #include "job.h"
 
 #define EVMAX 16
+#ifndef NSIG
+#define NSIG 64
+#endif /* NSIG */
 #define signal(sig, handler) __signal(sig, handler)
 #define init_eventloop(e) ((e)->nsrc = 0, (e)->running = 1)
 #define stopeventloop(e) ((e)->running = 0)
@@ -30,12 +33,24 @@ typedef struct {
   int running;
 } eventloop;
 
+
+typedef enum {
+  S_DFL = 1,
+  S_CATCH,
+  S_IGN,
+  S_HIGN,
+} sig;
+
 extern eventloop el;
 extern volatile sig_atomic_t intsig;
 extern volatile sig_atomic_t ndnotify;
 extern int tty_fd;
 extern int selfpipe[2];
 extern int intpipe[2];
+
+extern volatile sig_atomic_t chksig[NSIG];
+extern volatile sig_atomic_t fchksig;
+extern const char *signame[NSIG + 1];
 
 typedef void (*sighandler_t)(int);
 sighandler_t __signal(int sig, sighandler_t handler);
@@ -44,6 +59,16 @@ void init_job(void);
 extern int addeventloop(eventloop *, int, short,void (*)(void *), void *);
 extern int rmeventloop(eventloop *, int);
 extern int runeventloop(eventloop *, int);
+
+int init_traps(void);
+void exittrap(int) __attribute__((__noreturn__));
+void dotrap(void);
+void trapsig(int);
+void cleartraps(void);
+void setsig(int);
+int getsig(const char *);
+int trapcmd(char **);
+
 
 static inline void
 drain_chldp(void)

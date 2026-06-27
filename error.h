@@ -8,7 +8,7 @@
 #include "lex.h"
 #include "main.h"
 
-static const char shname[] = "simpsh";
+static const char dmsg[] = "\nUse \"exit\" to leave the shell \n";
 
 /* err but it returns instead of exiting */
 #define err(r, s) \

@@ -1,10 +1,12 @@
 /* simpsh.c - functions for running the shell */
 #define _POSIX_C_SOURCE 200809L
 
+#include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <string.h>
 #include <unistd.h>
 #ifdef READLINE
 #include <readline/history.h>
@@ -65,6 +67,37 @@ stdin_cb(void *data)
 #endif /* READLINE */
 }
 
+/* simplified shell loop for eval and '.' */
+int
+eval_run(void)
+{
+  int status = 0;
+  for (;;) {
+    cmd_tree *c;
+    stmark mark;
+
+    if (last_tok.type == TNL)
+      last_tok = SHTOK(TNONE);
+    mark = stack_mark();
+    chkwd = CHKKWD | CHKALIAS | CHKNL;
+    c = parse_list(TEOF);
+    if (!c) {
+      stack_restore(mark);
+      last_tok = SHTOK(TNONE);
+      break;
+    }
+    if (!nflag)
+      status = run_commands(c, 0);
+    if (retnow) {
+      stack_restore(mark);
+      break;
+    }
+    stack_restore(mark);
+    last_tok = SHTOK(TNONE);
+  }
+  return status;
+}
+
 void
 simpsh_run(void)
 {
@@ -77,6 +110,9 @@ simpsh_run(void)
 
     mark = stack_mark();
     chkwd = CHKKWD | CHKALIAS | CHKNL;
+
+    if (fchksig)
+      dotrap();
     c = parse_list(TEOF);
     if (!c) {
       stack_restore(mark);
@@ -92,6 +128,8 @@ simpsh_run(void)
     }
     stack_restore(mark);
     last_tok = SHTOK(TNONE);
+    if (fchksig)
+      dotrap();
     runeventloop(&el, 0);
     killjob();
     if (ndnotify) {
@@ -289,14 +327,15 @@ sh_interactive(void)
     if (r == 0) {
       if (Iflag && iflag) {
         clearerr(stdin);
-        if ((write(STDOUT_FILENO, "\nUse \"exit\" to leave the shell \n", 33)) < 0)
+        if ((write(STDOUT_FILENO, dmsg, strlen(dmsg) + 1)) < 0)
           err(1, "write");
         stack_restore(mark);
         continue;
       }
       stack_restore(mark);
       break;
-    } else if (r < 0) {
+    }
+    if (r < 0) {
       stack_restore(mark);
       return 1;
     }
@@ -356,23 +395,66 @@ lineread(char *prompt)
   return nxtline;
 }
 
+
+static inline void
+source_file(const char *path)
+{
+  int fd = open(path, O_RDONLY);
+  if (fd < 0)
+    return;
+  setinputf(fd, 0);
+  eval_run();
+  retnow = 0;
+  popinput();
+}
+
+void
+init_rc(int flag)
+{
+  if (flag & LOGIN) {
+    source_file("/etc/profile");
+    if (home) {
+      size_t hl, flen;
+      const size_t plen = 8;
+      char hprof[PATH_MAX];
+      hl = strlen(home);
+      flen = hl + plen + 2;
+      memcpy(hprof, home, hl);
+      hprof[hl] = '/';
+      memcpy(hprof + hl + 1, ".profile", plen);
+      hprof[flen - 1] = '\0';
+      source_file(hprof);
+    }
+  }
+
+  if (iflag && getuid() == geteuid() && getgid() == getegid()) {
+    char *f;
+    size_t elen;
+    shvar *e;
+    if ((e = findvar_n(envn, 3))) {
+      f = exp_str(shvar_val(e), vallen(e), &elen);
+      source_file(f);
+    }
+  }
+}
+
 /** initialize history */
 void
 init_history(void)
 {
-  char buf[256];
-  snprintf(histfile, 256, "%s/.local/state/simpsh/simpsh_history", home);
+  char buf[PATH_MAX];
+  snprintf(histfile, PATH_MAX, "%s/.local/state/simpsh/simpsh_history", home);
   using_history();
   if (access(histfile, W_OK) < 0) {
     static const char *histdir = ".local/state/simpsh";
-    snprintf(buf, 256, "%s/%s", home, histdir);
+    snprintf(buf, PATH_MAX, "%s/%s", home, histdir);
     if (!pmkdir(buf))
       return;
     if (access(histfile, W_OK) < 0)
       if (write_history(histfile) != 0)
         return;
   } else {
-    history_truncate_file(histfile, 1000);
+    history_truncate_file(histfile, HISTORY_SIZE);
     if (read_history_range(histfile, 0, -1) != 0)
       perror("Failed to read .simpsh_history");
   }

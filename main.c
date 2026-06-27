@@ -1,8 +1,11 @@
 /* simpsh - a simple posix shell */
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
+#include <alloca.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <locale.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -21,30 +24,33 @@
 #include "simpsh.h"
 #include "var.h"
 
-char histfile[256];
+char histfile[PATH_MAX];
 int builtin_tab[BUILTIN_BUCKETS];
+
 const char ifsn[16] = "IFS";
+const char envn[16] = "ENV";
 const char pwdn[16] = "PWD";
 const char oldpwdn[16] = "OLDPWD";
 const char homen[16] = "HOME";
 const char pathn[16] = "PATH";
 const char ppidn[16] = "PPID";
 const char shlvln[16] = "SHLVL";
+const char shelln[16] = "SHELL";
+const char shname[] = "simpsh";
 const char linen[16] = "LINENO";
 const char cdpthn[16] = "CDPATH";
 const char ps1n[16] = "PS1";
 const char ps2n[16] = "PS2";
 
-
 /* global shell variables */
-int sh_argc;
+intf sh_lineno;
+intf sh_argc;
 pid_t sh_pid;
 pid_t sh_ppid;
 char *sh_ppid_s = NULL;
 char *sh_pid_s = NULL;
 char *sh_bgpid_s = NULL;
 pid_t sh_bgpid;
-int sh_lineno;
 char *sh_lineno_s;
 char *sh_argv0;
 char *sh_prompt;
@@ -52,16 +58,17 @@ char *sh_ps1;
 char *sh_ps2;
 char *sh_ps4;
 char **sh_argv;
-int sheof;
 int alloc_sh_argv = 0;
 char *home;
 size_t homelen;
-int lstatus;
+intf lstatus;
 int retval = 0;
 int retnow = 0;
 int loopdepth = 0;
 int loopbreak = 0;
 int loopcontinue = 0;
+
+#define usage() fprintf(stderr, "Usage: simpsh [-abCefhiImnosvVx] [-o longopt] [-c 'cmd']\n")
 
 /** shell entry point */
 int
@@ -104,6 +111,9 @@ main(int argc, char **argv)
     case 'I':
       Iflag = 1;
       break;
+    case 'l':
+      flags |= FLAG_l;
+      break;
     case 'm':
       mflag = 1;
       break;
@@ -145,6 +155,7 @@ main(int argc, char **argv)
   }
   ARGEND
 
+  flags |= ((argv0[0] == '-') || (flags & FLAG_l)) ? LOGIN : 0;
 
   /* all the set up functions for the shell */
   setlocale(LC_ALL, "");
@@ -158,7 +169,8 @@ main(int argc, char **argv)
     init_job();
   }
 
-  snprintf(histfile, 256, "%s/.local/state/simpsh/simpsh_history", home);
+  sh_argv0 = argv0;
+  init_rc(flags);
 
   if (flags & FLAG_c) {
     if (vflag) {
@@ -172,7 +184,7 @@ main(int argc, char **argv)
     sh_argv = argc > 2 ? argv + 2 : NULL;
     sh_argc = argc > 2 ? argc - 2 : 0;
     sh_ccmd(argv[0]);
-    exit(lstatus);
+    exittrap(lstatus);
   } else if (!sflag && *argv) {
     if (!(flags & FLAG_i)) {
       iflag = 0;
@@ -180,22 +192,22 @@ main(int argc, char **argv)
     }
     if ((fd = open(*argv, O_RDONLY)) < 0) {
       perror("simpsh");
-      exit(1);
+      exittrap(1);
     }
     sh_argv0 = argv0;
     sh_argv = argv + 1;
     sh_argc = argc - 1;
     sh_script(fd);
-    exit(lstatus);
+    exittrap(lstatus);
   } else if (!iflag || sflag) {
     sh_argv0 = argv0;
     sh_argv = argv;
     sh_argc = argc;
     sh_stdin();
-    exit(lstatus);
+    exittrap(lstatus);
   } else {
     sh_argv0 = argv0;
     /* run the main loop */
-    exit(sh_interactive());
+    exittrap(sh_interactive());
   }
 }

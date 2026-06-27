@@ -5,8 +5,22 @@
 #include "lex.h"
 
 typedef struct redir redir;
-typedef struct clause clause;
+struct redir {
+  redir *next;
+  int fd;
+  int type;
+  wf *name;
+  char *heredoc;
+  redir *heredoc_next;
+};
+
 typedef struct cmd_tree cmd_tree;
+typedef struct clause clause;
+struct clause {
+  wf **ptrn;
+  cmd_tree *body;
+  clause *next;
+};
 
 /* AST node for commands */
 struct cmd_tree {
@@ -35,21 +49,6 @@ struct cmd_tree {
     struct { wf *word; clause *clauses;} case_;
     struct { wf *name; wf **words; } for_;
   } t;
-};
-
-struct redir {
-  redir *next;
-  int fd;
-  int type;
-  wf *name;
-  char *heredoc;
-  redir *heredoc_next;
-};
-
-struct clause {
-  wf **ptrn;
-  cmd_tree *body;
-  clause *next;
 };
 
 enum {

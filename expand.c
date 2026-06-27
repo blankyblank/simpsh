@@ -24,7 +24,6 @@ int ifsnull = 0;
 static char ifschar[256];
 
 static wf **splitword(wf *restrict, size_t *restrict);
-static char *exp_str(char *restrict, size_t, size_t *restrict);
 
 /** get the pid shell variable */
 #define varpid() (st_strdup(sh_pid_s))
@@ -144,7 +143,7 @@ homedir(char *user)
   return NULL;
 }
 
-static char *
+char *
 exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
 {
   size_t i = 0, vlen, end, tlen = 0;
@@ -391,14 +390,14 @@ expand_argv(wf **args, size_t *restrict t)
 
   while (args[argc])
     argc++;
-  argv = st_alloc(cap * sizeof(char *));
+  argv = (char **)st_alloc(cap * sizeof(char *));
   for (i = 0; i < argc; i++) {
     wf *w = args[i];
     if (!w->next && w->qs == QNONE &&
         sscndelim(w->word, w->len, "$`\\~*?[", 7) >= w->len) {
       if (fargc >= cap) {
         cap *= 2;
-        char **new = st_alloc(cap * sizeof(char *));
+        char **new = (char **)st_alloc(cap * sizeof(char *));
         memcpy(new, argv, fargc * sizeof(char *));
         argv = new;
       }
@@ -675,6 +674,10 @@ append:
           int qs = (f->qs == QVAR || f->qs == QBRACE) ? QNONE : f->qs;
           append_wf(&head, &tail, val, vlen, qs);
           len += vlen;
+        } else {
+          int qs = (f->qs == QVAR || f->qs == QBRACE) ? QNONE : f->qs;
+          append_wf(&head, &tail, "", 0, qs);
+          len += val ? vlen : 0;
         }
         break;
 

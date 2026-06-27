@@ -155,9 +155,7 @@ init_opts(void)
   for (int i = 0; i < OPTC; i++)
     shopts[i] = 0;
 
-  iflag = isatty(STDIN_FILENO);
-  mflag = iflag;
-  hflag = iflag;
+  hflag = mflag = iflag = isatty(STDIN_FILENO);
 }
 
 void

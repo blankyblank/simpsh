@@ -3,14 +3,18 @@
 #define SIMP_H
 
 #define _POSIX_C_SOURCE 200809L
+#include <fcntl.h>
+#include <sys/mman.h>
+
 #include "input.h"
 #include "main.h"
-#include <sys/mman.h>
 
 /* functions for shell */
 extern char *lineread(char *);
+extern int eval_run(void);
 extern void simpsh_run(void);
 extern int sh_interactive(void);
+extern void init_rc(int);
 
 #ifndef MUSL
 extern void getbuildinfo(void);

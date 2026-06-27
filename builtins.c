@@ -20,17 +20,18 @@
 #include "builtins.h"
 #include "env.h"
 #include "error.h"
+#include "help.h"
 #include "input.h"
 #include "job.h"
 #include "main.h"
 #include "opts.h"
 #include "path.h"
+#include "sig.h"
 #include "simd.h"
 #include "simpsh.h"
 #include "test.h"
 #include "utils.h"
 #include "var.h"
-#include "help.h"
 
 /* builtins */
 static int breakcmd(char **);
@@ -38,6 +39,7 @@ static int cdcmd(char **);
 static int continuecmd(char **);
 static int dotcmd(char **);
 static int echocmd(char **);
+static int evalcmd(char **);
 static int execcmd(char **);
 static int exitcmd(char **);
 static int falsecmd(char **);
@@ -60,6 +62,7 @@ const builtin builtins[] = {
   { "cd",       &cdcmd       },
   { "continue", &continuecmd },
   { "echo",     &echocmd     },
+  { "eval",     &evalcmd     },
   { "exec",     &execcmd     },
   { "exit",     &exitcmd     },
   { "export",   &exportcmd   },
@@ -75,6 +78,7 @@ const builtin builtins[] = {
   { "return",   &returncmd   },
   { "set",      &setcmd      },
   { "test",     &testcmd     },
+  { "trap",     &trapcmd     },
   { "true",     &truecmd     },
   { "umask",    &umaskcmd    },
   { "unalias",  &unaliascmd  },
@@ -130,9 +134,7 @@ pwdpath(char *path) {
   while (*src) {
     switch (*src) {
       case '/':
-        if (res != path && *(res - 1) == '/')
-          src++;
-        else if (*(src + 1) == '\0')
+        if ((res != path && *(res - 1) == '/') || *(src + 1) == '\0')
           src++;
         else
           *res++ = *src++;
@@ -207,9 +209,9 @@ static int
 cdcmd(char **argv)
 {
   unsigned int prnt, argc = 0;
-  char *bargv0, *dest, *end, *pwdval;
+  char *bargv0, *dir, *end, *pwdval;
   char flag = '\0', respath[PATH_MAX];
-  const char *dir;
+  const char *dest;
   shvar *pwd, *oldpwd, *cdpth;
   size_t destlen = 0;
 
@@ -247,61 +249,60 @@ cdcmd(char **argv)
         !(argv[0][0] == '.' && argv[0][1] == '\0') &&
         !(argv[0][0] == '.' && argv[0][1] == '/') &&
         !(argv[0][0] == '.' && argv[0][1] == '.')) {
-      if ((dir = chkpath(shvar_val(cdpth), *argv, X_OK, 1))) {
-        if (!(dir[0] == '.' && dir[1] == '/'))
+      if ((dest = chkpath(shvar_val(cdpth), *argv, X_OK, 1))) {
+        if (!(dest[0] == '.' && dest[1] == '/'))
           prnt = 1;
       } else {
-        dir = *argv;
+        dest = *argv;
       }
     } else {
-      dir = *argv;
+      dest = *argv;
     }
   } else {
-    dir = *argv;
+    dest = *argv;
   }
 
-  if (!dir) {
-    dest = home;
+  if (!dest) {
+    dir = home;
     destlen = homelen;
-  } else if (*dir == '-' && dir[1] == '\0') {
+  } else if (*dest == '-' && dest[1] == '\0') {
     if (!oldpwd) {
       shwarnx(bargv0, "OLDPWD not set"); /*NOLINT*/
       return 1;
-    } else {
-      dest = shvar_val(oldpwd);
-      destlen = oldpwd->flen;
-      prnt = 1;
     }
+    dir = shvar_val(oldpwd);
+    destlen = oldpwd->flen;
+    prnt = 1;
   } else {
-    dest = (char *)dir;
-    destlen = strlen(dest);
+    dir = (char *)dest;
+    destlen = strlen(dir);
   }
 
   if (flag == FLAG_P) {
     if (destlen >= PATH_MAX)
       nts(respath, destlen - 1);
-    if (!realpath(dest, respath)) {
-      sherr(1, bargv0, dest);
+    if (!realpath(dir, respath)) {
+      sherr(1, bargv0, dir);
     }
     if (chdir(respath) < 0) {
-      sherr(1, bargv0, dest);
-    } else {
-      if (prnt) {
-        printf("%s\n", respath);
-      }
+      sherr(1, bargv0, dir);
+    }
+    if (prnt) {
+      printf("%s\n", respath);
     }
     if (getcwd(respath, PATH_MAX))
       return 1;
   } else {
     size_t plen, dlen;
-    if (chdir(dest) < 0) {
-      sherr(1, bargv0, dest);
-    } else if (prnt == 1) {
-      printf("%s\n", dest);
+    if (chdir(dir) < 0) {
+      sherr(1, bargv0, dir);
     }
-    dlen = strlen(dest);
-    if (dest != NULL && dest[0] == '/') {
-      memcpy(respath, dest, dlen);
+    if (prnt == 1) {
+      printf("%s\n", dir);
+    }
+    dlen = strlen(dir);
+    if (dir != NULL && dir[0] == '/') {
+      memcpy(respath, dir, dlen);
       respath[dlen] = '\0';
     } else {
       if (!pwdval)
@@ -309,7 +310,7 @@ cdcmd(char **argv)
       plen = strlen(pwdval);
       end = mempcpy_(respath, pwdval, plen);
       *end++ = '/';
-      end = mempcpy_(end, dest, dlen);
+      end = mempcpy_(end, dir, dlen);
       *end = '\0';
     }
     if (!pwdpath(respath)) {
@@ -432,7 +433,8 @@ dotcmd(char **argv)
     alloc_sh_argv = 1;
   }
 
-  simpsh_run();
+  eval_run();
+  retnow = 0;
   popinput();
 
 restore:
@@ -493,6 +495,26 @@ echocmd(char *argv[])
   return 0;
 }
 
+int
+evalcmd(char **argv)
+{
+  size_t tlen = 0;
+  char *cmdstrn;
+  int status;
+ 
+  if (!argv[1])
+    return 0;
+
+  for (size_t i = 1; argv[i]; i++)
+    tlen += strlen(argv[i]);
+  cmdstrn = join_strn(argv + 1, &tlen);
+
+  setinputstrn(cmdstrn, tlen);
+  status = eval_run();
+  popinput();
+  return status;
+}
+
 static int
 execcmd(char **argv)
 {
@@ -531,7 +553,9 @@ exitcmd(char **argv)
   if (argc > 2) {
     shwarnx(argv[0], "too many arguements"); /*NOLINT*/
     return 1;
-  } else if (argc == 2) {
+  }
+
+  if (argc == 2) {
     for (size_t i = 0; argv[1][i]; i++) {
       if (!isdigit_(argv[1][i])) {
         shwarn_arg(argv[0], argv[1], "a number is required");
@@ -773,6 +797,7 @@ truecmd(char **args)
   return 0;
 }
 
+/* NOLINTBEGIN(readability-magic-numbers) */
 static int
 umaskcmd(char **argv)
 {
@@ -800,121 +825,117 @@ umaskcmd(char **argv)
     if (!symb) {
       printf("%.4o\n", mask);
       return 0;
-    } else {
-      mask = (~mask) & 0777;
-      usrp = (mask >> 6) & 07;
-      grpp = (mask >> 3) & 07;
-      othp = mask & 07;
-
-      int val[] = { usrp, grpp, othp };
-
-      for (int i = 0; i <= 2; i++) {
-        putc(ugo[i], stdout);
-        putc('=', stdout);
-        if (val[i] & 4)
-          putc('r', stdout);
-        if (val[i] & 2)
-          putc('w', stdout);
-        if (val[i] & 1)
-          putc('x', stdout);
-        if (i < 2)
-          putc(',', stdout);
-      }
-      putc('\n', stdout);
-      return 0;
     }
-  } else {
-    if (!symb) {
-      mode_t val = 0;
+    mask = (~mask) & 0777;
+    usrp = (mask >> 6) & 07;
+    grpp = (mask >> 3) & 07;
+    othp = mask & 07;
+    int val[] = { usrp, grpp, othp };
 
-      for (int i = 0; argv[0][i]; i++) {
-        int c = argv[0][i];
-        if (c < '0' || c > '7') {
-          shwarn_arg(argv0, argv[0], "octal number out of range");
-          return 1;
-        }
-        val = (val << 3) | (c - '0');
-      }
-      umask(val);
-      return 0;
-    } else {
-      mask = (~mask) & 0777;
-
-      for (char *c = argv[0]; *c; c++) {
-        mode_t pos = 0, perms = 0, nm = 0;
-        char op = '\0';
-
-        while (*c == 'u' || *c == 'g' || *c == 'o' || *c == 'a') {
-          if (*c == 'u')
-            pos |= 1 << 6;
-          else if (*c == 'g')
-            pos |= 1 << 3;
-          else if (*c == 'o')
-            pos |= 1 << 0;
-          else if (*c == 'a')
-            pos |= 0111;
-          c++;
-        }
-
-        op = *c;
-        if (*c != '=' && *c != '+' && *c != '-') {
-          fprintf(stderr, "%s: %s: %c:  not a valid operator \n", sh_argv0, argv0, *c);
-          return 1;
-        }
-        if (!pos)
-          pos = 0111;
-        c++;
-
-
-        while (*c == 'r' || *c == 'w' || *c == 'x' || *c == 'u' || *c == 'g' ||
-               *c == 'o' || *c == 'X' || *c == 's') {
-          switch (*c) {
-            case 'r':
-              perms |= 04, c++;
-              continue;
-            case 'w':
-              perms |= 02, c++;
-              continue;
-            case 'X':
-            case 'x':
-              perms |= 01, c++;
-              continue;
-            case 'u':
-              perms |= (mask >> 6) & 07, c++;
-              continue;
-            case 'g':
-              perms |= (mask >> 3) & 07, c++;
-              continue;
-            case 'o':
-              perms |= mask & 07, c++;
-              continue;
-            case 's':
-              c++;
-              continue;
-            default:
-              break;
-          }
-        }
-
-        nm = perms * pos;
-
-        if (op == '=') {
-          mask = nm | (mask & ~(pos * 07));
-        } else if (op == '+') {
-          mask |= nm;
-        } else if (op == '-') {
-          mask &= ~nm;
-        }
-
-        if (*c == ',') {
-          continue;
-        } else if (*c == '\0') {
-          break;
-        }
-      }
-      umask((~mask) & 0777);
-      return 0;
+    for (int i = 0; i <= 2; i++) {
+      putc(ugo[i], stdout);
+      putc('=', stdout);
+      if (val[i] & 4)
+        putc('r', stdout);
+      if (val[i] & 2)
+        putc('w', stdout);
+      if (val[i] & 1)
+        putc('x', stdout);
+      if (i < 2)
+        putc(',', stdout);
     }
+    putc('\n', stdout);
+    return 0;
   }
-}
 
+  if (!symb) {
+    mode_t val = 0;
+
+    for (int i = 0; argv[0][i]; i++) {
+      int c = argv[0][i];
+      if (c < '0' || c > '7') {
+        shwarn_arg(argv0, argv[0], "octal number out of range");
+        return 1;
+      }
+      val = (val << 3) | (c - '0');
+    }
+    umask(val);
+    return 0;
+  }
+
+  mask = (~mask) & 0777;
+
+  for (char *c = argv[0]; *c; c++) {
+    mode_t pos = 0, perms = 0, nm = 0;
+    char op = '\0';
+
+    while (*c == 'u' || *c == 'g' || *c == 'o' || *c == 'a') {
+      if (*c == 'u')
+        pos |= 1 << 6;
+      else if (*c == 'g')
+        pos |= 1 << 3;
+      else if (*c == 'o')
+        pos |= 1 << 0;
+      else if (*c == 'a')
+        pos |= 0111;
+      c++;
+    }
+
+    op = *c;
+    if (*c != '=' && *c != '+' && *c != '-') {
+      fprintf(stderr, "%s: %s: %c:  not a valid operator \n", sh_argv0, argv0,
+              *c);
+      return 1;
+    }
+    if (!pos)
+      pos = 0111;
+    c++;
+
+    while (*c == 'r' || *c == 'w' || *c == 'x' || *c == 'u' || *c == 'g' ||
+           *c == 'o' || *c == 'X' || *c == 's') {
+      switch (*c) {
+        case 'r':
+          perms |= 04, c++;
+          continue;
+        case 'w':
+          perms |= 02, c++;
+          continue;
+        case 'X':
+        case 'x':
+          perms |= 01, c++;
+          continue;
+        case 'u':
+          perms |= (mask >> 6) & 07, c++;
+          continue;
+        case 'g':
+          perms |= (mask >> 3) & 07, c++;
+          continue;
+        case 'o':
+          perms |= mask & 07, c++;
+          continue;
+        case 's':
+          c++;
+          continue;
+        default:
+          break;
+      }
+    }
+
+    nm = perms * pos;
+
+    if (op == '=')
+      mask = nm | (mask & ~(pos * 07));
+    else if (op == '+')
+      mask |= nm;
+    else if (op == '-')
+      mask &= ~nm;
+
+    if (*c == ',')
+      continue;
+    if (*c == '\0')
+      break;
+  }
+  umask((~mask) & 0777);
+  return 0;
+}
+/* NOLINTEND(readability-magic-numbers) */

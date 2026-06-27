@@ -3,6 +3,7 @@
 #include <err.h>
 #include <limits.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -19,6 +20,7 @@
 #include "utils.h"
 #include "var.h"
 
+#define INTSIZE 16
 static shvar var_tab_init[VAR_BUCKETS_INIT];
 static char **env_cache;
 static int env_dirty = 1;
@@ -397,9 +399,9 @@ init_env(void)
   ifs->func = ifsupdt;
   ifsupdt(shvar_val(ifs));
 
-  sh_pid_s = slalloc(16);
-  sh_bgpid_s = slalloc(16);
-  sh_ppid_s = slalloc(16);
+  sh_pid_s = slalloc(INTSIZE);
+  sh_bgpid_s = slalloc(INTSIZE);
+  sh_ppid_s = slalloc(INTSIZE);
   if (!sh_pid_s || !sh_bgpid_s || !sh_ppid_s) {
     warn("malloc failed");
     exit(1);

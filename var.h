@@ -32,6 +32,7 @@ enum {
 #define VAR_CACHE_S 64
 
 #define shvar_val(v) ((v)->var + (v)->nlen + 1)
+#define vallen(v) ((v)->flen - (v)->nlen - 1)
 #define findvar(v) findvar_n(v, strlen(v))
 
 extern shvar *var_tab;

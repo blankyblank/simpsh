@@ -304,6 +304,17 @@ parse_list(token s)
         last_tok = t2;
         break;
       }
+      if (t.type == TNL) {
+        while (t2.type == TNL) {
+          gettok(CHKALIAS | CHKKWD, t2);
+          if (tokendlist[t2.type]) {
+            last_tok = t2;
+            break;
+          }
+        }
+        if (tokendlist[t2.type])
+          break;
+      }
       last_tok = t2;
       r = parse_cmd();
       if (!r) {
@@ -373,9 +384,11 @@ parse_heredoc(void)
     return;
 
   redir *r;
-  char *eofv, *bpos;
+  char *eofv;
+  char *bpos;
   char c;
-  size_t eofvlen, bodylen;
+  size_t eofvlen;
+  size_t bodylen;
 
   while (heredoc_head) {
     bpos = NULL;
@@ -406,19 +419,17 @@ parse_heredoc(void)
           }
           fprintf(stderr, "unexpected EOF while looking for delimiter\n");
           return;
-        } else if (c == '\n') {
-          break;
         }
+        if (c == '\n')
+          break;
         st_putc(c);
       }
       llen = stnext - lpos;
       if (llen == eofvlen && memcmp(lpos, eofv, eofvlen) == 0) {
         stunalloc(lpos);
         break;
-      } else {
-        st_putc('\n');
-        continue;
       }
+      st_putc('\n');
     }
 
 done:
@@ -487,10 +498,9 @@ parse_case(void)
       t = tokenize();
       if (t.type == TDSEMI)
         continue;
-      else if (t.type == TESAC)
+      if (t.type == TESAC)
         break;
-      else
-       return parserr(curline, "expected", TESAC);
+      return parserr(curline, "expected", TESAC);
     }
   } else {
     return parserr(curline, "expected", TIN);
@@ -602,6 +612,7 @@ parse_if(void)
       else_ = NULL;
       break;
     default:
+      // return NULL;
       return parserr(curline, "unexpected token", t.type);
   }
   return newifnode(cond, then, else_);
@@ -613,17 +624,18 @@ parse_simple_cmd(size_t neg)
   sh_tok t, close;
   wf **args, **sh_vars;
   redir *redirs, **tail;
-  size_t vc, wc, cap;
   cmd_tree *body, *l;
+
+  size_t vc, wc, cap;
   int cmdflags;
 
   sh_lineno = shinpt->linenum;
   // sh_lineno = curline;
-  args = st_alloc(8 * sizeof(wf *));
+  cap = WFCAP;
+  args = st_alloc(cap * sizeof(wf *));
   redirs = NULL;
   tail = &redirs;
   wc = 0;
-  cap = WFCAP;
   cmdflags = (neg & 1) ? NEG : 0;
 
   for (;;) {

@@ -172,32 +172,34 @@ mempcpy_(char *restrict dest, const char *restrict src, size_t n)
 
 /**  get length of char* array  */
 #define array_len(a, c) \
-  while (a[c]) \
-    c++;
+  while ((a)[(c)]) \
+    (c)++;
 
 /** join char** array into single string */
 static inline char *
-join_strn(char **arr, size_t t)
+join_strn(char **arr, size_t *t)
 {
   char *p, *buf;
-  size_t ac = 0;
+  size_t ac = 0, flen;
 
   if (!arr)
     return NULL;
 
   array_len(arr, ac);
-  buf = st_alloc(t + ac);
+  buf = st_alloc(*t + ac);
   p = buf;
 
+  flen = 0;
   for (char **a = arr; *a; a++) {
     size_t len;
     if (a != arr)
       *p++ = ' ';
     len = strlen(*a);
     memcpy(p, *a, len);
-    p += len;
+     p += len, flen += len + 1;
   }
   *p = '\0';
+  *t = flen;
   return buf;
 }
 

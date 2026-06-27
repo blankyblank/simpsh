@@ -247,7 +247,7 @@ bg_cmd(const cmd_tree *n)
         char **argv;
         size_t len;
         argv = expand_argv(CARGS(n), &len);
-        return join_strn(argv, len);
+        return join_strn(argv, &len);
       }
     case OP:
       return "(pipeline)";
@@ -775,7 +775,7 @@ __attribute__((hot)) static int
 run_cmd(const cmd_tree *n, int inchld)
 {
   int status;
-  int ifl, efl;
+  char ifl, efl;
   char **final = NULL;
   char **env = NULL;
   wf **vars;
@@ -800,7 +800,7 @@ run_cmd(const cmd_tree *n, int inchld)
     char *xline;
     sh_ps4 = getvar("PS4");
     sh_ps4 = sh_ps4 ? sh_ps4 : "+";
-    xline = join_strn(final, len);
+    xline = join_strn(final, &len);
     printf("%s %s\n", sh_ps4, xline);
   }
 

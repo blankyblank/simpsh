@@ -192,6 +192,7 @@ findjob(const char *s)
 void
 child_setup_fg(pid_t pgid)
 {
+  cleartraps();
   signal(SIGINT, SIG_DFL);
   signal(SIGQUIT, SIG_DFL);
   signal(SIGTSTP, SIG_DFL);
@@ -211,6 +212,7 @@ child_setup_fg(pid_t pgid)
 void
 child_setup_bg(void)
 {
+  cleartraps();
   signal(SIGINT, SIG_IGN);
   signal(SIGQUIT, SIG_IGN);
   signal(SIGTSTP, SIG_DFL);
