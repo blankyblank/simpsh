@@ -1,7 +1,9 @@
 #ifndef ALLOC_H
 #define ALLOC_H
 
+#define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -9,7 +11,11 @@
  * large which can have it's own drawbacks test more sized */
 #define align_mem(n) (((n) + 15) & ~15)
 #define MINSTACK_S align_mem(8192)
-#define SLCLASSN 9
+#define PAGE_SIZE 4096
+#define MEMMAGIC 0x534C4142
+#define LARGEMAGIC ((void *)(uintptr_t)0x4C52474C)   /* "LARG" */
+#define SLCLASSN 10
+#define STACK_CLS 9
 #define MINSLAB align_mem(4096)
 #define stack_mark() ((stmark) { current, stnext, stleft })
 #define st_strdup(s) (st_strndup(s, strlen(s))) /** stack allocated strdup */
@@ -36,27 +42,24 @@
       i = 8; \
   } while (0)
 
-typedef struct chunk chunk;
 typedef struct stackseg stackseg;
-typedef struct slab slab;
-
-struct chunk {
-  chunk *next;
-  size_t size;
-};
-
 struct stackseg {
   stackseg *prev;
   char _pad[8];
   char buf[MINSTACK_S + 16];
 };
+
 typedef struct {
   stackseg *current;
   char *next;
   size_t stleft;
 } stmark;
 
+typedef struct slab slab;
 struct slab {
+  int magic;
+  int nalloc;  /* outstanding allocations */
+  int ci;      /* class index */
   slab *next;  /* list for free lookup (linked list) */
   size_t stsz; /* slot size */
   void *flist; /* free list */
@@ -70,16 +73,14 @@ typedef struct {
   slab *slabs;
 } slclass;
 
-extern slclass slclasses[SLCLASSN];
+extern slclass slotsz[SLCLASSN];
 
 extern char *stnext;
 extern size_t stleft;
 extern stackseg stackbase;
 extern stackseg *current;
+extern int stacksl;
 
-void *getchunk(size_t);
-void clearchunk(void);
-void *newslab(int);
 /* stack allocator functions */
 extern void stack_restore(stmark);
 extern void stack_clear(void);
@@ -88,17 +89,8 @@ extern void *grow_stack(size_t);
 extern void init_stack(void);
 extern void stunalloc(void *);
 /* slab allocator functions */
+void *newslab(int);
 extern void slclear(void);
-
-static chunk *freelist;
-
-static inline void
-putchunk(void *p)
-{
-  chunk *c = (chunk *)((char *)p - sizeof(chunk));
-  c->next = freelist;
-  freelist = c;
-}
 
 static inline void *
 slalloc(size_t n)
@@ -108,14 +100,25 @@ slalloc(size_t n)
   slab *s;
   void *p;
 
-  if (n >= MINSLAB) {
-    if (!(p = getchunk(align_mem(n))))
-      return NULL;
-    return p;
+if (stacksl) {
+    stacksl = 0;
+    if (n + sizeof(slab *) > slotsz[STACK_CLS].stsz)
+      goto large;
+    i = STACK_CLS;
+    goto stackskip;
   }
-  getclass(n, i);
+  if (n + sizeof(slab *) >= PAGE_SIZE) {
+  large:
+    if (posix_memalign(&p, PAGE_SIZE, align_mem(n) + sizeof(slab *)))
+      return NULL;
+    *(slab **)p = LARGEMAGIC;
+    memset((char *)p + sizeof(slab *), 0, align_mem(n));
+    return (char *)p + sizeof(slab *);
+  }
+  getclass(n + sizeof(slab *), i);
 
-  c = &slclasses[i];
+stackskip:
+  c = &slotsz[i];
   if (!c->slabs) {
     c->slabs = newslab(i);
     if (!c->slabs)
@@ -127,12 +130,16 @@ slalloc(size_t n)
     if (s->flist) {
       p = s->flist;
       s->flist = *(void **)s->flist;
-      return p;
+      s->nalloc++;
+      *(slab **)p = s;
+      return (char *)p + sizeof(slab *);
     }
     if ((char *)s->p + s->stsz <= (char *)s->end) {
       p = s->p;
       s->p = (char *)s->p + s->stsz;
-      return p;
+      s->nalloc++;
+      *(slab **)p = s;
+      return (char *)p + sizeof(slab *);
     }
     s = newslab(i);
     if (!s)
@@ -145,16 +152,26 @@ slfree(void *p)
 {
   if (!p)
     return;
-  for (size_t i = 0; i < SLCLASSN; i++) {
-    for (slab *s = slclasses[i].slabs; s; s = s->next) {
-      if ((char *)p >= (char *)s + sizeof(slab) && (char *)p < (char *)s->end) {
-        *(void **)p = s->flist;
-        s->flist = p;
-        return;
-      }
-    }
+  void *magic, *save;
+  slab *s;
+
+  magic = *(void **)((char *)p - sizeof(slab *));
+  if (magic == LARGEMAGIC) {
+    free((char *)p - sizeof(slab *));
+    return;
   }
-  putchunk(p);
+
+  s = magic;
+  save = p;
+  p = (char *)p - sizeof(slab *);
+  if (s->magic != MEMMAGIC || (char *)p < (char *)s + sizeof(slab) ||
+      (char *)p >= (char *)s->end) {
+    free(save);
+    return;
+  }
+  *(void **)p = s->flist;
+  s->flist = p;
+  s->nalloc--;
 }
 
 static inline void
@@ -162,7 +179,6 @@ static inline void
     void *p;
     size_t total = n * size;
     if ((p = slalloc(total))) {
-        if (total < MINSLAB)
             memset(p, 0, total);
     }
     return p;

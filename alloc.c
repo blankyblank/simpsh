@@ -2,84 +2,15 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
 #include <stdlib.h>
-#include <sys/mman.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 #include "alloc.h"
 #include "lex.h"
 
-void *
-getchunk(size_t n)
-{
-  size_t ttl = sizeof(chunk) + n + MINSLAB;
-  chunk *c, **prev = &freelist;
-  while (*prev) {
-    if ((*prev)->size >= ttl) {
-      chunk *c = *prev;
-      *prev = c->next;
-      return (char *)c + sizeof(chunk);
-    }
-    prev = &(*prev)->next;
-  }
-  if ((c = mmap(NULL, ttl, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE,
-                -1, 0)) == MAP_FAILED)
-    return NULL;
-  c->size = ttl;
-  c->next = NULL;
-  mprotect((char *)c + ttl - MINSLAB, MINSLAB, PROT_READ);
-  return (char *)c + sizeof(chunk);
-}
-
-void
-clearchunk(void)
-{
-  chunk *c = freelist;
-  while (c) {
-    chunk *next = c->next;
-    munmap(c, c->size);
-    c = next;
-  }
-  freelist = NULL;
-}
-
-/* if needed create a new mmaped slab for the size needed */
-void *
-newslab(int ci)
-{
-  void *base;
-
-  if (!(base = getchunk(slclasses[ci].sbsz)))
-    return NULL;
-
-  slab *s;
-  s = (slab *)base;
-  s->stsz = slclasses[ci].stsz;
-  s->flist = NULL;
-  s->p = (char *)base + sizeof(slab);
-  s->end = (char *)base + slclasses[ci].sbsz;
-  s->next = slclasses[ci].slabs;
-  slclasses[ci].slabs = s;
-  return s;
-}
-
-void
-slclear(void)
-{
-  for (size_t i = 0; i < SLCLASSN; i++) {
-    slab *s = slclasses[i].slabs;
-    while (s) {
-      slab *n = s->next;
-      chunk *c = (chunk *)((char *)s - sizeof(chunk));
-      munmap(c, c->size);
-      s = n;
-    }
-  }
-  clearchunk();
-}
-
-/*     STACK ALLOCATOR      */
 /*
  * NOTE:
  *      this stack allocator is directly inspired by dash's stack allocator
@@ -96,29 +27,33 @@ slclear(void)
  * causes a segfault.
  */
 
+#define ul unsigned long
 stackseg stackbase;
 stackseg *current = &stackbase;
 char *stnext = stackbase.buf;
 size_t stleft = MINSTACK_S;
+int stacksl = 0;
 
-slclass slclasses[SLCLASSN] = {
-  { .stsz = 16,   .sbsz = 65536  },
-  { .stsz = 32,   .sbsz = 65536  },
-  { .stsz = 64,   .sbsz = 65536  },
-  { .stsz = 128,  .sbsz = 65536  },
-  { .stsz = 256,  .sbsz = 65536  },
-  { .stsz = 512,  .sbsz = 131072 },
-  { .stsz = 1024, .sbsz = 131072 },
-  { .stsz = 2048, .sbsz = 131072 },
-  { .stsz = 4096, .sbsz = 131072 },
+slclass slotsz[SLCLASSN] = {
+  { .stsz = 24,    .sbsz = sizeof(slab) + (ul)(512 * 16)  },
+  { .stsz = 40,    .sbsz = sizeof(slab) + (ul)(256 * 32)  },
+  { .stsz = 72,    .sbsz = sizeof(slab) + (ul)(128 * 64)  },
+  { .stsz = 136,   .sbsz = sizeof(slab) + (ul)(128 * 128) },
+  { .stsz = 264,   .sbsz = sizeof(slab) + (ul)(64 * 128)  },
+  { .stsz = 520,   .sbsz = sizeof(slab) + (ul)(32 * 512)  },
+  { .stsz = 1032,  .sbsz = sizeof(slab) + (ul)(18 * 1024) },
+  { .stsz = 2056,  .sbsz = sizeof(slab) + (ul)(8 * 2056)  },
+  { .stsz = 4104,  .sbsz = sizeof(slab) + (ul)(4 * 4104)  },
+  { .stsz = 16392, .sbsz = sizeof(slab) + (ul)(2 * 16392) },
 };
+/*     STACK ALLOCATOR      */
 
 void
 stunalloc(void *p)
 {
   if (p >= (void *)stnext)
     return;
-  stleft += (char *)stnext - (char *)p;
+  stleft += stnext - (char *)p;
   stnext = p;
 }
 
@@ -128,7 +63,7 @@ stack_restore(stmark m)
 {
   while (current != &stackbase && current != m.current) {
     stackseg *tmp = current->prev;
-    putchunk(current);
+    slfree(current);
     current = tmp;
   }
   current = m.current;
@@ -142,7 +77,8 @@ st_addseg(size_t asize)
 {
   size_t need = asize < MINSTACK_S ? MINSTACK_S : asize;
   size_t len = sizeof(stackseg) - MINSTACK_S + need;
-  stackseg *nseg = getchunk(len);
+  stacksl = 1;
+  stackseg *nseg = slalloc(len);
   if (!nseg)
     return NULL;
   nseg->prev = current;
@@ -170,7 +106,8 @@ grow_stack(size_t msize)
   nsize = align_mem(msize + used + 128);
   if (nsize < MINSTACK_S)
     nsize = MINSTACK_S;
-  if (!(nb = getchunk(sizeof(stackseg) - MINSTACK_S + nsize)))
+  stacksl = 1;
+  if (!(nb = slalloc(sizeof(stackseg) - MINSTACK_S + nsize)))
     return NULL;
   nb->prev = current;
   current = nb;
@@ -188,7 +125,7 @@ stack_clear(void)
   stackseg *tmp;
   while (current->prev != NULL) {
     tmp = current->prev;
-    putchunk(current);
+    slfree(current);
     current = tmp;
   }
   current = &stackbase;
@@ -200,7 +137,48 @@ stack_clear(void)
 void
 init_stack(void)
 {
+  memset(stackbase.buf, 0, sizeof(stackbase.buf));
   current = &stackbase;
   stnext = stackbase.buf;
   stleft = MINSTACK_S;
 }
+
+/*  slab allocator  */
+
+
+/* if needed create a new mmaped slab for the size needed */
+void *
+newslab(int ci)
+{
+  void *base;
+
+  if ((base = mmap(NULL, slotsz[ci].sbsz, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)) == MAP_FAILED)
+    return NULL;
+  slab *s;
+  s = (slab *)base;
+  s->ci = ci;
+  s->magic = MEMMAGIC;
+  s->stsz = slotsz[ci].stsz;
+  s->flist = NULL;
+  s->p = (char *)base + sizeof(slab);
+  s->end = (char *)base + slotsz[ci].sbsz;
+  s->next = slotsz[ci].slabs;
+  slotsz[ci].slabs = s;
+  return s;
+}
+
+void
+slclear(void)
+{
+  for (size_t i = 0; i < SLCLASSN; i++) {
+    slab *s = slotsz[i].slabs;
+    while (s) {
+      slab *n = s->next;
+      munmap(s, slotsz[s->ci].sbsz);
+      s = n;
+    }
+    slotsz[i].slabs = NULL;
+  }
+}
+
