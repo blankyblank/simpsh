@@ -257,15 +257,14 @@ nexpr(testvar *tv)
 
 static int
 aexpr(testvar *tv) {
-  int res;
+  int res, r;
 
   res = nexpr(tv);
 
   if (tv->pos < tv->wpend  && (*tv->pos)[0] == '-' && (*tv->pos)[1] == 'a' && (*tv->pos)[2] == '\0') {
     tv->pos++;
-    if (!res)
-      return 0;
-    return aexpr(tv);
+    r = aexpr(tv);
+    return res && r;
   }
   return res;
 }
@@ -273,14 +272,13 @@ aexpr(testvar *tv) {
 static int
 oexpr(testvar *tv)
 {
-  int res;
+  int res, r;
 
   res = aexpr(tv);
   if (tv->pos < tv->wpend && **tv->pos == '-' && (*tv->pos)[1] == 'o' && (*tv->pos)[2] == '\0') {
     tv->pos++;
-    if (res)
-      return 1;
-    return oexpr(tv);
+    r = oexpr(tv);
+    return res || r;
   }
   return res;
 }

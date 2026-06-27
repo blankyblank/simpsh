@@ -123,10 +123,27 @@ free_tree(cmd_tree *n)
       free_wf(CFOR(n).name);
       slfree(n);
       break;
+    case CASE:
+      free_wf(CCASE(n).word);
+      for (clause *c = CCASE(n).clauses; c;) {
+        clause *next = c->next;
+        for (size_t i = 0; c->ptrn[i]; i++)
+          free_wf(c->ptrn[i]);
+        slfree(c->ptrn);
+        free_tree(c->body);
+        slfree(c);
+        c = next;
+      }
+      slfree(n);
+      break;
     case IF:
       free_tree(n->left);
       free_tree(n->right);
       free_tree(CELSE(n));
+      slfree(n);
+      break;
+    case BRACE:
+      free_tree(n->left);
       slfree(n);
       break;
     case CMD:

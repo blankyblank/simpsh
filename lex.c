@@ -1,4 +1,5 @@
 /* lex.c - tokenizer functions */
+/* NOLINTBEGIN(readability-function-cognitive-complexity) */
 #define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
 #include <stdio.h>
@@ -498,7 +499,7 @@ get_wf(int c)
               goto done;
             }
             switch (cstate) {
-              qescape(c)
+              qescape(ch)
             }
             switch (ch) {
               case '\'':
@@ -811,3 +812,4 @@ tokenize(void)
   }
   return SHTOK(TEOF);
 }
+/* NOLINTEND(readability-function-cognitive-complexity) */

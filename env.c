@@ -32,6 +32,26 @@ wfdup(wf *s)
   return n;
 }
 
+static inline clause *
+clausedup(clause *c)
+{
+  size_t cnt = 0;
+  clause *n;
+
+  if (!c)
+    return NULL;
+  n = slalloc(sizeof(clause));
+  for (size_t i = 0; c->ptrn[i]; i++)
+    cnt++;
+  n->ptrn = slalloc((cnt + 1) * sizeof(wf *));
+  for (size_t i = 0; c->ptrn[i]; i++)
+    n->ptrn[i] = wfdup(c->ptrn[i]);
+  n->ptrn[cnt] = NULL;
+  n->body = tree_dup(c->body);
+  n->next = clausedup(c->next);
+  return n;
+}
+
 cmd_tree *
 tree_dup(cmd_tree *s)
 {
@@ -67,6 +87,13 @@ tree_dup(cmd_tree *s)
     case WHILE:
       n->left = tree_dup(s->left);
       n->right = tree_dup(s->right);
+      break;
+    case BRACE:
+      n->left = tree_dup(s->left);
+      break;
+    case CASE:
+      CCASE(n).word = wfdup(CCASE(s).word);
+      CCASE(n).clauses = clausedup(CCASE(s).clauses);
       break;
     case FOR:
       {
