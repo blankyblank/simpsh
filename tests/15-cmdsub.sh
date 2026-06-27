@@ -30,3 +30,13 @@ if [ "$out2" != "before_in_after" ]; then
 else
   test_pass "out2" "matches" "before_in_after"
 fi
+
+msg_run 'backtick command substitution test: t=`echo test123` ; echo $t'
+out3=$(../simpsh -c 't=`echo test123` ; echo $t')
+if [ "$out3" != "test123" ]; then
+  test_fail "out3" "expected" "test123"
+  exit 1
+else
+  test_pass "out3" "matches" "test123"
+fi
+

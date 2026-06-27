@@ -5,7 +5,10 @@
 [ -f ./funcs ] && . ./funcs
 
 msg_run 'if test: if true; then echo true; fi'
-out=$(../simpsh -c 'if true; then echo true; fi')
+out=$(../simpsh -c 'if true; then
+  echo true
+fi
+  ')
 if [ "$out" != "true" ]; then
   test_fail "out" "expected" "true"
   exit 1
@@ -14,7 +17,13 @@ else
 fi
 
 msg_run 'if else test: if false; then echo true; else echo false; fi'
-out1=$(../simpsh -c 'if false; then echo true; else echo false; fi')
+out1=$(../simpsh -c 'if false; then
+  echo true
+
+else
+
+  echo false
+fi')
 if [ "$out1" != "false" ]; then
   test_fail "out1" "expected" "false"
   exit 1

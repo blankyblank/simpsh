@@ -13,6 +13,11 @@ check() {
     fi
 }
 
+msg_run '[ = ] test: [ "$var" = "hello" ]'
+out=$(../simpsh -c 'var=hello; [ "$var" = "hello" ] && echo y || echo n')
+[ "$out" = "y" ] || { msg_fail "fast path: got '$out'"; exit 1; }
+test_pass "out" "matches" "y"
+
 msg_run 'fast path: [ 1 -eq 1 ]'
 out=$(../simpsh -c '[ 1 -eq 1 ] && echo y || echo n')
 [ "$out" = "y" ] || { msg_fail "fast path: got '$out'"; exit 1; }
@@ -84,4 +89,4 @@ check "int le"          "1 -le 1"               y
 check "int ge"          "1 -ge 1"               y
 check "file eq"         "/etc/passwd -ef /etc/passwd" y
 # Don't add -nt/-ot as those depend on file mtimes
-test_pass "all" "flags pass" "all"
+msg_pass "all flags pass"
