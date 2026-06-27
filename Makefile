@@ -1,3 +1,4 @@
+.POSIX:
 CC := gcc
 # cc | gcc | clang
 BUILD       ?= release
@@ -7,7 +8,9 @@ BUILD_LINK  ?= dynamic
 READLINE    := y
 # set to anything to enable, unset to disable
 GCOV :=
-# Build mode presets
+
+PREFIX := /usr/local
+BINDIR := $(DESTDIR)$(PREFIX)/bin
 
 # Compiler flags
 CFLAGS  := --std=c99 -I. -Wall -Wextra -pedantic -pipe
@@ -15,7 +18,7 @@ LDFLAGS :=
 LDLIBS  :=
 
 ifeq ($(BUILD),release)
-	CFLAGS += -march=native -O2 -flto=auto
+	CFLAGS += -march=native -O2 -flto=auto -fno-omit-frame-pointer
 # -D_FORTIFY_SOURCE=3
 endif
 ifdef GCOV
@@ -121,11 +124,10 @@ all.c:
 	echo "int main() { return 0;}" > all.c
 
 install:
-	rm -f /home/blank/.local/bin/simpsh
-	cp -f simpsh /home/blank/.local/bin/
-	chmod 755 /home/blank/.local/bin/simpsh
+	rm -f $(BINDIR)/simpsh
+	install -m 755 simpsh $(BINDIR)/simpsh
 uninstall:
-	rm -f /home/blank/.local/bin/simpsh
+	rm -f $(BINDIR)/simpsh
 clean:
 	rm -f simpsh obj/*.o
 analyze:
