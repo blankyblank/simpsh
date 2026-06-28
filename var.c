@@ -21,17 +21,32 @@
 #include "var.h"
 
 #define INTSIZE 16
+
+/* shell variables */
+intf sh_lineno;
+pid_t sh_pid;
+pid_t sh_ppid;
+char *sh_ppid_s = NULL;
+char *sh_pid_s = NULL;
+char *sh_bgpid_s = NULL;
+pid_t sh_bgpid;
+char *sh_lineno_s;
+char *sh_ps1;
+char *sh_ps2;
+char *sh_ps4;
+char *home;
+size_t homelen;
+
 static shvar var_tab_init[VAR_BUCKETS_INIT];
-static char **env_cache;
-static int env_dirty = 1;
 shvar *var_tab = var_tab_init;
 shvar *var_cache[VAR_CACHE_S];
 size_t var_tab_size = VAR_BUCKETS_INIT;
 size_t var_count;
 tmp_var localvars[LOCAL_MAX];
 size_t localsp;
+static char **env_cache;
+static int env_dirty = 1;
 static shvar linevar;
-// XXX: 256?
 static char linebuf[256];  /* 7 header + some digits */
 
 void
@@ -376,7 +391,7 @@ void
 init_env(void)
 {
   size_t i, env_c = 0;
-  shvar *p, *ifs;
+  shvar *p, *ifs, *ps1, *ps2, *ps4;
   int shlvl;
   char *shlvl_s, pwd[PATH_MAX];
 
@@ -406,11 +421,23 @@ init_env(void)
     warn("malloc failed");
     exit(1);
   }
+
+  if (!(ps1 = findvar_n(ps1n, 3))) {
+    sh_ps1 = " $ ";
+    setvar(ps1n, sh_ps1, 0);
+  }
+  if (!(ps2 = findvar_n(ps2n, 3))) {
+    sh_ps2 = " > ";
+    setvar(ps2n, sh_ps2, 0);
+  }
+  if (!(ps4 = findvar_n(ps4n, 3))) {
+    sh_ps4 = " + ";
+    setvar(ps4n, sh_ps4, 0);
+  }
   if (!getcwd(pwd, PATH_MAX))
     shwarnx("getcwd", "couldn't get PWD");
   else
     setvar(pwdn, pwd, VEXPRT);
-
 
   sh_ppid = getppid();
   sh_pid = getpid();

@@ -1,6 +1,6 @@
 /* simpsh.c - functions for running the shell */
 #define _POSIX_C_SOURCE 200809L
-
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
@@ -8,12 +8,11 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#ifdef READLINE
-#include <readline/history.h>
-#include <readline/readline.h>
+#ifdef LIBEDIT
+#include <histedit.h>
 #else
 #include "utils.h"
-#endif /* ifdef READLINE */
+#endif /* ifdef LIBEDIT */
 
 #include "alloc.h"
 #include "error.h"
@@ -28,43 +27,158 @@
 #include "simpsh.h"
 #include "var.h"
 
-static char *nxtline;
-#ifdef READLINE
-#define DIRPERMS S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH
-static int pmkdir(char *);
-#endif /* ifdef READLINE */
+static int need_more(const char *, size_t);
+static int read_cont(char **, size_t *);
+static int read_cmd(char ** restrict, size_t * restrict);
+static shinput *init_interactive(void);
 
-#ifndef MUSL
-void
-getbuildinfo(void) {
-  printf("%s build info:\n"
-         "build date: %s %s\n"
-         "ansi C standard conformance: %ld\n",
-         sh_argv0, __DATE__, __TIME__, __STDC_ISO_10646__);
-}
-#endif /* ifndef MUSL */
+#ifdef LIBEDIT
+#define DIRPERMS (S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH)
+static EditLine *thel;
+static History *hist;
+static int ps1mode;
+
+static int pmkdir(char *);
+static int input_notify(EditLine *, wchar_t *);
+static char *prompt_fn(EditLine *);
+void init_history(void);
+#else
+static char *nxtline;
+
+static void stdin_cb(void *data);
+#endif /* LIBEDIT */
 
 static inline void
-stdin_cb(void *data)
+source_file(const char *path)
 {
-  (void)data;
-#ifdef READLINE
-  rl_callback_read_char();
-#else
-  char buf[4096];
-  ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
-  if (n > 0) {
-    char *nl = memchr(buf, '\n', n);
-    if (nl)
-      *nl = '\0';
-    else
-      buf[n] = '\0';
-    nxtline = st_strdup(buf);
-    stopeventloop(&el);
-  } else if (!n) {
-    stopeventloop(&el);
+  int fd = open(path, O_RDONLY);
+  if (fd < 0)
+    return;
+  setinputf(fd, 0);
+  eval_run();
+  retnow = 0;
+  popinput();
+}
+
+static char *
+update_prompt(intf ps1)
+{
+  char *p;
+
+  if (!(p = getvar(ps1 ? ps1n : ps2n)))
+    return ps1 ? " $ " : " > ";
+  return expand_ps1(p);
+}
+
+static inline void
+feed_input(shinput *inpt, const char *lines, size_t llen)
+{
+  size_t cpylen;
+  cpylen = llen > BUFSIZ ? BUFSIZ : llen;
+  memcpy(inpt->buf, lines, cpylen);
+  inpt->nchar = inpt->buf;
+  inpt->nleft = cpylen;
+  inpt->unget = 0;
+}
+
+
+static int
+read_cont(char **lines, size_t *llen)
+{
+  char *line;
+  size_t n;
+  stmark mark = stack_mark();
+  while (need_more(*lines, *llen)) {
+    stack_restore(mark);
+    line = lineread(0);
+    if (!line)
+      return -1;
+    if (vflag) {
+      fputs(line, stderr);
+      fputc('\n', stderr);
+    }
+
+    n = strlen(line);
+    char *new = st_alloc(*llen + n + 2);
+    memcpy(new, lines, *llen);
+    memcpy(new + *llen, line, n);
+    new[*llen + n] = '\n';
+    new[*llen + n + 1] = '\0';
+    *lines = new;
+    *llen += n + 1;
   }
-#endif /* READLINE */
+  return 0;
+}
+
+static int
+read_cmd(char **restrict cmd, size_t *restrict len)
+{
+  char *line = lineread(1);
+  if (!line)
+    return 0;
+  if (vflag) {
+    fputs(line, stderr);
+    fputc('\n', stderr);
+  }
+  size_t n = strlen(line);
+  char *lines = st_alloc(n + 2);
+  memcpy(lines, line, n);
+  lines[n] = '\n';
+  lines[n + 1] = '\0';
+  size_t llen = n + 1;
+  if (read_cont(&lines, &llen) < 0)
+    return -1;
+  *cmd = lines;
+  *len = llen;
+  return 1;
+}
+
+static shinput *
+init_interactive(void)
+{
+  static shinput *inpt;
+  inpt = st_alloc(sizeof(shinput));
+  inpt->buf = st_alloc(BUFSIZ);
+  inpt->fd = -1;
+  inpt->nchar = inpt->buf;
+  inpt->prev = shinpt;
+  inpt->strpush = NULL;
+  inpt->b.mapsize = 0;
+  inpt->linenum = 1;
+  inpt->unget = 0;
+  inpt->nleft = 0;
+  shinpt = inpt;
+  return inpt;
+}
+
+void
+init_rc(int flag)
+{
+  if (flag & LOGIN) {
+    source_file("/etc/profile");
+    if (home) {
+      size_t hl, flen;
+      const size_t plen = 8;
+      char hprof[PATH_MAX];
+      hl = strlen(home);
+      flen = hl + plen + 2;
+      memcpy(hprof, home, hl);
+      hprof[hl] = '/';
+      memcpy(hprof + hl + 1, ".profile", plen);
+      hprof[flen - 1] = '\0';
+      source_file(hprof);
+    }
+  }
+
+  if (iflag && getuid() == geteuid() && getgid() == getegid()) {
+    char *f;
+    size_t elen;
+    shvar *e;
+    if ((e = findvar_n(envn, 3))) {
+      f = exp_str(shvar_val(e), vallen(e), &elen);
+      source_file(f);
+    }
+  }
 }
 
 /* simplified shell loop for eval and '.' */
@@ -121,6 +235,7 @@ simpsh_run(void)
     }
     if (!nflag)
       run_commands(c, 0);
+    fflush(stdout);
     if (retnow) {
       retnow = 0;
       stack_restore(mark);
@@ -140,6 +255,74 @@ simpsh_run(void)
       intsig = 0;
   }
 }
+
+int
+sh_interactive(void)
+{
+  char *lines;
+  stmark mark;
+  shinput *inpt;
+  size_t llen;
+  int r;
+
+#ifdef LIBEDIT
+  HistEvent ev;
+  thel = el_init(sh_argv0, stdin, stdout, stderr);
+  el_set(thel, EL_EDITOR, "vi");
+  el_set(thel, EL_SIGNAL, 1);
+  el_set(thel, EL_GETCFN, input_notify);
+  el_set(thel, EL_PROMPT, prompt_fn);
+  hist = history_init();
+  el_set(thel, EL_HIST, history, hist);
+  init_history();
+#endif
+
+  inpt = init_interactive();
+
+  for (;;) {
+    ttyreclaim();
+    /* service events between sub-commands within same command list */
+    runeventloop(&el, 0);
+    killjob();
+    if (ndnotify || !bflag) {
+      ndnotify = 0;
+      jobnotify();
+    }
+    ndnotify = 0;
+    if (intsig) {
+      intsig = 0;
+      putchar('\n');
+    }
+    mark = stack_mark();
+
+    r = read_cmd(&lines, &llen);
+    if (r == 0) {
+      if (Iflag && iflag) {
+        clearerr(stdin);
+        if ((write(STDOUT_FILENO, dmsg, strlen(dmsg) + 1)) < 0)
+          err(1, "write");
+        stack_restore(mark);
+        continue;
+      }
+      stack_restore(mark);
+      break;
+    }
+    if (r < 0) {
+      stack_restore(mark);
+      return 1;
+    }
+
+    feed_input(inpt, lines, llen);
+    simpsh_run();
+#ifdef LIBEDIT
+    history(hist, &ev, H_SAVE, histfile);
+#endif
+    stack_restore(mark);
+  }
+  ttyrestore();
+  return lstatus;
+}
+
 
 static int
 need_more(const char *lines, size_t lineslen)
@@ -232,210 +415,77 @@ need_more(const char *lines, size_t lineslen)
   return 0;
 }
 
+
+#ifdef LIBEDIT
 static int
-read_cmd(char **restrict cmd, size_t *restrict len)
+input_notify(EditLine *e, wchar_t *wc)
 {
-  char *ps1 = expand_ps1(getvar(ps1n));
-  char *line = lineread(ps1 ? ps1 : " $ ");
-  if (!line)
-    return 0;
-  if (vflag) {
-    fputs(line, stderr);
-    fputc('\n', stderr);
-  }
-  size_t n = strlen(line);
-  char *lines = st_alloc(n + 2);
-  memcpy(lines, line, n);
-  lines[n] = '\n';
-  lines[n + 1] = '\0';
-  size_t lineslen = n + 1;
-#ifdef READLINE
-  free(line);
-#endif
-
-  stmark mark = stack_mark();
-  while (need_more(lines, lineslen)) {
-    stack_restore(mark);
-    char *ps2 = expand_ps1(getvar(ps2n));
-    line = lineread(ps2 ? ps2 : "> ");
-    if (!line)
-      return -1;
-    if (vflag) {
-      fputs(line, stderr);
-      fputc('\n', stderr);
-    }
-
-    n = strlen(line);
-    char *new = st_alloc(lineslen + n + 2);
-    memcpy(new, lines, lineslen);
-    memcpy(new + lineslen, line, n);
-    new[lineslen + n] = '\n';
-    new[lineslen + n + 1] = '\0';
-#ifdef READLINE
-    free(line);
-#endif
-    lines = new;
-    lineslen += n + 1;
-  }
-
-  *cmd = lines;
-  *len = lineslen;
-  return 1;
-}
-
-int
-sh_interactive(void)
-{
-  char *lines;
-  stmark mark;
-  size_t lineslen, cpylen;
-  int r;
-  static shinput *inpt;
-
-#ifdef READLINE
-  init_history();
-  FILE *tty = fopen("/dev/tty", "w+");
-  if (tty) {
-    setbuf(tty, NULL);
-    rl_outstream = tty;
-  }
-#endif
-
-  inpt = st_alloc(sizeof(shinput));
-  inpt->buf = st_alloc(BUFSIZ);
-  inpt->fd = -1;
-  inpt->nchar = inpt->buf;
-  inpt->prev = shinpt;
-  shinpt = inpt;
+  (void)e;
+  struct pollfd fds[2];
+  fds[0].fd = STDIN_FILENO;
+  fds[0].events = POLLIN;
+  fds[1].fd = selfpipe[0];
+  fds[1].events = POLLIN;
 
   for (;;) {
-    ttyreclaim();
-    runeventloop(&el, 0);
-    killjob();
-    if (ndnotify || !bflag) {
-      ndnotify = 0;
-      jobnotify();
-    }
-    ndnotify = 0;
-    if (intsig) {
-      intsig = 0;
-      putchar('\n');
-    }
-    mark = stack_mark();
+    if (poll(fds, 2, -1) < 0)
+      return -1;
 
-    r = read_cmd(&lines, &lineslen);
-    if (r == 0) {
-      if (Iflag && iflag) {
-        clearerr(stdin);
-        if ((write(STDOUT_FILENO, dmsg, strlen(dmsg) + 1)) < 0)
-          err(1, "write");
-        stack_restore(mark);
-        continue;
+    if (fds[1].revents & POLLIN) {
+      drain_chldp();
+      if (bflag && ndnotify) {
+        ndnotify = 0;
+        jobnotify();
       }
-      stack_restore(mark);
-      break;
-    }
-    if (r < 0) {
-      stack_restore(mark);
-      return 1;
+      continue;
     }
 
-    cpylen = lineslen > BUFSIZ ? BUFSIZ : lineslen;
-    memcpy(inpt->buf, lines, cpylen);
-    inpt->nchar = inpt->buf;
-    inpt->nleft = cpylen;
-    inpt->unget = 0;
-    simpsh_run();
-#ifdef READLINE
-    append_history(1, histfile);
-#endif
-    stack_restore(mark);  /* frees lines/parse trees, NOT persist */
+    unsigned char c;
+    if (read(STDIN_FILENO, &c, 1) != 1)
+      return -1;
+    *wc = c;
+    return 1;
   }
-  ttyrestore();
-  return lstatus;
 }
 
-#ifdef READLINE
-
-static inline void
-handle_line(char *line)
+static char *
+prompt_fn(EditLine *e)
 {
-  nxtline = line;
-  rl_callback_handler_remove();
-  stopeventloop(&el);
+  (void)e;
+  return update_prompt(ps1mode);
 }
 
 /** read line from interactive shell */
 char *
-lineread(char *prompt)
+lineread(int ps1)
 {
-  addeventloop(&el, STDIN_FILENO, POLLIN, stdin_cb, NULL);
-  rl_already_prompted = 1;
-  rl_callback_handler_install(prompt, handle_line);
-  rl_redisplay();
-  nxtline = NULL;
-  el.running = 1;
-  while (el.running) {
-    runeventloop(&el, -1);
-    if (intsig) {
-      intsig = 0;
+  int count;
+  char *s;
+  const char *line;
+  HistEvent ev;
+
+again:
+  ps1mode = ps1;
+  line = el_gets(thel, &count);
+  if (!line) {
+    if (!count) {
       putchar('\n');
-      rl_free_line_state();
-      rl_cleanup_after_signal();
-      rl_already_prompted = 1;
-      rl_callback_handler_install(prompt, handle_line);
-      rl_redisplay();
-      nxtline = NULL;
-      el.running = 1;
+      return NULL;
     }
-  }
-  rmeventloop(&el, STDIN_FILENO);
-  if (nxtline && *nxtline)
-    add_history(nxtline);
-  return nxtline;
-}
-
-
-static inline void
-source_file(const char *path)
-{
-  int fd = open(path, O_RDONLY);
-  if (fd < 0)
-    return;
-  setinputf(fd, 0);
-  eval_run();
-  retnow = 0;
-  popinput();
-}
-
-void
-init_rc(int flag)
-{
-  if (flag & LOGIN) {
-    source_file("/etc/profile");
-    if (home) {
-      size_t hl, flen;
-      const size_t plen = 8;
-      char hprof[PATH_MAX];
-      hl = strlen(home);
-      flen = hl + plen + 2;
-      memcpy(hprof, home, hl);
-      hprof[hl] = '/';
-      memcpy(hprof + hl + 1, ".profile", plen);
-      hprof[flen - 1] = '\0';
-      source_file(hprof);
+    if (errno == EINTR) {
+      putchar('\n');
+      goto again;
     }
+    return NULL;
   }
 
-  if (iflag && getuid() == geteuid() && getgid() == getegid()) {
-    char *f;
-    size_t elen;
-    shvar *e;
-    if ((e = findvar_n(envn, 3))) {
-      f = exp_str(shvar_val(e), vallen(e), &elen);
-      source_file(f);
-    }
-  }
+  if (count > 0 && line[count - 1] == '\n')
+    count--;
+  s = st_alloc(count + 1);
+  memcpy(s, line, count);
+  s[count] = '\0';
+  history(hist, &ev, H_ENTER, s);
+  return s;
 }
 
 /** initialize history */
@@ -443,21 +493,16 @@ void
 init_history(void)
 {
   char buf[PATH_MAX];
+  HistEvent ev;
   snprintf(histfile, PATH_MAX, "%s/.local/state/simpsh/simpsh_history", home);
-  using_history();
+  history(hist, &ev, H_SETSIZE, HISTORY_SIZE);
   if (access(histfile, W_OK) < 0) {
     static const char *histdir = ".local/state/simpsh";
     snprintf(buf, PATH_MAX, "%s/%s", home, histdir);
     if (!pmkdir(buf))
       return;
-    if (access(histfile, W_OK) < 0)
-      if (write_history(histfile) != 0)
-        return;
-  } else {
-    history_truncate_file(histfile, HISTORY_SIZE);
-    if (read_history_range(histfile, 0, -1) != 0)
-      perror("Failed to read .simpsh_history");
   }
+  history(hist, &ev, H_LOAD, histfile);
 }
 
 /**  created directories and their parents if they don't exist  */
@@ -480,11 +525,32 @@ pmkdir(char *path)
 }
 #else
 
+static void
+stdin_cb(void *data)
+{
+  (void)data;
+  char buf[4096];
+  ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
+  if (n > 0) {
+    char *nl = memchr(buf, '\n', n);
+    if (nl)
+      *nl = '\0';
+    else
+      buf[n] = '\0';
+    nxtline = st_strdup(buf);
+    stopeventloop(&el);
+  } else if (!n) {
+    stopeventloop(&el);
+  }
+}
+
 /** lineread with no readline, for testing */
 char *
-lineread(char *prompt)
+lineread(int ps1)
 {
+  char *prompt;
   addeventloop(&el, STDIN_FILENO, POLLIN, stdin_cb, NULL);
+  prompt = update_prompt(ps1);
   fputs(prompt, stdout);
   fflush(stdout);
   nxtline = NULL;
@@ -505,5 +571,5 @@ lineread(char *prompt)
   rmeventloop(&el, STDIN_FILENO);
   return nxtline;
 }
-#endif /* ifdef READLINE */
+#endif /* ifdef LIBEDIT */
 

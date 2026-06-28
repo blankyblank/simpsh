@@ -7,11 +7,7 @@
 #include <locale.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <string.h>
 #include <unistd.h>
-#ifdef READLINE
-  #include <readline/history.h>
-#endif /* ifdef READLINE */
 
 #include "alloc.h"
 #include "arg.h"
@@ -41,26 +37,13 @@ const char linen[16] = "LINENO";
 const char cdpthn[16] = "CDPATH";
 const char ps1n[16] = "PS1";
 const char ps2n[16] = "PS2";
+const char ps4n[16] = "PS4";
 
 /* global shell variables */
-intf sh_lineno;
 intf sh_argc;
-pid_t sh_pid;
-pid_t sh_ppid;
-char *sh_ppid_s = NULL;
-char *sh_pid_s = NULL;
-char *sh_bgpid_s = NULL;
-pid_t sh_bgpid;
-char *sh_lineno_s;
 char *sh_argv0;
-char *sh_prompt;
-char *sh_ps1;
-char *sh_ps2;
-char *sh_ps4;
 char **sh_argv;
 int alloc_sh_argv = 0;
-char *home;
-size_t homelen;
 intf lstatus;
 int retval = 0;
 int retnow = 0;

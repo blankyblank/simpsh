@@ -309,3 +309,13 @@ err:
   return 1;
 }
 
+#ifndef MUSL
+void
+getbuildinfo(void) {
+  printf("%s build info:\n"
+         "build date: %s %s\n"
+         "ansi C standard conformance: %ld\n",
+         sh_argv0, __DATE__, __TIME__, __STDC_ISO_10646__);
+}
+#endif /* ifndef MUSL */
+

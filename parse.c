@@ -11,6 +11,7 @@
 #include "opts.h"
 #include "parse.h"
 #include "utils.h"
+#include "var.h"
 
 static const char tokendlist[] = {
   [TEOF]   = 1,

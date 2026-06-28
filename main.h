@@ -1,8 +1,6 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-/* #define _XOPEN_SOURCE 700 */
-#include <stdint.h>
 #define _POSIX_C_SOURCE 200809L
 #ifdef HAVE_PATHS_H
   #include <paths.h>
@@ -12,8 +10,9 @@
   #include <valgrind/memcheck.h>
 #endif /* ifdef ENABLE_VALGRIND */
 
-#include <unistd.h>
 #include <limits.h>
+#include <stdint.h>
+#include <unistd.h>
 
 #define MAX_ENV 500
 #define HISTORY_SIZE 1000
@@ -56,33 +55,19 @@ extern const char cdpthn[16];
 extern const char linen[16];
 extern const char ps1n[16];
 extern const char ps2n[16];
+extern const char ps4n[16];
 
-/* shell variables */
 extern char **environ;
 extern char *sh_argv0; /* the shells first arguement */
 extern char **sh_argv; /* shell arguement array */
-extern char *sh_prompt; /* prompt string */
-extern char *sh_ps1; /* prompt string */
-extern char *sh_ps2; /* continuation prompt string */
-extern char *sh_ps4;
 extern intf sh_argc; /* shell arg count */
+extern int alloc_sh_argv; /* if sh_argv was alloced */
 extern intf lstatus; /* last exit status */
-extern int retval; /* return builtins value */
+extern int retval; /* value from 'return n' */
 extern int retnow; /* if set return from func or . file */
 extern int loopdepth; /* current loop nesting depth */
 extern int loopbreak; /* remaining break depth */
 extern int loopcontinue; /* remaining continue depth */
-extern intf sh_lineno;
-extern pid_t sh_pid;
-extern pid_t sh_ppid;
-extern pid_t sh_bgpid;
-extern char *sh_lineno_s; /* current line number */
-extern char *sh_pid_s; /* the shell's pid */
-extern char *sh_ppid_s; /* the shell's ppid */
-extern char *sh_bgpid_s; /* the last background processes pid */
-extern int alloc_sh_argv; /* if sh_argv was alloced */
-extern char *home;
-extern size_t homelen;
 
 extern char histfile[PATH_MAX];
 #endif /* !MAIN_H */

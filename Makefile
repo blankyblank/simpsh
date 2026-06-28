@@ -1,11 +1,11 @@
 .POSIX:
-CC := gcc
+CC := clang
 # cc | gcc | clang
 BUILD       ?= release
 # debug | release | sanitize | valgrind | profile
-BUILD_LINK  ?= dynamic
+BUILD_LINK  ?= static
 # dynamic | static | static-musl
-READLINE    := y
+LIBEDIT := y
 # set to anything to enable, unset to disable
 GCOV :=
 
@@ -18,7 +18,7 @@ LDFLAGS :=
 LDLIBS  :=
 
 ifeq ($(BUILD),release)
-	CFLAGS += -march=native -O2 -flto=auto -fno-omit-frame-pointer
+	CFLAGS += -march=native -O2 -flto=auto
 # -D_FORTIFY_SOURCE=3
 endif
 ifdef GCOV
@@ -85,20 +85,20 @@ endif
 ifeq ($(BUILD_LINK),static)
 	LDFLAGS += -static
 endif
-# Readline
-ifdef READLINE
-	CFLAGS += -DREADLINE
+# libedit
+ifdef LIBEDIT
+	CFLAGS += -DLIBEDIT
 	ifneq ($(BUILD_LINK),static)
 		ifneq ($(BUILD_LINK),static-musl)
-			LDLIBS += -lreadline
+			LDLIBS += -ledit
 		endif
 	endif
   ifeq ($(BUILD_LINK),static-musl)
 		CFLAGS +=  -DMUSL
-		LDLIBS += -lreadline -lhistory -lncurses
+		LDLIBS += -ledit -lhistory -lncurses
   endif
   ifeq ($(BUILD_LINK),static)
-		LDLIBS += -lreadline -lncurses
+		LDLIBS += -ledit -lncurses
   endif
 endif
 

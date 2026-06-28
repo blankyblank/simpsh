@@ -42,6 +42,21 @@ extern shvar *var_cache[VAR_CACHE_S];
 extern tmp_var localvars[LOCAL_MAX];
 extern size_t localsp;
 
+/* shell variables */
+extern char *sh_ps1; /* prompt string */
+extern char *sh_ps2; /* continuation prompt string */
+extern char *sh_ps4;
+extern intf sh_lineno;
+extern pid_t sh_pid;
+extern pid_t sh_ppid;
+extern pid_t sh_bgpid;
+extern char *sh_lineno_s; /* current line number */
+extern char *sh_pid_s; /* the shell's pid */
+extern char *sh_ppid_s; /* the shell's ppid */
+extern char *sh_bgpid_s; /* the last background processes pid */
+extern char *home;
+extern size_t homelen;
+
 extern char **build_env(char **);
 extern void init_env(void);
 extern void setvar(const char * restrict, char * restrict, shvar_flags);

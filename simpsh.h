@@ -10,15 +10,12 @@
 #include "main.h"
 
 /* functions for shell */
-extern char *lineread(char *);
+extern char *lineread(int);
 extern int eval_run(void);
 extern void simpsh_run(void);
 extern int sh_interactive(void);
 extern void init_rc(int);
 
-#ifndef MUSL
-extern void getbuildinfo(void);
-#endif /* ifndef MUSL */
 #ifdef READLINE
 extern void init_history(void);
 #endif /* ifdef READLINE */

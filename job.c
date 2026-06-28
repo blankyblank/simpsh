@@ -12,10 +12,10 @@
 #include "error.h"
 #include "exec.h"
 #include "job.h"
-#include "main.h"
 #include "opts.h"
 #include "sig.h"
 #include "utils.h"
+#include "var.h"
 
 pid_t sh_pgid;
 job *job_list;
