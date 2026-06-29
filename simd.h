@@ -103,7 +103,6 @@ sskipnl(const char *buf, size_t len)
 
   allones = _mm_set1_epi8(-1);
   nlv = _mm_set1_epi8('\n');
-  mask = 0;
   i = 0;
   for (; i < len; i += 16) {
     size_t chunk = len - i;

@@ -2,6 +2,7 @@
 #ifndef LEX_H
 #define LEX_H
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
 
@@ -145,7 +146,8 @@ static inline wf *
 wfalloc(void)
 {
   if (wf_chunk_left == 0) {
-    wf_chunk = st_alloc(WF_CHUNK_SIZE * sizeof(wf));
+    if (!(wf_chunk = st_alloc(WF_CHUNK_SIZE * sizeof(wf))))
+      return NULL;
     wf_chunk_left = WF_CHUNK_SIZE;
   }
   wf *f = wf_chunk++;
@@ -157,13 +159,11 @@ wfalloc(void)
 static inline void
 append_wf(wf **restrict head, wf **restrict tail, char *restrict w, size_t len, int quoted)
 {
-  if (wf_chunk_left == 0) {
-    wf_chunk = st_alloc(WF_CHUNK_SIZE * sizeof(wf));
-    wf_chunk_left = WF_CHUNK_SIZE;
+  wf *f;
+  if (!(f = wfalloc())) {
+    perror("st_alloc failed");
+    return;
   }
-  wf *f = wf_chunk++;
-  wf_chunk_left--;
-
   f->word = w;
   f->len = len;
   f->qs = quoted;

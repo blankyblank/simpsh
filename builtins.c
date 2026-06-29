@@ -195,11 +195,11 @@ classify_cmd(char *s, int vrb, int def)
       return 0;
     }
     if ((f = findfunc(s))) {
-      printf("%s is a shell function\n", s);
+      printf("%s is a shell function\n", f->name);
       return 0;
     }
     if ((b = findbuiltin(s))) {
-      printf("%s is a shell builtin\n", s);
+      printf("%s is a shell builtin\n", b->name);
       return 0;
     }
     if (!def) {
@@ -225,11 +225,11 @@ classify_cmd(char *s, int vrb, int def)
     return 0;
   }
   if ((f = findfunc(s))) {
-    printf("%s\n", s);
+    printf("%s\n", f->name);
     return 0;
   }
   if ((b = findbuiltin(s))) {
-    printf("%s\n", s);
+    printf("%s\n", b->name);
     return 0;
   }
   if (!def) {
@@ -471,7 +471,6 @@ commandcmd(char **argv)
   }
 
   char *jcmd, *fpath, **env;
-  size_t tlen;
   const builtin *b;
 
 
@@ -484,7 +483,7 @@ commandcmd(char **argv)
     shwarnx(argv[0], "command not found");
     return 1;
   }
-  jcmd = join_strn(argv, &tlen);
+  jcmd = join_strn(argv, NULL);
   env = build_env(NULL);
   status = forkexec(fpath, argv, env, jcmd, NULL);
 

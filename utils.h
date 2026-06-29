@@ -184,20 +184,20 @@ join_strn(char **arr, size_t *t)
 {
   char *p, *buf;
   size_t ac = 0, flen;
+  size_t tlen = 0;
 
   if (!arr)
     return NULL;
 
   array_len(arr, ac);
 
-  if (!t) {
-    *t = 0;
-    for (size_t i = 0; i < ac; i++) {
-      *t += strlen(arr[i]);
-    }
-  }
+  if (!t)
+    for (size_t i = 0; i < ac; i++)
+      tlen += strlen(arr[i]);
+  else
+    tlen = *t;
 
-  buf = st_alloc(*t + ac);
+  buf = st_alloc(tlen + ac);
   p = buf;
 
   flen = 0;
@@ -210,7 +210,8 @@ join_strn(char **arr, size_t *t)
      p += len, flen += len + 1;
   }
   *p = '\0';
-  *t = flen;
+  if (t)
+    *t = flen;
   return buf;
 }
 

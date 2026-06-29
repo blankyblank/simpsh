@@ -9,6 +9,9 @@
   #include <valgrind/cachegrind.h>
   #include <valgrind/memcheck.h>
 #endif /* ifdef ENABLE_VALGRIND */
+#ifdef TRACE
+#include <mcheck.h>
+#endif /* ifdef TRACE */
 
 #include <limits.h>
 #include <stdint.h>
@@ -68,8 +71,8 @@ extern int lstatus; /* last exit status */
 extern int retval; /* value from 'return n' */
 extern ucharf retnow; /* if set return from func or . file */
 extern int loopdepth; /* current loop nesting depth */
-extern ucharf loopbreak; /* remaining break depth */
-extern ucharf loopcontinue; /* remaining continue depth */
+extern int loopbreak; /* remaining break depth */
+extern int loopcontinue; /* remaining continue depth */
 
 extern char histfile[PATH_MAX];
 #endif /* !MAIN_H */

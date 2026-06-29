@@ -535,7 +535,7 @@ parse_for(void)
       t = tokenize();
       if (t.type != TWORD)
         break;
-      if (wc >= cap) {
+      if (wc + 1 >= cap) {
         cap *= 2;
         wf **new = st_alloc(cap * sizeof(wf *));
         memcpy(new, words, wc * sizeof(wf *));
@@ -704,7 +704,7 @@ parse_simple_cmd(size_t neg)
           last_tok = n;
           if (t.cmd->flags & WFCMDSUB)
             cmdflags |= NECMDSUB;
-          if (wc >= cap) {
+          if (wc + 1 >= cap) {
             wf **new;
             cap *= 2;
             new = st_alloc(cap * sizeof(wf *));

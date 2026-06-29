@@ -255,18 +255,22 @@ trapsig(int n)
   fchksig = n;
   if (trap[n]) {
     if (n == SIGCHLD)
-      write(selfpipe[1], "\1", 1);
+      if (write(selfpipe[1], "\1", 1) < 0)
+        return;
     if (n == SIGINT)
-      write(intpipe[1], "\1", 1);
+      if (write(intpipe[1], "\1", 1) < 0)
+        return;
     return;
   } else {
     switch (n) {
       case SIGCHLD:
-        write(selfpipe[1], "\1", 1);
+        if (write(selfpipe[1], "\1", 1) < 0)
+          return;
         ndnotify = 1;
         break;
       case SIGINT:
-        write(intpipe[1], "\1", 1);
+        if (write(intpipe[1], "\1", 1) < 0)
+          return;
         intsig = 1;
         break;
       case SIGTERM:
@@ -276,6 +280,8 @@ trapsig(int n)
         for (job *j = job_list; j; j = j->next)
           kill(-j->pgid, SIGHUP);
         _exit(0);
+        break;
+      default:
         break;
     }
   }
@@ -368,7 +374,6 @@ int
 trapcmd(char **argv)
 {
   size_t s = 0, argc = 0;
-  int sig;
   char *act, *argv0;
 
   array_len(argv, argc);
@@ -384,7 +389,7 @@ trapcmd(char **argv)
     }
     return 0;
   } else {
-    if ((sig = getsig(*argv)) < 0) {
+    if ((getsig(*argv)) < 0) {
       act = *argv;
       s = 1;
     } else {

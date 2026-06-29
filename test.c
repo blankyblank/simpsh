@@ -295,7 +295,6 @@ primary(testvar *tv)
     return 0;
   }
 
-  res = 0;
   if (**tv->pos == '(') {
     tv->pos++;
     res = oexpr(tv);

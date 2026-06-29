@@ -124,7 +124,8 @@ setvar(const char *restrict name, char *restrict val, shvar_flags flags)
   char *nvar;
   size_t vlen, nlen, flen, ci;
 
-  nlen = strlen(name);
+  if (!(nlen = strlen(name)))
+    return;
   vlen = val ? strlen(val) : 0;
   flen = nlen + vlen + 2;
   end = var_tab + var_tab_size;
@@ -386,7 +387,7 @@ void
 init_env(void)
 {
   size_t i, env_c = 0;
-  shvar *p, *ifs, *ps1, *ps2, *ps4;
+  shvar *p, *ifs;
   int shlvl;
   char *shlvl_s, pwd[PATH_MAX];
 
@@ -417,11 +418,11 @@ init_env(void)
     exit(1);
   }
 
-  if (!(ps1 = findvar_n(ps1n, 3)))
+  if (!(findvar_n(ps1n, 3)))
     setvar(ps1n, " $ ", 0);
-  if (!(ps2 = findvar_n(ps2n, 3)))
+  if (!(findvar_n(ps2n, 3)))
     setvar(ps2n, " > ", 0);
-  if (!(ps4 = findvar_n(ps4n, 3)))
+  if (!(findvar_n(ps4n, 3)))
     setvar(ps4n, " + ", 0);
 
   if (!getcwd(pwd, PATH_MAX))
@@ -444,10 +445,10 @@ init_env(void)
 }
 
 int
-exportcmd(char **args)
+exportcmd(char **argv)
 {
   size_t argc = 0;
-  array_len(args, argc);
+  array_len(argv, argc);
 
   if (argc > 1) {
     for (size_t i = 1; i < argc; i++) {
@@ -455,16 +456,24 @@ exportcmd(char **args)
       char *name, *val;
       shvar *v;
 
-      eq = strchrnul_(args[i], '=');
+      eq = strchrnul_(argv[i], '=');
       if (*eq == '\0') {
-        v = findvar(args[i]);
+        if (eq == argv[i]) {
+          shwarn_arg(argv[0], argv[1], "not a valid identifier");
+          return 1;
+        }
+        v = findvar(argv[i]);
         if (v) {
           v->flags |= VEXPRT;
           env_dirty = 1;
         } else
-          setvar(args[i], NULL, VEXPRT);
+          setvar(argv[i], NULL, VEXPRT);
       } else {
-        read_assn(args[i], &name, &val);
+        if (eq == argv[i]) {
+          shwarn_arg(argv[0], argv[1], "not a valid identifier");
+          return 1;
+        }
+        read_assn(argv[i], &name, &val);
         setvar(name, val, VEXPRT);
         slfree(name);
         slfree(val);

@@ -158,7 +158,6 @@ exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
     if (i >= slen)
       break;
     vlen = 0;
-    end = i;
     val = NULL;
     switch (str[i + 1]) {
       case '$':

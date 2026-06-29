@@ -347,9 +347,8 @@ get_wf(int c)
           shungetc(n2);
 
           /* $() */
-          int cmdsubd;
+          int cmdsubd = 1;
           enum qs cstate;
-          cmdsubd = 1;
           cstate = 0;
           cmdlen = 0;
           flushword(&head, &tail, w, len,

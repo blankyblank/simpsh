@@ -48,8 +48,8 @@ int lstatus;
 int retval = 0;
 ucharf retnow = 0;
 int loopdepth = 0;
-ucharf loopbreak = 0;
-ucharf loopcontinue = 0;
+int loopbreak = 0;
+int loopcontinue = 0;
 
 #define usage() fprintf(stderr, "Usage: simpsh [-abCefhiImnosvVx] [-o longopt] [-c 'cmd']\n")
 
@@ -57,6 +57,10 @@ ucharf loopcontinue = 0;
 int
 main(int argc, char **argv)
 {
+#ifdef TRACE
+  mtrace();
+#endif /* TRACE */
+
   (void)argc;
   int flags, fd, i;
   char *oarg;
