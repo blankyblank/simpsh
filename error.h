@@ -32,7 +32,7 @@ static const char dmsg[] = "\nUse \"exit\" to leave the shell \n";
   return r
 
 /* same as sherr  but doesn't return */
-#define shwarn(b, m) warn("%s: %s: %s", shname, b, m)
+#define shwarn(b, m) warn("%s: %s", b, m)
 
 /* warning with simpsh: builtin: message, format */
 #define shwarnx(b, m) fprintf(stderr, "%s: %s: %s\n", shname, b, m)
@@ -50,8 +50,6 @@ static const char dmsg[] = "\nUse \"exit\" to leave the shell \n";
 /*  missing required arguement error message */
 #define no_opt(p, c) \
   (fprintf(stderr, "%s: %s: %c: requires arguement\n", shname, p, c))
-
-#define arsz(a, o) (sizeof(a) / sizeof(o))
 
 /* return the right syntax error message */
 #define parserr(l, m, t) ((iflag) ? lnsyntxerr(l, m, t) : syntxerr(m, t))

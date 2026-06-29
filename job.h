@@ -9,19 +9,19 @@
 
 typedef struct job job;
 struct job {
-  job *next;
-  pid_t pgid;              /* process group */
-  int state;               /* JRUN, JSTP, JDONE */
+  pid_t pgid;          /* process group */
+  pid_t status_pid;    /* which pid's exit determines job exit status */
+  pid_t saved_ttypgrp; /* saved on stop (valid when JSAVEDTTYPGRP) */
+  int wstatus;         /* wait status of status_pid */
+  int lwstatus; /* wait status of for chld on left (pipefail needs this) */
+  short nlive;  /* # of processes still running (not yet exited) */
+  unsigned char state;     /* JRUN, JSTP, JDONE */
+  unsigned char flags;     /* JCHANGED, JFG, JSAVEDTTY, JSAVEDTTYPGRP */
   int num;                 /* job number */
-  char *cmd;               /* command string */
-  int flags;               /* JCHANGED, JFG, JSAVEDTTY, JSAVEDTTYPGRP */
   int age;                 /* monotonic counter for current-job selection */
+  job *next;               /* next job */
+  char *cmd;               /* command string */
   struct termios ttystate; /* saved on stop (valid when JSAVEDTTY) */
-  pid_t saved_ttypgrp;     /* saved on stop (valid when JSAVEDTTYPGRP) */
-  pid_t status_pid;        /* which pid's exit determines job exit status */
-  int wstatus;             /* wait status of status_pid */
-  int lwstatus;            /* wait status of for chld on left (pipefail needs this) */
-  int nlive;               /* # of processes still running (not yet exited) */
 };
 
 #define JRUN 0

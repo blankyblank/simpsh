@@ -40,16 +40,16 @@ const char ps2n[16] = "PS2";
 const char ps4n[16] = "PS4";
 
 /* global shell variables */
-intf sh_argc;
+int sh_argc;
 char *sh_argv0;
 char **sh_argv;
-int alloc_sh_argv = 0;
-intf lstatus;
+ucharf alloc_sh_argv = 0;
+int lstatus;
 int retval = 0;
-int retnow = 0;
+ucharf retnow = 0;
 int loopdepth = 0;
-int loopbreak = 0;
-int loopcontinue = 0;
+ucharf loopbreak = 0;
+ucharf loopcontinue = 0;
 
 #define usage() fprintf(stderr, "Usage: simpsh [-abCefhiImnosvVx] [-o longopt] [-c 'cmd']\n")
 

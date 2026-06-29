@@ -32,7 +32,7 @@ stackseg stackbase;
 stackseg *current = &stackbase;
 char *stnext = stackbase.buf;
 size_t stleft = MINSTACK_S;
-int stacksl = 0;
+unsigned char stacksl = 0;
 
 slclass slotsz[SLCLASSN] = {
   { .stsz = 24,    .sbsz = sizeof(slab) + (ul)(512 * 16)  },

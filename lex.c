@@ -11,34 +11,33 @@
 #include "error.h"
 #include "input.h"
 #include "lex.h"
-#include "main.h"
 #include "simd.h"
 #include "utils.h"
 
 wf *wf_chunk = NULL;
-size_t wf_chunk_left = 0;
-int alias_depth = 0;
-int notclosed = 0;
+unsigned int wf_chunk_left = 0;
+ucharf alias_depth = 0;
+ucharf notclosed = 0;
 sh_tok last_tok = { .type = TNONE };
-int chkwd = 0;
+ucharf chkwd = 0;
 #define CTX_MAX 8
-#define NCHR(c) (nchars[(unsigned char)c])
-#define DCHR(c) (dqchars[(unsigned char)c])
-#define SCHR(c) (sqchars[(unsigned char)c])
+#define NCHR(c) (nchars[(unsigned char)(c)])
+#define DCHR(c) (dqchars[(unsigned char)(c)])
+#define SCHR(c) (sqchars[(unsigned char)(c)])
 #define current_ctx (ctx_stack[ctx_depth])
 #define push_ctx(m) (ctx_stack[++ctx_depth] = (m))
 #define pop_ctx() (ctx_depth--)
 
 #define KEYW(f, s, t) \
-  if (memcmp(s, f->word, f->len) == 0) \
-    return (sh_tok) { .type = t, .cmd = f }
+  if (memcmp(s, (f)->word, (f)->len) == 0) \
+    return (sh_tok) { .type = (t), .cmd = (f) }
 
 #define flushword(h, t, w, l, qs) \
   do { \
-    if (l > 0) { \
-      w = grab_str(l); \
+    if ((l) > 0) { \
+      (w) = grab_str(l); \
       append_wf(h, t, w, l, qs); \
-      l = 0; \
+      (l) = 0; \
     } \
   } while (0)
 
@@ -92,7 +91,7 @@ static wf *get_wf(int);
 
 #define qescape(c) \
   case insq: \
-    if (c == '\'') { \
+    if ((c) == '\'') { \
       cstate &= ~insq; \
       st_putc(c); \
       cmdlen++; \
@@ -108,12 +107,12 @@ static wf *get_wf(int);
     cstate &= ~esc; \
     continue; \
   case indq: \
-    if (c == '"') { \
+    if ((c) == '"') { \
       cstate &= ~indq; \
       st_putc(c); \
       cmdlen++; \
       continue; \
-    } else if (c == '\\') { \
+    } else if ((c) == '\\') { \
       st_putc(c); \
       cmdlen++; \
       cstate |= esc; \
@@ -172,7 +171,7 @@ join_wf(wf *wordf)
 __attribute__((hot)) static wf *
 get_wf(int c)
 {
-  enum {
+  enum qs {
     insq = (1 << 0),
     indq = (1 << 1),
     esc = (1 << 2),
@@ -180,7 +179,8 @@ get_wf(int c)
 
   static int ctx_depth;
   static tokmode ctx_stack[CTX_MAX] = { M_NORMAL };
-  char n, n2, *w;
+  int n, n2;
+  char *w;
   size_t len,  cmdlen;
   wf *head = NULL;
   wf *tail = NULL;
@@ -343,19 +343,19 @@ get_wf(int c)
             if ((c = eatbnl()) == SHEOF)
               goto done;
             continue;
-          } else {
-            shungetc(n2);
           }
+          shungetc(n2);
 
           /* $() */
-          int cstate;
-          size_t cmdsubd = 1;
+          int cmdsubd;
+          enum qs cstate;
+          cmdsubd = 1;
           cstate = 0;
           cmdlen = 0;
           flushword(&head, &tail, w, len,
                     current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
 
-          for (char ch = shgetchar();; ch = shgetchar()) {
+          for (int ch = shgetchar();; ch = shgetchar()) {
             if (ch == SHEOF) {
               notclosed = 1;
               goto done;
@@ -404,7 +404,7 @@ get_wf(int c)
           flushword(&head, &tail, w, len,
                     current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
           size_t nlen = 0;
-          for (char ch = shgetchar();; ch = shgetchar()) {
+          for (int ch = shgetchar();; ch = shgetchar()) {
             if (ch == SHEOF) {
               notclosed = 1;
               goto done;
@@ -428,7 +428,7 @@ get_wf(int c)
           st_putc(n);
           size_t nlen = 1;
           for (;;) {
-            char ch = eatbnl();
+            int ch = eatbnl();
             if (!isalnum_(ch) && ch != '_') {
               shungetc(ch);
               break;
@@ -462,7 +462,7 @@ get_wf(int c)
           st_putc(n);
           size_t nlen = 1;
           for (;;) {
-            char ch = eatbnl();
+            int ch = eatbnl();
             if (!isdigit_(ch)) {
               shungetc(ch);
               break;
@@ -487,13 +487,13 @@ get_wf(int c)
       case C_BTICK:
         {
           /* `cmd`*/
-          int cstate;
+          enum qs cstate;
 
           cstate = 0;
           cmdlen = 0;
           flushword(&head, &tail, w, len,
                     current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
-          for (char ch = shgetchar();; ch = shgetchar()) {
+          for (int ch = shgetchar();; ch = shgetchar()) {
             if (ch == SHEOF) {
               notclosed = 1;
               goto done;
@@ -685,26 +685,23 @@ tokenize(void)
             return SHREDIR(RDHERE_D);
           shungetc(n);
           return SHREDIR(RDHERE);
-        } else if (n == '&') {
-          return SHREDIR(RDDUPI);
-        } else if (n == '>') {
-          return SHREDIR(RDRW);
-        } else {
-          shungetc(n);
-          return SHREDIR(RDIN);
         }
+        if (n == '&')
+          return SHREDIR(RDDUPI); 
+        if (n == '>')
+          return SHREDIR(RDRW);
+        shungetc(n);
+        return SHREDIR(RDIN);
       case C_GT:
         n = eatbnl();
-        if (n == '>') {
+        if (n == '>')
           return SHREDIR(RDAPP);
-        } else if (n == '&') {
+        if (n == '&')
           return SHREDIR(RDDUPO);
-        } else if (n == '|') {
+        if (n == '|')
           return SHREDIR(RDCLOB);
-        } else {
-          shungetc(n);
-          return SHREDIR(RDOUT);
-        }
+        shungetc(n);
+        return SHREDIR(RDOUT);
 
       case C_BSLASH:
         if ((n = shgetchar()) == '\n')
@@ -741,6 +738,8 @@ tokenize(void)
                 case '!':
                   KEYW(f, "!", TNOT);
                   break;
+                default:
+                  break;
               }
               break;
             case 2:
@@ -755,15 +754,19 @@ tokenize(void)
                 case 'f':
                   KEYW(f, "fi", TFI);
                   break;
+                default:
+                  break;
               }
-            break;
+              break;
             case 3:
               switch (f->word[0]) {
                 case 'f':
                   KEYW(f, "for", TFOR);
                   break;
+                default:
+                  break;
               }
-            break;
+              break;
             case 4:
               switch (f->word[0]) {
                 case 'c':
@@ -780,8 +783,10 @@ tokenize(void)
                 case 'd':
                   KEYW(f, "done", TDONE);
                   break;
+                default:
+                  break;
               }
-            break;
+              break;
             case 5:
               switch (f->word[0]) {
                 case 'w':
@@ -790,8 +795,12 @@ tokenize(void)
                 case 'u':
                   KEYW(f, "until", TUNTIL);
                   break;
+                default:
+                  break;
               }
-            break;
+              break;
+            default:
+              break;
           }
         }
         if ((wd & CHKALIAS) && (f->flags & WFSINGLE)) {

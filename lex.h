@@ -6,6 +6,7 @@
 #include <stddef.h>
 
 #include "alloc.h"
+#include "main.h"
 
 enum chars {
   C_WORD,
@@ -106,11 +107,11 @@ typedef struct {
 } sh_tok;
 
 extern wf *wf_chunk;
-extern size_t wf_chunk_left;
-extern int alias_depth;
-extern int notclosed;
+extern unsigned int wf_chunk_left;
+extern ucharf alias_depth;
+extern ucharf notclosed;
 extern sh_tok last_tok;
-extern int chkwd;
+extern ucharf chkwd;
 
 #define WF_CHUNK_SIZE 4
 #define SHTOK(t) ((sh_tok){ .type = t, .sub = 0 })
@@ -123,7 +124,7 @@ enum {
   CHKKWD = 1 << 2,
 };
 
-enum {
+enum rdr {
   RDIN = 1 << 0,
   RDOUT = 1 << 1,
   RDAPP = 1 << 2,

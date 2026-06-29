@@ -10,7 +10,7 @@ typedef struct cmdent {
 } cmdent;
 
 extern cmdent chash[CHASH_MAX];
-extern size_t chashn;
+extern unsigned int chashn;
 
 extern void initchash(void);
 extern char *findchash(const char *);

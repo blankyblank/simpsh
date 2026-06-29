@@ -59,7 +59,7 @@ typedef struct slab slab;
 struct slab {
   int magic;
   int nalloc;  /* outstanding allocations */
-  int ci;      /* class index */
+  unsigned char ci;      /* class index */
   slab *next;  /* list for free lookup (linked list) */
   size_t stsz; /* slot size */
   void *flist; /* free list */
@@ -79,7 +79,7 @@ extern char *stnext;
 extern size_t stleft;
 extern stackseg stackbase;
 extern stackseg *current;
-extern int stacksl;
+extern unsigned char stacksl;
 
 /* stack allocator functions */
 extern void stack_restore(stmark);

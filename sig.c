@@ -139,8 +139,8 @@ runeventloop(eventloop *el, int cont)
 }
 
 static char signum[NSIG][8];
-static char *trap[NSIG];                        /* trap command strings */
-static int sigmode[NSIG];                       /* S_DFL, S_CATCH, S_IGN, S_HARD_IGN */
+static char *trap[NSIG];                /* trap command strings */
+static unsigned char sigmode[NSIG];     /* S_DFL, S_CATCH, S_IGN, S_HARD_IGN */
 
 static void setsignal(int);
 

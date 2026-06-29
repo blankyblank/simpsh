@@ -66,22 +66,23 @@ static const int lbp_tab[] = {
   [A_EOF]    = -1,
 };
 
+/* NOLINTBEGIN(readability-magic-numbers) */
 #define get_lbp(t) ( (t) < A_END ? lbp_tab[t] : 0 )
 
 static const char *ap;    // current position
 static size_t alen;       // remaining bytes
 static int atok;          // current token type
-static long long aval;    // numeric value (for A_NUM)
+static llongf aval;    // numeric value (for A_NUM)
 static const char *aname; // name pointer (for A_NAME)
 static size_t anlen;      // name length (for A_NAME)
 static char *lname;
 static size_t lnlen;
 
-static long long expr_bp(int);
+static llongf expr_bp(int);
 static void next_tok(void);
-static long long nud(void);
-static long long led(long long);
-static long long lookupavar(void);
+static llongf nud(void);
+static llongf led(llongf);
+static llongf lookupavar(void);
 
 static inline int
 hexval(char c)
@@ -116,7 +117,7 @@ next_tok(void)
       ap += 2;
       alen -= 2;
       while (alen > 0 && isxdigit(ap[0])) {
-        aval = aval * 16 + hexval(ap[0]);
+        aval = (aval * 16) + hexval(ap[0]);
         ap++;
         alen--;
       }
@@ -124,13 +125,13 @@ next_tok(void)
       ap++;
       alen--;
       while (alen > 0 && ap[0] >= '0' && ap[0] <= '7') {
-        aval = aval * 8 + (ap[0] - '0');
+        aval = (aval * 8) + (ap[0] - '0');
         ap++;
         alen--;
       }
     } else {
       while (alen > 0 && isdigit_(ap[0])) {
-        aval = aval * 10 + (ap[0] - '0');
+        aval = (aval * 10) + (ap[0] - '0');
         ap++;
         alen--;
       }
@@ -251,10 +252,10 @@ next_tok(void)
   }
 }
 
-static long long
+static llongf
 nud(void)
 {
-  long long val;
+  llongf val;
   switch (atok) {
     case A_NUM:
       lname = NULL;
@@ -300,10 +301,10 @@ nud(void)
   }
 }
 
-static long long
-led(long long left)
+static llongf
+led(llongf left)
 {
-  long long rb;
+  llongf rb;
   switch (atok) {
     case A_PLUS:
       next_tok();
@@ -371,7 +372,7 @@ led(long long left)
       return left || expr_bp(5);
     case A_ASSN:
       next_tok();
-      long long rhs;
+      llongf rhs;
       char valbuf[32];
       rhs = expr_bp(2);
       if (!lname) {
@@ -387,10 +388,10 @@ led(long long left)
   }
 }
 
-static long long
+static llongf
 expr_bp(int min_bp)
 {
-  long long left;
+  llongf left;
 
   left = nud();
   for (;;) {
@@ -403,10 +404,10 @@ expr_bp(int min_bp)
   return left;
 }
 
-long long
+llongf
 arith_eval(const char *expr, size_t len)
 {
-  long long res;
+  llongf res;
 
   ap = expr;
   alen = len;
@@ -415,11 +416,11 @@ arith_eval(const char *expr, size_t len)
   return res;
 }
 
-static long long
+static llongf
 lookupavar(void)
 {
   shvar *rvar;
-  long long res;
+  llongf res;
 
   rvar = findvar_n(aname, anlen);
   if (!rvar)
@@ -428,3 +429,4 @@ lookupavar(void)
     return 0;
   return res;
 }
+/* NOLINTEND(readability-magic-numbers) */

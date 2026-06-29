@@ -20,7 +20,7 @@
 #include "utils.h"
 #include "var.h"
 
-int ifsnull = 0;
+ucharf ifsnull = 0;
 static char ifschar[256];
 
 static wf **splitword(wf *restrict, size_t *restrict);
@@ -377,8 +377,8 @@ done:
 char **
 expand_argv(wf **args, size_t *restrict t)
 {
-  size_t cap, fargc, tlen;
-  size_t i, argc, elen;
+  unsigned int cap, fargc, argc;
+  size_t i, elen, tlen;
   wf **fargv;
   char **argv;
 
@@ -707,7 +707,7 @@ splitword(wf *f, size_t * restrict tlen)
   };
   wf **fargv;
   wf *chead, *ctail, *cf;
-  size_t fpos, cap, fargc, ttl = 0;
+  unsigned int fpos, cap, fargc, ttl = 0;
 
   if (tlen)
     *tlen = 0;

@@ -1,22 +1,22 @@
-#include <stddef.h>
 #define _POSIX_C_SOURCE 200809L
-#include <string.h>
-#include <stdlib.h>
 #include <limits.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "arg.h"
 #include "error.h"
 #include "expand.h"
-#include "path.h"
 #include "main.h"
 #include "opts.h"
+#include "path.h"
 #include "utils.h"
 #include "var.h"
 
 cmdent chash[CHASH_MAX];
-size_t chashn;
+unsigned int chashn;
 
 static char *tildepath(const char * restrict, size_t, size_t * restrict);
 

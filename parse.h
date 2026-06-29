@@ -8,7 +8,7 @@ typedef struct redir redir;
 struct redir {
   redir *next;
   int fd;
-  int type;
+  enum rdr type;
   wf *name;
   char *heredoc;
   redir *heredoc_next;

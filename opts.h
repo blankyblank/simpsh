@@ -1,8 +1,9 @@
 #ifndef OPTS_H
 #define OPTS_H
 
+#include "main.h"
 #define OPTC 19
-extern int nounseterr;
+extern ucharf nounseterr;
 
 #define aflag shopts[0]
 #define bflag shopts[1]

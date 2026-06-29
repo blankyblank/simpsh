@@ -81,7 +81,7 @@ istestop(const char *s, int isunry)
 int
 testeval(testvar *tv, testop op, const char *opnd1, const char *opnd2)
 {
-  long long int1, int2;
+  llongf int1, int2;
   struct stat st, st2;
 
   switch (op) {

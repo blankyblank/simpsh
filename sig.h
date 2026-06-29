@@ -29,8 +29,8 @@ typedef struct {
 typedef struct {
   struct pollfd pfds[EVMAX];
   ev_src srcs[EVMAX];
-  int nsrc;
-  int running;
+  unsigned char nsrc;
+  unsigned char running;
 } eventloop;
 
 

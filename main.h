@@ -27,19 +27,21 @@ enum {
   FLAG_l = 1 << 3,
   FLAG_p = 1 << 4,
   FLAG_V = 1 << 5,
-  FLAG_r = 1 << 6,
-  LOGIN = 1 << 7,
+  FLAG_v = 1 << 6,
+  FLAG_r = 1 << 7,
+  LOGIN = 1 << 8,
 };
 
-#define charf int_fast8_t
-#define ucharf uint_fast8_t
-#define shortf int_fast16_t
-#define intf int_fast32_t
-#define uintf uint_fast32_t
-#define longf int_fast64_t
-#define ulongf uint_fast64_t
-#define llongf int_fast64_t
-#define ullongf uint_fast64_t
+typedef int_fast8_t charf;
+typedef uint_fast8_t ucharf;
+typedef int_fast16_t shortf;
+typedef uint_fast16_t ushortf;
+typedef int_fast32_t intf;
+typedef uint_fast32_t uintf;
+typedef int_fast64_t longf;
+typedef uint_fast64_t ulongf;
+typedef int_fast64_t llongf;
+typedef uint_fast64_t ullongf;
 
 extern const char pwdn[16];
 extern const char ifsn[16];
@@ -60,14 +62,14 @@ extern const char ps4n[16];
 extern char **environ;
 extern char *sh_argv0; /* the shells first arguement */
 extern char **sh_argv; /* shell arguement array */
-extern intf sh_argc; /* shell arg count */
-extern int alloc_sh_argv; /* if sh_argv was alloced */
-extern intf lstatus; /* last exit status */
+extern int sh_argc; /* shell arg count */
+extern ucharf alloc_sh_argv; /* if sh_argv was alloced */
+extern int lstatus; /* last exit status */
 extern int retval; /* value from 'return n' */
-extern int retnow; /* if set return from func or . file */
+extern ucharf retnow; /* if set return from func or . file */
 extern int loopdepth; /* current loop nesting depth */
-extern int loopbreak; /* remaining break depth */
-extern int loopcontinue; /* remaining continue depth */
+extern ucharf loopbreak; /* remaining break depth */
+extern ucharf loopcontinue; /* remaining continue depth */
 
 extern char histfile[PATH_MAX];
 #endif /* !MAIN_H */
