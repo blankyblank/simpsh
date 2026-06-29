@@ -9,6 +9,7 @@
 #include <stddef.h>
 
 #include "alloc.h"
+#include "main.h"
 
 /* is_ something checks (some replacing ctypes functions) */
 
@@ -21,6 +22,8 @@
 #define is_ws(c) (c == ' ' || c == '\t' || c == '\n')
 
 #define is_ifs_nws(c, s) (!is_ws(c) && strchr(s, c))
+
+#define arsz(a, o) (sizeof(a) / sizeof(o))
 
 /**  check if char is operator  */
 #define is_operator(c) \
@@ -47,10 +50,10 @@ atoi_(const char *s)
     return n;
 }
 
-static inline int
-atoll_(const char *restrict s, long long *restrict res)
+static inline llongf
+atoll_(const char *restrict s, llongf *restrict res)
 {
-  long long n = 0;
+  llongf n = 0;
   int neg = 0;
 
   if (*s == '-') {
@@ -70,10 +73,10 @@ atoll_(const char *restrict s, long long *restrict res)
 
 /* convert long long to string  */
 static inline size_t
-lltoa(long long val, char *buf)
+lltoa(llongf val, char *buf)
 {
   char *p, *start, *end;
-  unsigned long long uval;
+  ullongf uval;
 
   p = buf;
 
@@ -101,7 +104,7 @@ lltoa(long long val, char *buf)
 
 /* convert int to string  */
 static inline size_t
-itoa(long long val, char *buf)
+itoa(int val, char *buf)
 {
   char *p, *start, *end;
   unsigned int uval;
@@ -186,6 +189,14 @@ join_strn(char **arr, size_t *t)
     return NULL;
 
   array_len(arr, ac);
+
+  if (!t) {
+    *t = 0;
+    for (size_t i = 0; i < ac; i++) {
+      *t += strlen(arr[i]);
+    }
+  }
+
   buf = st_alloc(*t + ac);
   p = buf;
 
@@ -252,7 +263,7 @@ st_read_assn(const char *assn, char **restrict name, char **restrict value)
 static inline unsigned int
 hash(const char *s, unsigned int buckets)
 {
-  unsigned long int h = 525201411107845655ull;
+  ulongf h = 525201411107845655ull;
   while (*s) {
     h ^= (unsigned char)*s;
     h *= 0x5bd1e9955bd1e995;
@@ -265,7 +276,7 @@ hash(const char *s, unsigned int buckets)
 /**  hash string with known length  */
 static inline unsigned int
 hash_n(const char *s, size_t n, unsigned int buckets) {
-  unsigned long h = 525201411107845655ull;
+  ulongf h = 525201411107845655ull;
   for (size_t i = 0; i < n; i++) {
     h ^= (unsigned char)s[i];
     h *= 0x5bd1e9955bd1e995;

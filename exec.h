@@ -14,10 +14,13 @@
 #include "sig.h"
 
 #define _INCHLD (1 << 0)
-extern int func_depth;
+extern ucharf func_depth;
+
+#define builtin_launch(b, a) (b->fn(a))
 
 extern int run_commands(const cmd_tree *, int);
 extern int run_cmdsub(const cmd_tree *);
+extern int forkexec(char *, char **, char **, const char *, redir *r);
 
 #define DUPFD(s, d) \
   if (dup2(s, d) < 0) { \

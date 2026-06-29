@@ -31,9 +31,6 @@ char *sh_pid_s = NULL;
 char *sh_bgpid_s = NULL;
 pid_t sh_bgpid;
 char *sh_lineno_s;
-char *sh_ps1;
-char *sh_ps2;
-char *sh_ps4;
 char *home;
 size_t homelen;
 
@@ -41,11 +38,11 @@ static shvar var_tab_init[VAR_BUCKETS_INIT];
 shvar *var_tab = var_tab_init;
 shvar *var_cache[VAR_CACHE_S];
 size_t var_tab_size = VAR_BUCKETS_INIT;
-size_t var_count;
+unsigned int var_cnt;
 tmp_var localvars[LOCAL_MAX];
-size_t localsp;
+unsigned int localsp;
 static char **env_cache;
-static int env_dirty = 1;
+static ucharf env_dirty = 1;
 static shvar linevar;
 static char linebuf[256];  /* 7 header + some digits */
 
@@ -190,8 +187,8 @@ setvar(const char *restrict name, char *restrict val, shvar_flags flags)
   n->flags = flags;
   n->func = NULL;
   v = n;
-  var_count++;
-  if (var_count > var_tab_size * 7 / 10) {
+  var_cnt++;
+  if (var_cnt > var_tab_size * 7 / 10) {
     resize_var_tab();
     end = var_tab + var_tab_size;
     v = var_tab + hash_n(name, nlen, var_tab_size);
@@ -210,7 +207,6 @@ callback:
   var_cache[ci] = v;
   if (v->func)
     v->func(val);
-  return;
 }
 
 /** unset variable */
@@ -235,7 +231,7 @@ rmvar(const char *name)
       v->nlen = 0;
       v->flags = 0;
       v->func = NULL;
-      var_count--;
+      var_cnt--;
       env_dirty = 1;
       ci = hash_n(name, nlen, VAR_CACHE_S);
       if (var_cache[ci] == v)
@@ -253,7 +249,6 @@ grabvar(char *name)
   tmp_var tmp;
   shvar *v;
 
-  // XXX: again where is nlen/len??
   v = findvar(name);
   if (v) {
     tmp.set = 1;
@@ -325,7 +320,7 @@ rebuild_env(char **sh_env)
   size_t arrsize = (c + 1) * sizeof(char *);
   if (!(mem = slalloc(arrsize + (len + 1))))
     return NULL;
-  cmd_env = (char **)mem;
+  cmd_env = mem;
   char *buf = (char *)mem + arrsize;
   arr = cmd_env;
 
@@ -395,7 +390,7 @@ init_env(void)
   int shlvl;
   char *shlvl_s, pwd[PATH_MAX];
 
-  var_count = 0;
+  var_cnt = 0;
   array_len(environ, env_c);
   for (i = 0; i < env_c; i++) {
     char *name, *val;
@@ -422,18 +417,13 @@ init_env(void)
     exit(1);
   }
 
-  if (!(ps1 = findvar_n(ps1n, 3))) {
-    sh_ps1 = " $ ";
-    setvar(ps1n, sh_ps1, 0);
-  }
-  if (!(ps2 = findvar_n(ps2n, 3))) {
-    sh_ps2 = " > ";
-    setvar(ps2n, sh_ps2, 0);
-  }
-  if (!(ps4 = findvar_n(ps4n, 3))) {
-    sh_ps4 = " + ";
-    setvar(ps4n, sh_ps4, 0);
-  }
+  if (!(ps1 = findvar_n(ps1n, 3)))
+    setvar(ps1n, " $ ", 0);
+  if (!(ps2 = findvar_n(ps2n, 3)))
+    setvar(ps2n, " > ", 0);
+  if (!(ps4 = findvar_n(ps4n, 3)))
+    setvar(ps4n, " + ", 0);
+
   if (!getcwd(pwd, PATH_MAX))
     shwarnx("getcwd", "couldn't get PWD");
   else
@@ -576,27 +566,25 @@ unsetcmd(char **argv)
 
   err = 0;
   c = 0;
-  if (argc < 1) {
+  if (argc < 1)
     return 0;
-
-  } else {
-    for (; c < argc; c++) {
-      if (flag == FUNC) {
-        rmfunc(argv[c]);
-      } else {
-        v = findvar(argv[c]);
-        if (v) {
-          if (v->flags & VREADONLY) {
-            shwarn_arg(bargv0, argv[c], "cannot unset: readonly variable"); /*NOLINT*/
-            err = 1;
-          } else {
-            rmvar(argv[c]);
-          }
+  for (; c < argc; c++) {
+    if (flag == FUNC) {
+      rmfunc(argv[c]);
+    } else {
+      v = findvar(argv[c]);
+      if (v) {
+        if (v->flags & VREADONLY) {
+          shwarn_arg(bargv0, argv[c],
+                     "cannot unset: readonly variable"); /*NOLINT*/
+          err = 1;
+        } else {
+          rmvar(argv[c]);
         }
       }
-      if (err)
-        return 1;
     }
+    if (err)
+      return 1;
   }
 
   return 0;

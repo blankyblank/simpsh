@@ -25,11 +25,13 @@
 #include "utils.h"
 #include "var.h"
 
+#define OPENRW 0666
+#define LOOPERR 130
+#define FD_MAX 10
 #define MAX_TMP_VARS 40
 #define xpnd(a) (join_wf(exp_word(a, NULL)))
-#define builtin_launch(b, a) (b->fn(a))
 
-int func_depth = 0;
+ucharf func_depth = 0;
 redir *predir = NULL;
 
 typedef struct fdlist {
@@ -42,13 +44,13 @@ static const struct {
   mode_t mode;
 } redir_tab[] = {
   [RDIN] = { O_RDONLY },
-  [RDOUT] = { O_WRONLY | O_CREAT | O_TRUNC, 0666 },
-  [RDCLOB] = { O_WRONLY | O_CREAT | O_TRUNC, 0666 },
-  [RDAPP] = { O_WRONLY | O_CREAT | O_APPEND, 0666 },
-  [RDRW] = { O_RDWR | O_CREAT, 0666 },
+  [RDOUT] = { O_WRONLY | O_CREAT | O_TRUNC, OPENRW },
+  [RDCLOB] = { O_WRONLY | O_CREAT | O_TRUNC, OPENRW },
+  [RDAPP] = { O_WRONLY | O_CREAT | O_APPEND, OPENRW },
+  [RDRW] = { O_RDWR | O_CREAT, OPENRW },
 };
 
-static const builtin *findbuiltin(char *);
+static const builtin *findbuiltin(const char *);
 static void poptmpvars(tmp_var *, size_t);
 static int save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
@@ -103,7 +105,7 @@ apply_redir(redir *r)
         break;
       case RDOUT:
         if (Cflag) {
-          if ((fd = open(name, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, 0666)) <
+          if ((fd = open(name, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, OPENRW )) <
               0) {
             warn("%s", name);
             return 1;
@@ -177,20 +179,6 @@ dupfall:
   return 0;
 }
 
-
-/**  get builtin command  */
-static inline const builtin *
-findbuiltin(char *args)
-{
-  size_t idx;
-  idx = hash(args, BUILTIN_BUCKETS);
-  for (; builtin_tab[idx] >= 0; idx = (idx + 1) & (BUILTIN_BUCKETS - 1))
-    if (builtins[builtin_tab[idx]].name[0] == args[0] &&
-        strcmp(builtins[builtin_tab[idx]].name, args) == 0)
-      return &builtins[builtin_tab[idx]];
-  return NULL;
-}
-
 static inline void
 poptmpvars(tmp_var *tmp, size_t vc)
 {
@@ -216,6 +204,35 @@ save_fd(redir *r, fdlist *sfd, size_t * restrict sfdc)
     t = t->next;
   }
   return 0;
+}
+
+int
+forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
+{
+  pid_t pid;
+  switch (pid = fork()) {
+    case -1:
+      perror("fork");
+      return -1;
+    case 0:
+      child_setup_fg(0);
+      if (r && apply_redir(r))
+        _exit(1);
+      execve(path, argv, env);
+      _exit(127);
+    default:
+      {
+        if (mflag && getpid() == sh_pgid) {
+          job *j;
+          setpgid(pid, pid);
+          j = newjob(pid, cmd);
+          j->flags |= JFG;
+          startjob(pid);
+          return fgwait(j);
+        }
+        return _wait_(pid);
+      }
+  }
 }
 
 static pid_t
@@ -276,40 +293,19 @@ shexec(char **restrict args, char **restrict env, redir *r)
 
 /** fork and exec external command */
 static int
-shfexec(char **restrict args, const cmd_tree *restrict n, char **restrict env, redir *r)
+shfexec(char ** restrict argv, const cmd_tree * restrict n,
+        char ** restrict env, redir *r)
 {
-  pid_t pid;
   char *fullpath;
 
   /* get full command path */
-  fullpath = getpath(args[0]);
+  fullpath = getpath(argv[0]);
   if (!fullpath) {
-    fprintf(stderr, "%s: %s: command not found\n", sh_argv0, args[0]); /*NOLINT*/
+    fprintf(stderr, "%s: %s: command not found\n", sh_argv0,
+            argv[0]); /*NOLINT*/
     return 1;
   }
-
-  pid = fork();
-  switch (pid) {
-    case -1:
-      perror("failed to create");
-      return 1;
-    case 0:
-      child_setup_fg(0);
-      shexec(args, env, r);
-    /* fall through */
-    default:
-      // XXX: i really want to clean up all this jobcontrol stuff
-      if (mflag && getpid() == sh_pgid) {
-        job *j;
-        setpgid(pid, pid);
-        j = newjob(pid, bg_cmd(n));
-        j->flags |= JFG;
-        startjob(pid);
-        return fgwait(j);
-      }
-      /* no job control */
-      return _wait_(pid);
-  }
+  return forkexec(fullpath, argv, env, bg_cmd(n), r);
 }
 
 static int
@@ -319,10 +315,9 @@ run_if(const cmd_tree *n)
   status = run_commands(n->left, 0);
   if (status == 0)
     return run_commands(n->right, 0);
-  else if (CELSE(n))
+  if (CELSE(n))
     return run_commands(CELSE(n), 0);
-  else
-    return status;
+  return status;
 }
 
 static int
@@ -385,7 +380,7 @@ run_for(const cmd_tree *n)
       break;
     if (intsig) {
       intsig = 0;
-      return 130;
+      return LOOPERR;
     }
     f = stack_mark();
     setvar(CFOR(n).name->word, wrdv[i], 0);
@@ -417,7 +412,7 @@ run_while(const cmd_tree *n)
       break;
     if (intsig) {
       intsig = 0;
-      return 130;
+      return LOOPERR;
     }
     w = stack_mark();
     cond = run_commands(n->left, 0);
@@ -544,9 +539,9 @@ run_subsh(const cmd_tree *n, int chld)
     fflush(NULL);
     _exit(status);
   }
-  mfl = mflag;
-  efl = eflag;
-  ifl = iflag;
+  mfl = (int)mflag;
+  efl = (int)eflag;
+  ifl = (int)iflag;
 
   switch (pid = forkrun(0)) {
     case -1:
@@ -583,7 +578,7 @@ run_subsh(const cmd_tree *n, int chld)
 }
 
 int
-run_cmdsub(const cmd_tree *n)
+run_cmdsub(const cmd_tree *restrict n)
 {
   int wstatus, ret, pipefd[2];
   pid_t pid;
@@ -636,11 +631,12 @@ run_cmdsub(const cmd_tree *n)
             stnext += n;
             stleft -= n;
             continue;
-          } else if (n == 0) {
+          }
+          if (n == 0)
             break;
-          } else if (n == -1 && errno == EINTR) {
+          if (n == -1 && errno == EINTR)
             continue;
-          } else if (n == -1 && errno != EINTR) {
+          if (n == -1 && errno != EINTR) {
             ret = -1;
             goto cleanup;
           }
@@ -675,13 +671,13 @@ run_pipe(const cmd_tree *n)
   int status, lwstatus;
   int lstatus, rstatus;
   int pipefd[2], outer;
-  static int pipedepth;
+  static ucharf pipedepth;
   int mfl;
   pid_t lpid, rpid;
 
   pipedepth++;
   outer = (pipedepth == 1);
-  mfl = mflag;
+  mfl = (int)mflag;
 
   if (pipe(pipefd) < 0)
     err(1, "pipe");
@@ -782,7 +778,8 @@ run_cmd(const cmd_tree *n, int inchld)
   shvar *v;
   shfunc *f = NULL;
   const builtin *b = NULL;
-  size_t i, vc, len;
+  size_t i, len;
+  unsigned int vc;
 
   ifl = iflag;
   efl = eflag;
@@ -797,11 +794,10 @@ run_cmd(const cmd_tree *n, int inchld)
   }
 
   if (xflag) {
-    char *xline;
-    sh_ps4 = getvar("PS4");
-    sh_ps4 = sh_ps4 ? sh_ps4 : "+";
+    char *xline, *ps4;
+    ps4 = getvar(ps4n);
     xline = join_strn(final, &len);
-    printf("%s %s\n", sh_ps4, xline);
+    printf("%s %s\n", ps4, xline);
   }
 
   if (!final || !final[0]) {
@@ -826,7 +822,7 @@ run_cmd(const cmd_tree *n, int inchld)
   }
 
   if ((f = findfunc(final[0])) || (b = findbuiltin(*final))) {
-    fdlist sfd[10];
+    fdlist sfd[FD_MAX];
     size_t sfdc = 0;
     if (predir) {
       fflush(stdout);
@@ -885,7 +881,7 @@ run_cmd(const cmd_tree *n, int inchld)
 static inline int
 run_redir(const cmd_tree *n, int nchld)
 {
-  fdlist sfd[10];
+  fdlist sfd[FD_MAX];
   size_t sfdc;
   int status;
   redir *r;

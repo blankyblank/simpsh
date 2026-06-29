@@ -7,9 +7,9 @@ typedef int shvar_flags;
 typedef struct shvar shvar;
 struct shvar {
   char *var;                  /* Name=value */
-  size_t nlen;                /* name lenght */
-  size_t flen;                /* full length */
   shvar_flags flags;          /* VEXPRT | VREADONLY | VUNSET */
+  ushortf nlen;                /* name lenght */
+  unsigned int flen;                /* full length */
   void (*func)(const char *); /* callback func */
 };
 
@@ -37,15 +37,12 @@ enum {
 
 extern shvar *var_tab;
 extern size_t var_tab_size;
-extern size_t var_count;
+extern unsigned int var_cnt;
 extern shvar *var_cache[VAR_CACHE_S];
 extern tmp_var localvars[LOCAL_MAX];
-extern size_t localsp;
+extern unsigned int localsp;
 
 /* shell variables */
-extern char *sh_ps1; /* prompt string */
-extern char *sh_ps2; /* continuation prompt string */
-extern char *sh_ps4;
 extern intf sh_lineno;
 extern pid_t sh_pid;
 extern pid_t sh_ppid;

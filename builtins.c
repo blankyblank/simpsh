@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <termios.h>
@@ -19,6 +20,7 @@
 #include "arg.h"
 #include "builtins.h"
 #include "env.h"
+#include "exec.h"
 #include "error.h"
 #include "help.h"
 #include "input.h"
@@ -36,6 +38,7 @@
 /* builtins */
 static int breakcmd(char **);
 static int cdcmd(char **);
+static int commandcmd(char **);
 static int continuecmd(char **);
 static int dotcmd(char **);
 static int echocmd(char **);
@@ -46,12 +49,17 @@ static int falsecmd(char **);
 static int pwdcmd(char **);
 static int readcmd(char **);
 static int returncmd(char **);
+static int shiftcmd(char **);
+static int timescmd(char **);
 static int truecmd(char **);
+static int typecmd(char **);
 static int umaskcmd(char **);
 
+static int bltin_atoi(char *, char *);
+static int classify_cmd(char *, int, int);
 static char *pwdpath(char *);
 
-/* the array of builtin commands */ /* clang-format-off */
+/* the array of builtin commands */
 const builtin builtins[] = {
   { ".",        &dotcmd      },
   { "[",        &testcmd     },
@@ -60,6 +68,7 @@ const builtin builtins[] = {
   { "bg",       &bgcmd       },
   { "break",    &breakcmd    },
   { "cd",       &cdcmd       },
+  { "command",  &commandcmd  },
   { "continue", &continuecmd },
   { "echo",     &echocmd     },
   { "eval",     &evalcmd     },
@@ -77,21 +86,35 @@ const builtin builtins[] = {
   { "readonly", &readonlycmd },
   { "return",   &returncmd   },
   { "set",      &setcmd      },
+  { "shift",    &shiftcmd    },
   { "test",     &testcmd     },
+  { "times",    &timescmd    },
   { "trap",     &trapcmd     },
   { "true",     &truecmd     },
+  { "type",     &typecmd     },
   { "umask",    &umaskcmd    },
   { "unalias",  &unaliascmd  },
   { "unset",    &unsetcmd    },
 };
 
+static const char *keywd[] = {
+  "if",
+  "then",
+  "else",
+  "elif",
+  "fi",
+  "case",
+  "esac",
+  "for",
+  "while",
+  "until",
+  "do",
+  "done",
+  "in",
+  NULL,
+};
+
 #define nbuiltins() (sizeof(builtins) / sizeof(builtin))
-/* int
-nbuiltins(void)
-{
-  return sizeof(builtins) / sizeof(builtin);
-} */
-/* clang-format on */
 
 /**  initialize builtin hash table  */
 void
@@ -125,6 +148,102 @@ init_builtins(void)
    *     up when we need to skip something while res stays in place, or res
    *     moves back when we get rid of a segment.
    */
+
+static int
+bltin_atoi(char *s, char *b)
+{
+  int n;
+  for (intf i = 0; s[i]; i++) {
+    if (!isdigit_(s[i])) {
+      shwarn_arg(b, s, "a numeric arguement is required");
+      return -1;
+    }
+  }
+  if ((n = atoi_(s)) < 0) {
+    shwarn_arg(b, s, "must be a positive integer");
+    return -1;
+  }
+  return n;
+}
+
+static inline int
+iskeywd(const char *str)
+{
+  for (int i = 0; keywd[i]; i++) {
+    if (strcmp(str, keywd[i]) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int
+classify_cmd(char *s, int vrb, int def)
+{
+  alias *a;
+  shfunc *f;
+  const builtin *b;
+  char *e;
+
+  if (vrb) {
+    if ((a = findalias(s))) {
+      printf("%s is aliased to '%s'\n", a->name, a->value);
+      return 0;
+    }
+    if (iskeywd(s)) {
+      printf("%s is a shell keyword\n", s);
+      return 0;
+    }
+    if ((f = findfunc(s))) {
+      printf("%s is a shell function\n", s);
+      return 0;
+    }
+    if ((b = findbuiltin(s))) {
+      printf("%s is a shell builtin\n", s);
+      return 0;
+    }
+    if (!def) {
+      if ((e = findchash(s))) {
+        printf("%s is hashed (%s)\n", s, e);
+        return 0;
+      }
+    }
+    if ((e = chkpath((def) ? defpath : getvar(pathn), s, X_OK, 0))) {
+      printf("%s is %s\n", s, e);
+      return 0;
+    }
+    printf("%s: not found\n", s);
+    return 1;
+  }
+
+  if ((a = findalias(s))) {
+    printf("%s \n", a->name);
+    return 0;
+  }
+  if (iskeywd(s)) {
+    printf("%s\n", s);
+    return 0;
+  }
+  if ((f = findfunc(s))) {
+    printf("%s\n", s);
+    return 0;
+  }
+  if ((b = findbuiltin(s))) {
+    printf("%s\n", s);
+    return 0;
+  }
+  if (!def) {
+    if ((e = findchash(s))) {
+      printf("%s\n", e);
+      return 0;
+    }
+  }
+  if ((e = chkpath((def) ? defpath : getvar(pathn), s, X_OK, 0))) {
+    printf("%s\n", e);
+    return 0;
+  }
+  return 1;
+}
 
 /**  normalize path to set PWD variable with logical path  */
 static char *
@@ -183,15 +302,9 @@ breakcmd(char **argv)
   if (argc < 2) {
     n = 1;
   } else if (argc == 2) {
-    char *breakn = argv[1];
-    for (size_t i = 0; breakn[i]; i++) {
-      if (!isdigit_(breakn[i])) {
-        shwarn_arg(argv[0], argv[1], "a numeric arguement is required");
-        return 1;
-      }
-    }
-    if ((n = atoi_(argv[1])) <= 0) {
-      shwarn_arg(argv[0], breakn, "must be a positive integer");
+    if ((n = bltin_atoi(argv[1], argv[0])) <= 0) {
+      if (!n)
+        shwarn_arg(argv[0], argv[1], "must be a positive integer");
       return 1;
     }
   } else {
@@ -324,6 +437,61 @@ cdcmd(char **argv)
 }
 
 static int
+commandcmd(char **argv)
+{
+  int flags = 0, argc = 0;
+  int def = 0, status = 0;
+  char *path;
+
+  array_len(argv, argc);
+  if (argc == 1)
+    return 0;
+  ARGBEGIN
+  {
+    case 'v':
+      flags = FLAG_v;
+      break;
+    case 'V':
+      flags = FLAG_V;
+      break;
+    case 'p':
+      def = 1;
+      break;
+    default:
+      bad_opt(argv0, ARGC());
+      return 1;
+  }
+  ARGEND
+
+  if (flags & (FLAG_v | FLAG_V)) {
+    for (int i = 0; i < argc; i++)
+      if (classify_cmd(argv[i], (flags == FLAG_V), def))
+        status = 1;
+    return status;
+  }
+
+  char *jcmd, *fpath, **env;
+  size_t tlen;
+  const builtin *b;
+
+
+  if ((b = findbuiltin(argv[0]))) {
+    return builtin_launch(b, argv);
+  }
+  if ((path = (def) ? defpath : getvar(pathn)))
+    path = defpath;
+  if (!(fpath = chkpath(path, argv[0], X_OK, 0))) {
+    shwarnx(argv[0], "command not found");
+    return 1;
+  }
+  jcmd = join_strn(argv, &tlen);
+  env = build_env(NULL);
+  status = forkexec(fpath, argv, env, jcmd, NULL);
+
+  return status;
+}
+
+static int
 continuecmd(char **argv)
 {
   int n;
@@ -337,15 +505,9 @@ continuecmd(char **argv)
   if (argc < 2) {
     n = 1;
   } else if (argc == 2) {
-    char *contn = argv[1];
-    for (size_t i = 0; contn[i]; i++) {
-      if (!isdigit_(contn[i])) {
-        shwarn_arg(argv[0], argv[1], "a numeric arguement is required");
-        return 1;
-      }
-    }
-    if ((n = atoi_(argv[1])) <= 0) {
-      shwarn_arg(argv[0], contn, "must be a positive integer");
+    if ((n = bltin_atoi(argv[1], argv[0])) <= 0) {
+      if (!n)
+        shwarn_arg(argv[0], argv[1], "must be a positive integer");
       return 1;
     }
   } else {
@@ -555,15 +717,9 @@ exitcmd(char **argv)
     return 1;
   }
 
-  if (argc == 2) {
-    for (size_t i = 0; argv[1][i]; i++) {
-      if (!isdigit_(argv[1][i])) {
-        shwarn_arg(argv[0], argv[1], "a number is required");
-        return 1;
-      }
-    }
-    exnum = atoi_(argv[1]);
-  }
+  if (argc == 2)
+    if ((exnum = bltin_atoi(argv[1], argv[0])) < 0)
+      return 1;
   slclear();
   exit(exnum);
 }
@@ -791,10 +947,89 @@ returncmd(char **argv)
 }
 
 static int
+shiftcmd(char **argv)
+{
+  int argc = 0;
+  int n = 0;
+  array_len(argv, argc);
+
+  if (argc == 1) {
+    n = 1;
+  } else if (argc == 2) {
+    if ((n = bltin_atoi(argv[1], argv[0])) < 0)
+      return 1;
+  } else {
+    shwarn_arg(argv[0], argv[2], "too many arguements");
+    return 1;
+  }
+  if (!n)
+    return 0;
+  if (n > sh_argc) {
+    shwarnx(argv[0], "can't shift that many");
+    return 1;
+  }
+
+  if (alloc_sh_argv)
+    for (int i = 0; i < n; i++)
+      slfree(sh_argv[i]);
+  memmove(sh_argv, sh_argv + n, (sh_argc - n) * sizeof(char *));
+  for (int i = sh_argc - n; i < sh_argc; i++)
+    sh_argv[i] = NULL;
+  sh_argc -= n;
+
+  return 0;
+}
+
+static int
+timescmd(char **argv)
+{
+  size_t argc = 0;
+  array_len(argv, argc);
+  ARGBEGIN
+  {
+    default:
+      bad_opt(argv0, ARGC());
+      return 1;
+  }
+  ARGEND
+  struct rusage shell, chld;
+  getrusage(RUSAGE_SELF, &shell);
+  getrusage(RUSAGE_CHILDREN, &chld);
+
+  printf("%dm%fs %dm%fs\n"
+         "%dm%fs %dm%fs\n",
+         (int)(shell.ru_utime.tv_sec / 60),
+         (double)(shell.ru_utime.tv_sec % 60) + shell.ru_utime.tv_usec / 1e6,
+         (int)(shell.ru_stime.tv_sec / 60),
+         (double)(shell.ru_stime.tv_sec % 60) + shell.ru_stime.tv_usec / 1e6,
+         (int)(chld.ru_utime.tv_sec / 60),
+         (double)(chld.ru_utime.tv_sec % 60) + chld.ru_utime.tv_usec / 1e6,
+         (int)(chld.ru_stime.tv_sec / 60),
+         (double)(chld.ru_stime.tv_sec % 60) + chld.ru_stime.tv_usec / 1e6);
+
+  return 0;
+}
+
+static int
 truecmd(char **args)
 {
   (void)args;
   return 0;
+}
+
+static int
+typecmd(char **argv)
+{
+  int argc = 0;
+  int status = 0;
+  array_len(argv, argc);
+  if (argc == 1)
+    return 0;
+
+  for (int i = 1; i < argc; i++)
+    if (classify_cmd(argv[i], 1, 0))
+      status = 1;
+  return status;
 }
 
 /* NOLINTBEGIN(readability-magic-numbers) */
