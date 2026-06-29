@@ -1,21 +1,6 @@
 .POSIX:
-CC := clang
-# cc | gcc | clang
-BUILD       ?= release
-# debug | release | sanitize | valgrind | profile
-BUILD_LINK  ?= static
-# dynamic | static | static-musl
-LIBEDIT := y
-# set to anything to enable, unset to disable
-GCOV :=
 
-PREFIX := /usr/local
-BINDIR := $(DESTDIR)$(PREFIX)/bin
-
-# Compiler flags
-CFLAGS  := --std=c99 -I. -Wall -Wextra -pedantic -pipe
-LDFLAGS :=
-LDLIBS  :=
+include config.mk
 
 ifeq ($(BUILD),release)
 	CFLAGS += -march=native -O2 -flto=auto
@@ -24,6 +9,9 @@ endif
 ifdef GCOV
 	CFLAGS += --coverage -fno-lto
 	LDFLAGS += --coverage
+endif
+ifdef TRACE
+	CFLAGS += -DTRACE
 endif
 ifeq ($(BUILD),debug)
 	CFLAGS += -D_FORTIFY_SOURCE=3 -Og -g3 -fno-omit-frame-pointer
@@ -80,26 +68,11 @@ endif
 # Link type
 ifeq ($(BUILD_LINK),static-musl)
 	CLANG_RESOURCE_DIR := $(shell clang -print-resource-dir)
+	CFLAGS +=  -DMUSL
 	LDFLAGS += -static
 endif
 ifeq ($(BUILD_LINK),static)
 	LDFLAGS += -static
-endif
-# libedit
-ifdef LIBEDIT
-	CFLAGS += -DLIBEDIT
-	ifneq ($(BUILD_LINK),static)
-		ifneq ($(BUILD_LINK),static-musl)
-			LDLIBS += -ledit
-		endif
-	endif
-  ifeq ($(BUILD_LINK),static-musl)
-		CFLAGS +=  -DMUSL
-		LDLIBS += -ledit -lhistory -lncurses
-  endif
-  ifeq ($(BUILD_LINK),static)
-		LDLIBS += -ledit -lncurses
-  endif
 endif
 
 OBJDIR 	 	 := obj
@@ -131,7 +104,7 @@ uninstall:
 clean:
 	rm -f simpsh obj/*.o
 analyze:
-	scan-build --use-cc=$(CC) -enable-checker core -enable-checker unix -enable-checker security -analyze-headers -o reports make clean all
+	scan-build --use-cc=$(CC) -enable-checker core -enable-checker unix  -analyze-headers -o reports make clean all
 examine:
 	# gcc -O2 -g -fdump-tree-optimized $(SRC)
 	gcc -O2 -g -fopt-info-all=report.txt $(SRC)
