@@ -50,7 +50,6 @@ static const struct {
   [RDRW] = { O_RDWR | O_CREAT, OPENRW },
 };
 
-static const builtin *findbuiltin(const char *);
 static void poptmpvars(tmp_var *, size_t);
 static int save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
@@ -204,6 +203,33 @@ save_fd(redir *r, fdlist *sfd, size_t * restrict sfdc)
     t = t->next;
   }
   return 0;
+}
+
+int
+execcmd(char **argv)
+{
+  if (!argv[1])
+    return 0;
+  char *fullpath;
+  char **env = build_env(NULL);
+
+  if (!env)
+    shwarnx(argv[0], "failed to get environ"); /*NOLINT*/
+
+  fullpath = getpath(argv[1]);
+  if (!fullpath)
+    goto fail;
+  if (execve(fullpath, &argv[1], env) < 0)
+    goto fail;
+  return 0;
+
+fail:
+  perror(argv[0]);
+  if (env) {
+    slfree(env);
+  }
+  slfree(fullpath);
+  return 1;
 }
 
 int
@@ -842,10 +868,12 @@ run_cmd(const cmd_tree *n, int inchld)
       poptmpvars(tmp, vc);
     } else {
       status = f ? run_func(f->body, final) : builtin_launch(b, final);
-    }
-    if (predir) {
-      fflush(NULL);
-      restore_fd(sfd, sfdc);
+      if (predir) {
+        if (!(b && b->fn == &execcmd && !final[1])) {
+          fflush(NULL);
+          restore_fd(sfd, sfdc);
+        }
+      }
     }
 
   } else { /* if this is a external command */
@@ -924,7 +952,7 @@ run_commands(const cmd_tree *n, int nchld)
 
   while (n->type == OP && (COPP(n) == TSEMI || COPP(n) == TNL)) {
     lstatus = run_commands(n->left, 0);
-    if (retnow || !n->right)
+    if (retnow || loopbreak || loopcontinue || !n->right)
       return lstatus;
     n = n->right;
   }

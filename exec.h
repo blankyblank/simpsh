@@ -21,6 +21,7 @@ extern ucharf func_depth;
 extern int run_commands(const cmd_tree *, int);
 extern int run_cmdsub(const cmd_tree *);
 extern int forkexec(char *, char **, char **, const char *, redir *r);
+extern int execcmd(char **);
 
 #define DUPFD(s, d) \
   if (dup2(s, d) < 0) { \
