@@ -64,17 +64,17 @@ typedef enum {
 } token;
 
 typedef enum {
-  QNONE,
-  QDOUBLE,
-  QSINGLE,
-  QHEREDOC,
-  QVAR,
-  QVAR_DQ,
-  QBRACE,
-  QBRACE_DQ,
-  QCMDSUB,
-  QCMDSUB_DQ,
-  QARITH,
+  QNONE = 1 << 0,
+  QDOUBLE = 1 << 1,
+  QSINGLE = 1 << 2,
+  QHEREDOC = 1 << 3,
+  QVAR = 1 << 4,
+  QVAR_DQ = 1 << 5,
+  QBRACE = 1 << 6,
+  QBRACE_DQ = 1 << 7,
+  QCMDSUB = 1 << 8,
+  QCMDSUB_DQ = 1 << 9,
+  QARITH = 1 << 10,
 } quoted;
 
 typedef enum {

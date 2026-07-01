@@ -9,7 +9,7 @@
 
 /* so far 8000 for minstack_s seems pretty good for performance, but it seems
  * large which can have it's own drawbacks test more sized */
-#define align_mem(n) (((n) + 15) & ~15)
+#define align_mem(n) (((n) + 15) & ~(size_t)15)
 #define MINSTACK_S align_mem(8192)
 #define PAGE_SIZE 4096
 #define MEMMAGIC 0x534C4142
@@ -20,6 +20,13 @@
 #define stack_mark() ((stmark) { current, stnext, stleft })
 #define st_strdup(s) (st_strndup(s, strlen(s))) /** stack allocated strdup */
 #define st_putc(c) (void)(stleft == 0 ? grow_stack(1) : (void *)0), *stnext++ = (c), stleft--
+
+#define streallocar(ar, sz, used, t) \
+  do { \
+    t *n = st_alloc((sz) * sizeof(t)); \
+    memcpy(n, (ar), (used) * sizeof(t)); \
+    (ar) = n; \
+  } while (0)
 
 #define st_write(src, n, len) \
   do { \
@@ -93,7 +100,7 @@ void *newslab(int);
 extern void slclear(void);
 
 static inline void *
-slalloc(size_t n)
+salloc(size_t n)
 {
   int i;
   slclass *c;
@@ -178,14 +185,15 @@ static inline void
 *slcalloc(size_t n, size_t size) {
     void *p;
     size_t total = n * size;
-    if ((p = slalloc(total))) {
+    if ((p = salloc(total))) {
             memset(p, 0, total);
     }
     return p;
 }
 
 /**  allocate new stack block  */
-static inline __attribute__((always_inline)) void *
+__attribute__((always_inline, no_sanitize("unsigned-integer-overflow")))
+static inline  void *
 st_alloc(size_t dsize)
 {
   size_t pad;

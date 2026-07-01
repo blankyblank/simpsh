@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <stdio.h>
 
+#include "alloc.h"
 #include "arith.h"
 #include "env.h"
 #include "error.h"
@@ -14,7 +15,6 @@
 #include "input.h"
 #include "lex.h"
 #include "main.h"
-#include "alloc.h"
 #include "opts.h"
 #include "parse.h"
 #include "utils.h"
@@ -33,6 +33,12 @@ static wf **splitword(wf *restrict, size_t *restrict);
   buf = st_alloc(16); \
   *olen = lltoa(sh_argc, buf); \
   return buf;
+
+#define chk_cap(arc, c, arv, t) \
+  if ((arc) >= (c)) { \
+    (c) *= 2; \
+    streallocar(arv, c, arc, t); \
+  }
 
 /** get the variable for the return status of last command */
 static inline char *
@@ -271,7 +277,6 @@ expand_ps1(char *p)
   if (!p)
     return NULL;
 
-  varlen = 0;
   flen = 0;
   i = 0;
   while (p[i]) {
@@ -376,16 +381,13 @@ done:
 char **
 expand_argv(wf **args, size_t *restrict t)
 {
-  unsigned int cap, fargc, argc;
   size_t i, elen, tlen;
-  wf **fargv;
   char **argv;
-
+  unsigned int cap = 64;
+  unsigned int fargc = 0;
+  unsigned int argc = 0;
   *t = 0;
-  cap = 64;
-  fargc = 0;
-  argc = 0;
-  fargv = NULL;
+  wf **fargv = NULL;
 
   while (args[argc])
     argc++;
@@ -394,21 +396,68 @@ expand_argv(wf **args, size_t *restrict t)
     wf *w = args[i];
     if (!w->next && w->qs == QNONE &&
         sscndelim(w->word, w->len, "$`\\~*?[", 7) >= w->len) {
-      if (fargc >= cap) {
-        cap *= 2;
-        char **new = (char **)st_alloc(cap * sizeof(char *));
-        memcpy(new, argv, fargc * sizeof(char *));
-        argv = new;
-      }
+      chk_cap(fargc, cap, argv, char *);
       argv[fargc++] = st_strndup(w->word, w->len);
       *t += w->len;
       continue;
     }
+    if (sh_argc && w->len == 1 && (w->word[0] == '@' || w->word[0] == '*') &&
+        (w->qs & (QVAR | QVAR_DQ | QBRACE | QBRACE_DQ))) {
+      if (w->word[0] == '@' && (w->qs & (QVAR_DQ | QBRACE_DQ))) {
+        for (int j = 1; j <= sh_argc; j++) {
+          chk_cap(fargc, cap, argv, char *);
+          argv[fargc++] = st_strdup(get_posparam(j));
+        }
+        continue;
+      }
+      shvar *ifs;
+      int ifsc = 0;
+      if ((ifs = findvar_n(ifsn, 3))) {
+        if (ifs->var)
+          ifsc = (int)*shvar_val(ifs);
+      } else {
+        ifsc = ' ';
+      }
+      size_t pos = 0, tlen = 0, lenarr[sh_argc + 1];
+      for (int j = 1; j <= sh_argc; j++) {
+        char *p = get_posparam(j);
+        tlen += lenarr[j] = p ? strlen(p) : 0;
+        if (j < sh_argc && ifsc)
+          tlen++;
+      }
+      char *buf = st_alloc(tlen + 1);
+      for (int j = 1; j <= sh_argc; j++) {
+        char *p = get_posparam(j);
+        if (p) {
+          memcpy(buf + pos, p, lenarr[j]);
+          pos += lenarr[j];
+        }
+        if (j < sh_argc && ifsc)
+          buf[pos++] = ifsc;
+      }
+      buf[pos] = '\0';
+      chk_cap(fargc, cap, argv, char *);
+      if (w->qs & (QVAR | QBRACE)) {
+        argv[fargc++] = st_strndup(buf, tlen);
+        continue;
+      }
+      wf *pw = st_alloc(sizeof(wf));
+      pw->qs = QNONE;
+      pw->word = st_strndup(buf, tlen);
+      pw->len = tlen;
+      pw->flags = 0;
+      pw->next = NULL;
+      fargv = splitword(pw, &tlen);
+      *t += tlen;
+      goto glob;
+    }
+
     wf *expanded;
     if (!(expanded = exp_word(args[i], &elen)))
       return NULL;
     fargv = splitword(expanded, &tlen);
     *t += tlen;
+  glob:
     for (int j = 0; fargv[j]; j++) {
       if (!fflag) {
         int glob = 0;
@@ -425,23 +474,13 @@ expand_argv(wf **args, size_t *restrict t)
           int mc = globexpand(flat, &match);
           if (mc > 0) {
             for (int k = 0; k < mc; k++) {
-              if (fargc >= cap) {
-                cap *= 2;
-                char **new = st_alloc(cap * sizeof(char *));
-                memcpy(new, argv, fargc * sizeof(char *));
-                argv = new;
-              }
+              chk_cap(fargc, cap, argv, char *);
               argv[fargc++] = match[k];
             }
           } else
             argv[fargc++] = flat;
         } else {
-          if (fargc >= cap) {
-            cap *= 2;
-            char **new = st_alloc(cap * sizeof(char *));
-            memcpy(new, argv, fargc * sizeof(char *));
-            argv = new;
-          }
+          chk_cap(fargc, cap, argv, char *);
           argv[fargc++] = join_wf(fargv[j]);
         }
       } else
@@ -620,6 +659,8 @@ exp_word(wf *wordf, size_t * restrict rlen)
                 vlen = 0;
               }
               break;
+            default:
+              break;
           }
           // vlen = v->flen - (v->nlen + 2);
           if (!vlen && val)
@@ -645,6 +686,8 @@ exp_word(wf *wordf, size_t * restrict rlen)
             case '#':
               vlen = lltoa(sh_argc, buf);
               val = st_strndup(buf, vlen);
+              break;
+            default:
               break;
           }
         }
@@ -755,12 +798,7 @@ splitword(wf *f, size_t * restrict tlen)
             ttl += fpos - s;
           }
           if (chead) {
-            if (fargc >= cap) {
-              cap *= 2;
-              wf **new = st_alloc(cap * sizeof(wf *));
-              memcpy(new, fargv, fargc * sizeof(wf *));
-              fargv = new;
-            }
+            chk_cap(fargc, cap, fargv, wf *);
             append_wf(&chead, &ctail, NULL, 0, QNONE);
             fargv[fargc++] = chead;
             chead = NULL;
@@ -775,12 +813,7 @@ splitword(wf *f, size_t * restrict tlen)
             ttl += fpos - s;
           }
           append_wf(&chead, &ctail, NULL, 0, QNONE);
-          if (fargc >= cap) {
-            cap *= 2;
-            wf **new = st_alloc(cap * sizeof(wf *));
-            memcpy(new, fargv, fargc * sizeof(wf *));
-            fargv = new;
-          }
+          chk_cap(fargc, cap, fargv, wf *);
           fargv[fargc++] = chead;
           chead = NULL;
           ctail = NULL;
@@ -790,6 +823,8 @@ splitword(wf *f, size_t * restrict tlen)
         case M_NORMAL:
           fpos++;
           continue;
+        default:
+          break;
       }
     }
     if (cf->qs != QNONE && cf->qs != QCMDSUB) {
@@ -805,12 +840,7 @@ splitword(wf *f, size_t * restrict tlen)
 
   if (chead) {
     append_wf(&chead, &ctail, NULL, 0, QNONE);
-    if (fargc >= cap) {
-      cap *= 2;
-      wf **new = st_alloc(cap * sizeof(wf *));
-      memcpy(new, fargv, fargc * sizeof(wf *));
-      fargv = new;
-    }
+    chk_cap(fargc, cap, fargv, wf *);
     fargv[fargc++] = chead;
   }
 

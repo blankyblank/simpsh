@@ -92,7 +92,7 @@ static wf *get_wf(int);
 #define qescape(c) \
   case insq: \
     if ((c) == '\'') { \
-      cstate &= ~insq; \
+      cstate &= ~(unsigned int)insq; \
       st_putc(c); \
       cmdlen++; \
       continue; \
@@ -104,11 +104,11 @@ static wf *get_wf(int);
   case esc: \
     st_putc(c); \
     cmdlen++; \
-    cstate &= ~esc; \
+    cstate &= ~(unsigned int)esc; \
     continue; \
   case indq: \
     if ((c) == '"') { \
-      cstate &= ~indq; \
+      cstate &= ~(unsigned int)indq; \
       st_putc(c); \
       cmdlen++; \
       continue; \
@@ -270,7 +270,7 @@ get_wf(int c)
             depth = 0;
           startarith:
             for (;;) {
-              char ch;
+              int ch;
               if ((ch = shgetchar()) == SHEOF) {
                 notclosed = 1;
                 goto done;
@@ -443,7 +443,8 @@ get_wf(int c)
           continue;
 
           /* $$ $? $! $# */
-        } else if (n == '$' || n == '?' || n == '!' || n == '#') {
+        } else if (n == '$' || n == '?' || n == '!' ||  //
+                   n == '#' || n == '@' || n == '*') {
           flushword(&head, &tail, w, len,
                     current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
           st_putc(n);
@@ -574,7 +575,14 @@ done:
     w = grab_str(len);
     append_wf(&head, &tail, w, len,
               current_ctx == M_SQUOTE ? QSINGLE :
-              current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
+              current_ctx == M_DQUOTE ? QDOUBLE :
+                                        QNONE);
+  } else if (!notclosed) {
+    w = grab_str(0);
+    append_wf(&head, &tail, w, 0,
+              current_ctx == M_SQUOTE ? QSINGLE :
+              current_ctx == M_DQUOTE ? QDOUBLE :
+                                        QNONE);
   }
   return head;
 }

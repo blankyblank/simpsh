@@ -78,7 +78,7 @@ st_addseg(size_t asize)
   size_t need = asize < MINSTACK_S ? MINSTACK_S : asize;
   size_t len = sizeof(stackseg) - MINSTACK_S + need;
   stacksl = 1;
-  stackseg *nseg = slalloc(len);
+  stackseg *nseg = salloc(len);
   if (!nseg)
     return NULL;
   nseg->prev = current;
@@ -107,7 +107,7 @@ grow_stack(size_t msize)
   if (nsize < MINSTACK_S)
     nsize = MINSTACK_S;
   stacksl = 1;
-  if (!(nb = slalloc(sizeof(stackseg) - MINSTACK_S + nsize)))
+  if (!(nb = salloc(sizeof(stackseg) - MINSTACK_S + nsize)))
     return NULL;
   nb->prev = current;
   current = nb;
