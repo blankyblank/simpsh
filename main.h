@@ -9,9 +9,6 @@
   #include <valgrind/cachegrind.h>
   #include <valgrind/memcheck.h>
 #endif /* ifdef ENABLE_VALGRIND */
-#ifdef TRACE
-#include <mcheck.h>
-#endif /* ifdef TRACE */
 
 #include <limits.h>
 #include <stdint.h>

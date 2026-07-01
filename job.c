@@ -31,7 +31,7 @@ newjob(pid_t pgid, const char *cmd)
 {
   static int njn = 1; /* next job num */
   job *nj;
-  nj = slalloc(sizeof(job));
+  nj = salloc(sizeof(job));
   if (!nj)
     return NULL;
   nj->pgid = pgid;

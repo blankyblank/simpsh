@@ -43,7 +43,6 @@ static int continuecmd(char **);
 static int dotcmd(char **);
 static int echocmd(char **);
 static int evalcmd(char **);
-static int execcmd(char **);
 static int exitcmd(char **);
 static int falsecmd(char **);
 static int pwdcmd(char **);
@@ -532,7 +531,7 @@ dotcmd(char **argv)
   array_len(argv, argc);
 
   if (argc < 2) {
-    shwarn(argv[0], "filename arguement require");
+    shwarnx(argv[0], "filename arguement require");
     return 1;
   }
 
@@ -566,7 +565,7 @@ dotcmd(char **argv)
     st = 1;
     goto restore;
   }
-  setinputf(fd, 0);
+  setinputf(fd, file, 0);
 
   if (argc == 2) {
     o_argv0 = strdup_(sh_argv0);
@@ -577,7 +576,7 @@ dotcmd(char **argv)
     o_argv0 = strdup_(sh_argv0);
     sh_argv0 = strdup_(file);
 
-    o_argv = slalloc(sizeof(char *) * (o_argc + 1));
+    o_argv = salloc(sizeof(char *) * (o_argc + 1));
     for (int i = 0; i < o_argc; i++)
       o_argv[i] = strdup_(sh_argv[i]);
     o_argv[o_argc] = NULL;
@@ -586,7 +585,7 @@ dotcmd(char **argv)
         slfree(sh_argv[i]);
       slfree(sh_argv);
     }
-    sh_argv = slalloc(sizeof(char *) * (argc + 1));
+    sh_argv = salloc(sizeof(char *) * (argc + 1));
     size_t j = 0;
     for (size_t i = 2; argv[i]; i++)
       sh_argv[j++] = strdup_(argv[i]);
@@ -621,157 +620,119 @@ echocmd(char *argv[])
 {
   int nf = 0;
   size_t argc = 0;
-  char *bargv0;
+  char *argv0 = argv[0];
 
-  bargv0 = argv[0];
   array_len(argv, argc);
-  ARGBEGIN
-  {
-    case 'n':
-      nf = FLAG_N;
-      break;
-    default:
-      bad_opt(argv0, ARGC());
-      return 1;
-  }
-  ARGEND;
+
+  if (argv[1] && argv[1][0] == '-' && argv[1][1] == 'n' && !argv[1][2])
+    nf = FLAG_N, argv++, argc--;
+  argv++, argc--;
 
   if (fcntl(STDOUT_FILENO, F_GETFD) < 0) {
-    sherr(1, bargv0, "could not write to stdout");
+    sherr(1, argv0, "could not write to stdout");
   }
   for (size_t i = 0; i < argc; i++) {
     if (fputs(argv[i], stdout) == EOF) {
-      sherr(1, bargv0, "could not write to stdout");
+      sherr(1, argv0, "could not write to stdout");
     }
     if (i < argc - 1)
       if (fputc(' ', stdout) == EOF) {
-        sherr(1, bargv0, "could not write to stdout");
-    }
+        sherr(1, argv0, "could not write to stdout");
+      }
   }
   if (!(nf & FLAG_N))
     if (fputc('\n', stdout) == EOF) {
-      warn("%s: %s", bargv0, "could not write to stdout");
+      warn("%s: %s", argv0, "could not write to stdout");
       return 1;
     }
   return 0;
 }
 
-int
-evalcmd(char **argv)
-{
-  size_t tlen = 0;
-  char *cmdstrn;
-  int status;
- 
-  if (!argv[1])
-    return 0;
+    int evalcmd(char **argv)
+    {
+      size_t tlen = 0;
+      char *cmdstrn;
+      int status;
 
-  for (size_t i = 1; argv[i]; i++)
-    tlen += strlen(argv[i]);
-  cmdstrn = join_strn(argv + 1, &tlen);
+      if (!argv[1])
+        return 0;
 
-  setinputstrn(cmdstrn, tlen);
-  status = eval_run();
-  popinput();
-  return status;
-}
+      for (size_t i = 1; argv[i]; i++)
+        tlen += strlen(argv[i]);
+      cmdstrn = join_strn(argv + 1, &tlen);
 
-static int
-execcmd(char **argv)
-{
-  if (!argv[1])
-    return 0;
-  char *fullpath;
-  char **env = build_env(NULL);
-
-  if (!env)
-    shwarnx(argv[0], "failed to get environ"); /*NOLINT*/
-
-  fullpath = getpath(argv[1]);
-  if (!fullpath)
-    goto fail;
-  if (execve(fullpath, &argv[1], env) < 0)
-    goto fail;
-  return 0;
-
-fail:
-  perror(argv[0]);
-  if (env) {
-    slfree(env);
-  }
-  slfree(fullpath);
-  return 1;
-}
-
-static int
-exitcmd(char **argv)
-{
-  size_t argc = 0;
-  int exnum;
-
-  exnum = 0;
-  array_len(argv, argc);
-  if (argc > 2) {
-    shwarnx(argv[0], "too many arguements"); /*NOLINT*/
-    return 1;
-  }
-
-  if (argc == 2)
-    if ((exnum = bltin_atoi(argv[1], argv[0])) < 0)
-      return 1;
-  slclear();
-  exit(exnum);
-}
-
-static int
-falsecmd(char **args)
-{
-  (void)args;
-  return 1;
-}
-
-static int
-pwdcmd(char **argv)
-{
-  int argc = 0;
-  (void)argc;
-  char flag = '\0';
-  char pwdbuf[PATH_MAX + 1];
-
-  ARGBEGIN
-  {
-    case 'L':
-      flag = FLAG_L;
-      break;
-    case 'P':
-      flag = FLAG_P;
-      break;
-    default:
-      bad_opt(argv0, ARGC());
-      return 1;
-  }
-  ARGEND;
-
-  if (flag != FLAG_P) {
-    char *pwd = getvar(pwdn);
-    struct stat sbuf, cwdsbuf;
-
-    if (!pwd) {
-      goto physical;
+      setinputstrn(cmdstrn, tlen);
+      status = eval_run();
+      popinput();
+      return status;
     }
-    if (stat(pwd, &sbuf) < 0) {
-      goto physical;
+
+    static int exitcmd(char **argv)
+    {
+      size_t argc = 0;
+      int exnum;
+
+      exnum = 0;
+      array_len(argv, argc);
+      if (argc > 2) {
+        shwarnx(argv[0], "too many arguements"); /*NOLINT*/
+        return 1;
+      }
+
+      if (argc == 2)
+        if ((exnum = bltin_atoi(argv[1], argv[0])) < 0)
+          return 1;
+      slclear();
+      exit(exnum);
     }
-    if (stat(".", &cwdsbuf) < 0) {
-      warn("pwd");
+
+    static int falsecmd(char **args)
+    {
+      (void)args;
       return 1;
     }
-    if ((sbuf.st_ino != cwdsbuf.st_ino || sbuf.st_dev != cwdsbuf.st_dev))
-      goto physical;
 
-    printf("%s\n", pwd);
-    return 0;
-  }
+    static int pwdcmd(char **argv)
+    {
+      int argc = 0;
+      (void)argc;
+      char flag = '\0';
+      char pwdbuf[PATH_MAX + 1];
+
+      ARGBEGIN
+      {
+        case 'L':
+          flag = FLAG_L;
+          break;
+        case 'P':
+          flag = FLAG_P;
+          break;
+        default:
+          bad_opt(argv0, ARGC());
+          return 1;
+      }
+      ARGEND;
+
+      if (flag != FLAG_P) {
+        char *pwd = getvar(pwdn);
+        struct stat sbuf, cwdsbuf;
+
+        if (!pwd) {
+          goto physical;
+        }
+        if (stat(pwd, &sbuf) < 0) {
+          goto physical;
+        }
+        if (stat(".", &cwdsbuf) < 0) {
+          warn("pwd");
+          return 1;
+        }
+        if ((sbuf.st_ino != cwdsbuf.st_ino || sbuf.st_dev != cwdsbuf.st_dev))
+          goto physical;
+
+        printf("%s\n", pwd);
+        return 0;
+      }
 
 physical:
   if (getcwd(pwdbuf, PATH_MAX + 1)) {
@@ -819,7 +780,7 @@ readcmd(char **argv)
   char *ifs = NULL;
   char ifsws[4],  *line, *p;
 
-  setinputf(STDIN_FILENO, 1);
+  setinputf(STDIN_FILENO, NULL, 1);
   rmark = stack_mark();
 
   if ((flag & pfl)) {
@@ -1086,7 +1047,7 @@ umaskcmd(char **argv)
     mode_t val = 0;
 
     for (int i = 0; argv[0][i]; i++) {
-      int c = argv[0][i];
+      int c = (unsigned char)argv[0][i];
       if (c < '0' || c > '7') {
         shwarn_arg(argv0, argv[0], "octal number out of range");
         return 1;

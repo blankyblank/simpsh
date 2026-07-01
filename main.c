@@ -53,14 +53,11 @@ int loopcontinue = 0;
 
 #define usage() fprintf(stderr, "Usage: simpsh [-abCefhiImnosvVx] [-o longopt] [-c 'cmd']\n")
 
+ /* __attribute__((visibility("default"))) */
 /** shell entry point */
 int
 main(int argc, char **argv)
 {
-#ifdef TRACE
-  mtrace();
-#endif /* TRACE */
-
   (void)argc;
   int flags, fd, i;
   char *oarg;

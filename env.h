@@ -71,7 +71,7 @@ redirdup(redir *s)
   redir *n;
   if (!s)
     return NULL;
-  n = slalloc(sizeof(redir));
+  n = salloc(sizeof(redir));
   n->fd = s->fd;
   n->name = wfdup(s->name);
   n->type = s->type;

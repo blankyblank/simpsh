@@ -63,6 +63,7 @@ static const int lbp_tab[] = {
   [A_BNOT]   = -1,
   [A_LNOT]   = -1,
   [A_LPAREN] = -1,
+  [A_RPAREN] = -1,
   [A_EOF]    = -1,
 };
 
@@ -374,13 +375,14 @@ led(llongf left)
       next_tok();
       llongf rhs;
       char valbuf[32];
+      char *name = lname;
       rhs = expr_bp(2);
-      if (!lname) {
+      if (!name) {
         shwarn_arg("arithmetic", ap, "left value requried");
         return 0;
       }
       lltoa(rhs, valbuf);
-      setvar(lname, valbuf, 0);
+      setvar(name, valbuf, 0);
       return rhs;
     default:
       atok = A_EOF;

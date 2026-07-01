@@ -15,21 +15,22 @@ struct strpush {
     char *saved_nchar;
     size_t saved_nleft;
     int saved_unget;
-    char saved_ungetbuf[4];
+    unsigned char saved_ungetbuf[4];
     int alias;
 };
 
 /** holds unified input stream data */
 typedef struct shinput shinput;
 struct shinput {
-  char *nchar;     /* Pointer to next unconsumed char in buf */
-  size_t nleft;    /* Remaining chars in buf */
+  char *nchar;      /* Pointer to next unconsumed char in buf */
+  char *name;       /* current filename */
+  size_t nleft;     /* Remaining chars in buf */
   int unget;        /* number to pushback */
   char ungetbuf[4]; /* Small pushback buffer */
-  char *buf;       /* The raw read buffer */
-  shinput *prev;   /* Links to previous input */
-  int fd;          /* File descriptor for script file input */
-  int linenum;     /* Line counter for error reporting */
+  char *buf;        /* The raw read buffer */
+  shinput *prev;    /* Links to previous input */
+  int fd;           /* File descriptor for script file input */
+  int linenum;      /* Line counter for error reporting */
   union {
     size_t mapsize; /* size of mmaped file */
     size_t lleft;
@@ -53,7 +54,7 @@ extern shinput *shinpt;
 extern int shungetc(int);
 extern size_t shgetline(char *, size_t);
 extern void setinputstrn(char *, int);
-extern void setinputf(int, int);
+extern void setinputf(int, const char *, int);
 extern void init_input(void);
 static int shreadbuf(void);
 
@@ -63,17 +64,17 @@ shgetchar(void)
   shinput *in = shinpt;
   if ((in->unget > 0)) {
     in->unget--;
-    return in->ungetbuf[shinpt->unget];
+    return (unsigned char)in->ungetbuf[shinpt->unget];
   }
   if (in->nleft > 0) {
     if (*in->nchar == '\n')
       in->linenum++;
     in->nleft--;
-    return *in->nchar++;
+    return (unsigned char)*in->nchar++;
   }
   if (in->strpush) {
     popstring();
-    return shgetchar();
+    return (unsigned char)shgetchar();
   }
 
   if (in->fd < 0 && in->b.mapsize)
@@ -90,7 +91,7 @@ shgetchar(void)
     in->nleft--;
     if (*in->nchar == '\n')
       in->linenum++;
-    return *in->nchar++;
+    return (unsigned char)*in->nchar++;
 
   }
 
@@ -100,7 +101,7 @@ shgetchar(void)
   if (*in->nchar == '\n')
     in->linenum++;
   
-  return *in->nchar++;
+  return (unsigned char)*in->nchar++;
 }
 
 int

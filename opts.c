@@ -243,7 +243,7 @@ setcmd(char **argv)
 
     if (pparams) {
       if (!pos)
-        pos = slalloc(argc * sizeof(char *));
+        pos = salloc(argc * sizeof(char *));
       pos[pcnt++] = strdup_(arg);
       continue;
     }
@@ -251,7 +251,7 @@ setcmd(char **argv)
     if (arg[0] != '-' && arg[0] != '+') {
       pparams = 1;
       if (!pos)
-        pos = slalloc(argc * sizeof(char *));
+        pos = salloc(argc * sizeof(char *));
       pos[pcnt++] = strdup_(arg);
       continue;
     }
@@ -288,7 +288,7 @@ setcmd(char **argv)
 
   if (pparams) {
     if (!pos)
-      pos = slalloc(argc * sizeof(char *));
+      pos = salloc(argc * sizeof(char *));
     pos[pcnt] = NULL;
     freeshargv();
     alloc_sh_argv = 1;

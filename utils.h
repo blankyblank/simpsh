@@ -146,7 +146,7 @@ static inline char *
 strndup_(const char *restrict s, size_t n)
 {
   char *dup;
-  if ((dup = slalloc(n + 1))) {
+  if ((dup = salloc(n + 1))) {
     nmemcpy(dup, s, n);
   }
   return dup;
@@ -261,7 +261,7 @@ st_read_assn(const char *assn, char **restrict name, char **restrict value)
 }
 
 /**  hash string for hash table  */
-static inline unsigned int
+static inline unsigned int __attribute__((no_sanitize("unsigned-integer-overflow")))
 hash(const char *s, unsigned int buckets)
 {
   ulongf h = 525201411107845655ull;
@@ -275,7 +275,7 @@ hash(const char *s, unsigned int buckets)
 }
 
 /**  hash string with known length  */
-static inline unsigned int
+static inline unsigned int __attribute__((no_sanitize("unsigned-integer-overflow")))
 hash_n(const char *s, size_t n, unsigned int buckets) {
   ulongf h = 525201411107845655ull;
   for (size_t i = 0; i < n; i++) {
@@ -303,7 +303,10 @@ quotestrn(const char *s)
     else
       c++;
   }
-  buf = st_alloc(c);
+  if (!(buf = st_alloc(c))) {
+    perror("stalloc failed");
+    return NULL;
+  }
 
   p = buf;
   *p++ = '\'';

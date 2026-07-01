@@ -106,7 +106,7 @@ setinputstrn(char *s, int len)
 }
 
 void
-setinputf(int fd, int nmp)
+setinputf(int fd, const char *name, int nmp)
 {
   if (!nmp) {
     void *map;
@@ -120,6 +120,7 @@ setinputf(int fd, int nmp)
         new = st_alloc(sizeof(shinput));
         new->prev = shinpt;
         new->buf = map;
+        new->name = name ? st_strdup(name) : NULL;
         new->nchar = map;
         new->nleft = st.st_size;
         new->b.mapsize = st.st_size;
@@ -138,6 +139,7 @@ setinputf(int fd, int nmp)
   shinput *new;
   new = st_alloc(sizeof(shinput));
   new->buf = st_alloc(BUFSIZ);
+  new->name = name ? st_strdup(name) : NULL;
   new->b.lleft = 0;
   new->prev = shinpt;
   new->fd = fd;

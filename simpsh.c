@@ -54,7 +54,7 @@ source_file(const char *path)
   int fd = open(path, O_RDONLY);
   if (fd < 0)
     return;
-  setinputf(fd, 0);
+  setinputf(fd, path, 0);
   eval_run();
   retnow = 0;
   popinput();

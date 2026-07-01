@@ -150,7 +150,7 @@ setvar(const char *restrict name, char *restrict val, shvar_flags flags)
         else
           v->var[nlen + 1] = '\0';
       } else {
-        if (!(nvar = slalloc(flen)))
+        if (!(nvar = salloc(flen)))
           return;
         memcpy(nvar, name, nlen);
         nvar[nlen] = '=';
@@ -172,7 +172,7 @@ setvar(const char *restrict name, char *restrict val, shvar_flags flags)
       v = var_tab;
   }
 
-  if (!(nvar = slalloc(flen)))
+  if (!(nvar = salloc(flen)))
     return;
   memcpy(nvar, name, nlen);
   nvar[nlen] = '=';
@@ -319,7 +319,7 @@ rebuild_env(char **sh_env)
   }
 
   size_t arrsize = (c + 1) * sizeof(char *);
-  if (!(mem = slalloc(arrsize + (len + 1))))
+  if (!(mem = salloc(arrsize + (len + 1))))
     return NULL;
   cmd_env = mem;
   char *buf = (char *)mem + arrsize;
@@ -410,9 +410,9 @@ init_env(void)
   ifs->func = ifsupdt;
   ifsupdt(shvar_val(ifs));
 
-  sh_pid_s = slalloc(INTSIZE);
-  sh_bgpid_s = slalloc(INTSIZE);
-  sh_ppid_s = slalloc(INTSIZE);
+  sh_pid_s = salloc(INTSIZE);
+  sh_bgpid_s = salloc(INTSIZE);
+  sh_ppid_s = salloc(INTSIZE);
   if (!sh_pid_s || !sh_bgpid_s || !sh_ppid_s) {
     warn("malloc failed");
     exit(1);
@@ -440,8 +440,8 @@ init_env(void)
   lltoa(sh_ppid, sh_ppid_s);
   setvar(ppidn, sh_ppid_s, VREADONLY);
   setvar(shlvln, shlvl_s, VEXPRT);
-  home = getenv(homen);
-  homelen = strlen(home);
+  if ((home = getenv(homen)))
+    homelen = strlen(home);
 }
 
 int

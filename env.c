@@ -23,7 +23,7 @@ wfdup(wf *s)
 
   if (!s)
     return NULL;
-  n = slalloc(sizeof(wf));
+  n = salloc(sizeof(wf));
   n->word = strndup_(s->word, s->len);
   n->len = s->len;
   n->qs = s->qs;
@@ -40,10 +40,10 @@ clausedup(clause *c)
 
   if (!c)
     return NULL;
-  n = slalloc(sizeof(clause));
+  n = salloc(sizeof(clause));
   for (size_t i = 0; c->ptrn[i]; i++)
     cnt++;
-  n->ptrn = slalloc((cnt + 1) * sizeof(wf *));
+  n->ptrn = salloc((cnt + 1) * sizeof(wf *));
   for (size_t i = 0; c->ptrn[i]; i++)
     n->ptrn[i] = wfdup(c->ptrn[i]);
   n->ptrn[cnt] = NULL;
@@ -61,7 +61,7 @@ tree_dup(cmd_tree *s)
   if (!s)
     return NULL;
 
-  n = slalloc(sizeof(cmd_tree));
+  n = salloc(sizeof(cmd_tree));
   if (!n)
     return NULL;
   n->type = s->type;
@@ -102,7 +102,7 @@ tree_dup(cmd_tree *s)
         CFOR(n).name = wfdup(CFOR(s).name);
         if (CFOR(s).words) {
           array_len(CFOR(s).words, wrdc);
-          CFOR(n).words = slalloc((wrdc + 1) * sizeof(wf *));
+          CFOR(n).words = salloc((wrdc + 1) * sizeof(wf *));
           for (size_t i = 0; CFOR(s).words[i]; i++)
             CFOR(n).words[i] = wfdup(CFOR(s).words[i]);
           CFOR(n).words[wrdc] = NULL;
@@ -123,13 +123,13 @@ tree_dup(cmd_tree *s)
       cnt = 0;
       for (size_t i = 0; CARGS(s)[i]; i++)
         cnt++;
-      CARGS(n) = slalloc((cnt + 1) * sizeof(wf *));
+      CARGS(n) = salloc((cnt + 1) * sizeof(wf *));
       for (size_t i = 0; i < cnt; i++)
         CARGS(n)[i] = wfdup(CARGS(s)[i]);
       CARGS(n)[cnt] = NULL;
       CVARC(n) = CVARC(s);
       if (CVARS(s)) {
-        CVARS(n) = slalloc((CVARC(s) + 1) * sizeof(wf *));
+        CVARS(n) = salloc((CVARC(s) + 1) * sizeof(wf *));
         for (size_t i = 0; i < CVARC(s); i++)
           CVARS(n)[i] = wfdup(CVARS(s)[i]);
         CVARS(n)[CVARC(s)] = NULL;
@@ -171,7 +171,7 @@ setfunc(const char *restrict name, cmd_tree *restrict body)
     f->body = tree_dup(body);
   } else {
     i = hash(name, ENV_BUCKETS);
-    n = slalloc(sizeof(shfunc));
+    n = salloc(sizeof(shfunc));
     if (!n)
       return;
     n->name = strdup_(name);
@@ -210,7 +210,7 @@ setalias(const char *restrict name, const char *restrict val)
     slfree(a->value);
     a->value = strdup_(val);
   } else {
-    if (!(a = slalloc(sizeof(alias))))
+    if (!(a = salloc(sizeof(alias))))
       return;
     a->name = strdup_(name);
     a->value = strdup_(val);
