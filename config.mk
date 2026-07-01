@@ -17,25 +17,22 @@ LIBEDITLIBS := -ledit
 ## uncomment for the static build target with libedit
 # LIBEDIT-STATICLIBS := -lhistory -lncurses
 
+## sanitizer flags: use with the sanitize build target
+ASANFLAGS := -fsanitize=address,undefined
+## clang extras: -fsanitize=implicit-conversion | -fsanitize=integer
+# ASANFLAGS += -fsanitize=integer
+# ASANFLAGS += -fsanitize=cfi -fvisibility=hidden -O2 -flto
+
+# export UBSAN_OPTIONS=print_stacktrace=1:abort_on_error=1
+
+## valgrind profiling i.e. callgrind/cachegrind
+PROFFLAGS := -DDEBUG -DENABLE_VALGRIND
+
 ## set to anything to enable, unset to disable
 GCOV  :=
-TRACE :=
 
 ## Compiler flags
 CFLAGS  := --std=c99 -I. -Wall -Wextra -pedantic -pipe $(LIBEDITFLAGS)
 LDFLAGS :=
 LDLIBS  := $(LIBEDITLIBS) $(LIBEDIT-STATICLIBS)
-
-# export UBSAN_OPTIONS=print_stacktrace=1:abort_on_error=1
-
-## sanitizer flags: use with the sanitize build target
-ASANFLAGS := -fsanitize=address,undefined
-## clang extras
-# ASANFLAGS += -fsanitize=integer
-# ASANFLAGS += -fsanitize=implicit-conversion
-# ASANFLAGS += -fsanitize=cfi -fvisibility=hidden -O2 -flto
-
-## valgrind profiling i.e. callgrind/cachegrind
-PROFFLAGS := -DDEBUG -DENABLE_VALGRIND
-
 
