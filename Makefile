@@ -2,77 +2,49 @@
 
 include config.mk
 
-ifeq ($(BUILD),release)
-	CFLAGS += -march=native -O2 -flto=auto
-# -D_FORTIFY_SOURCE=3
+ifneq ($(filter debug valgrind sanitize,$(BUILD)),)
+	DEBUGFLAGS := -D_FORTIFY_SOURCE=3 -fstack-protector-strong -g3 -fno-omit-frame-pointer
+	CFLAGS += $(if $(filter gcc,$(CC)),-ggdb -fvar-tracking-assignments -fno-analyzer-state-merge)
+	CFLAGS += $(if $(filter clang,$(CC)),-glldb -fstandalone-debug)
 endif
+
 ifdef GCOV
 	CFLAGS += --coverage -fno-lto
 	LDFLAGS += --coverage
 endif
-ifdef TRACE
-	CFLAGS += -DTRACE
-endif
-ifeq ($(BUILD),debug)
-	CFLAGS += -D_FORTIFY_SOURCE=3 -Og -g3 -fno-omit-frame-pointer
-  ifeq ($(CC),gcc)
-  		CFLAGS +=  -ggdb -fvar-tracking-assignments -fno-analyzer-state-merge
-  		LDFLAGS += -ggdb
-  	endif
-  	ifeq ($(CC),clang)
-  		CFLAGS += -glldb  -fstandalone-debug
-  endif
-endif
-ifeq ($(BUILD),sanitize)
-	CFLAGS += -O0 -g3  -fno-omit-frame-pointer
+
+ifeq ($(BUILD),release)
+	CFLAGS += -march=native -O2 -flto=auto
+else ifeq ($(BUILD),debug)
+	CFLAGS += -Og $(DEBUGFLAGS)
+else ifeq ($(BUILD),valgrind)
+	CC := gcc
+	CFLAGS += -Og $(DEBUGFLAGS) -DDEBUG -DENABLE_VALGRIND
+else ifeq ($(BUILD),profile)
+	CFLAGS += -O2 -g3 -fvar-tracking-assignments -fno-analyzer-state-merge $(PROFFLAGS)
+	CFLAGS += $(if $(filter clang,$(CC)),-pg)
+	LDFLAGS += $(if $(filter clang,$(CC)),-pg)
+	CFLAGS += $(if $(filter clang,$(CC)),-fprofile-instr-generate -fcoverage-mapping)
+	LDFLAGS += $(if $(filter clang,$(CC)),-fprofile-instr-generate)
+else ifeq ($(BUILD),sanitize)
+	CFLAGS += -O1 $(DEBUGFLAGS)
   ifeq ($(BUILD_LINK),static)
 		CFLAGS += -fsanitize=undefined,bounds
 		LDFLAGS += -fsanitize=undefined,bounds
-    ifeq ($(CC),gcc)
-    		CFLAGS += -ggdb
-    		LDFLAGS += -static-libasan
-    	endif
-    	ifeq ($(CC),clang)
-    		CFLAGS += -glldb -fstandalone-debug
-				LDFLAGS += -static-libsan
-    endif
-  else
-		CFLAGS += -fsanitize=address,leak,undefined,bounds
-		LDFLAGS += -fsanitize=address,leak,undefined,bounds
-    ifeq ($(CC),gcc)
-    		CFLAGS += -ggdb
-    		# LDFLAGS += -ggdb
-    	endif
-    	ifeq ($(CC),clang)
-    		CFLAGS += -glldb -fstandalone-debug
-    endif
+		LDFLAGS += $(if $(filter gcc,$(CC)),-static-libasan)
+		CFLAGS += $(if $(filter clang,$(CC)),-glldb -fstandalone-debug)
+		LDFLAGS += $(if $(filter clang,$(CC)),-static-libsan)
+	else
+		CFLAGS += $(ASANFLAGS)
+		LDFLAGS += $(ASANFLAGS)
+	endif
 endif
-endif
-ifeq ($(BUILD),valgrind)
-	CC := gcc
-	CFLAGS += -Og -g3 -ggdb -fno-omit-frame-pointer -DDEBUG -DENABLE_VALGRIND
-	# callgrind flags
-  # CFLAGS += -g -O2 -DDEBUG -DENABLE_VALGRIND
-endif
-ifeq ($(BUILD),profile)
-	CFLAGS += -O2 -g3 -fvar-tracking-assignments -fno-analyzer-state-merge
-  ifeq ($(CC),gcc)
-  	CFLAGS += -pg
-  	LDFLAGS += -pg
-  endif
-  ifeq ($(CC),clang)
-		CFLAGS += -fprofile-instr-generate -fcoverage-mapping
-		LDFLAGS += -fprofile-instr-generate
-  endif
-endif
+
 # Link type
+LDFLAGS += $(if $(filter static static-musl,$(BUILD_LINK)),-static)
 ifeq ($(BUILD_LINK),static-musl)
 	CLANG_RESOURCE_DIR := $(shell clang -print-resource-dir)
 	CFLAGS +=  -DMUSL
-	LDFLAGS += -static
-endif
-ifeq ($(BUILD_LINK),static)
-	LDFLAGS += -static
 endif
 
 OBJDIR 	 	 := obj
@@ -104,7 +76,7 @@ uninstall:
 clean:
 	rm -f simpsh obj/*.o
 analyze:
-	scan-build --use-cc=$(CC) -enable-checker core -enable-checker unix  -analyze-headers -o reports make clean all
+	scan-build --force-analyze-debug-code --use-cc=$(CC) -enable-checker core -enable-checker unix  -analyze-headers -o reports make clean all
 examine:
 	# gcc -O2 -g -fdump-tree-optimized $(SRC)
 	gcc -O2 -g -fopt-info-all=report.txt $(SRC)
