@@ -9,8 +9,8 @@
 
 msg_run 'for loop test 1: for f in *; do echo $f >> ./for1.txt; done'
 ../simpsh -c 'for f in *; do echo $f >> ./for1.txt; done'
-out1=$(cat for1.txt | grep 18-for.sh)
-if [ "$out1" = "18-for.sh" ]; then
+out1=$(cat for1.txt | grep 19-for.sh)
+if [ "$out1" = "19-for.sh" ]; then
   test_pass "out1" "matches" "18-for.sh"
   rm ./for1.txt
 else
