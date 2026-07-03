@@ -12,6 +12,7 @@
 #include "alloc.h"
 #include "arg.h"
 #include "builtins.h"
+#include "error.h"
 #include "input.h"
 #include "job.h"
 #include "main.h"
@@ -38,6 +39,7 @@ const char cdpthn[16] = "CDPATH";
 const char ps1n[16] = "PS1";
 const char ps2n[16] = "PS2";
 const char ps4n[16] = "PS4";
+const char shusg[43] = "[-abCefhiImnosvVx] [-o longopt] [-c 'cmd']";
 
 /* global shell variables */
 int sh_argc;
@@ -50,8 +52,6 @@ ucharf retnow = 0;
 int loopdepth = 0;
 int loopbreak = 0;
 int loopcontinue = 0;
-
-#define usage() fprintf(stderr, "Usage: simpsh [-abCefhiImnosvVx] [-o longopt] [-c 'cmd']\n")
 
  /* __attribute__((visibility("default"))) */
 /** shell entry point */
@@ -105,7 +105,7 @@ main(int argc, char **argv)
       nflag = 1;
       break;
     case 'o':
-      oarg = EARGF(usage());
+      oarg = EARGF(usage(shname, shusg));
       i = chkopt(oarg);
       if (i >= 0)
         shopts[i] = 1;

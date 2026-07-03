@@ -54,6 +54,8 @@ static const char dmsg[] = "\nUse \"exit\" to leave the shell \n";
 #define no_opt(p, c) \
   (fprintf(stderr, "%s: %s: %c: requires arguement\n", shname, p, c))
 
+#define usage(prog, usg) fprintf(stderr, "Usage: %s %s\n",(prog), (usg))
+
 /* return the right syntax error message */
 #define parserr(l, e, m, t) ((iflag) ? lnsyntxerr(l, e, m, t) : syntxerr(m, t))
 
