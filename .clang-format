@@ -10,7 +10,7 @@ AlignConsecutiveBitFields:
 AlignConsecutiveDeclarations:
   Enabled: false
 AlignConsecutiveMacros:
-  Enabled: false
+  Enabled: true
   AcrossEmptyLines: false
   AcrossComments: false
 AlignEscapedNewlines: DontAlign
@@ -31,8 +31,9 @@ AlwaysBreakAfterReturnType: TopLevelDefinitions
 AlwaysBreakBeforeMultilineStrings: false
 AlwaysBreakTemplateDeclarations: Yes
 AttributeMacros: []
-BinPackArguments: true
-BinPackParameters: true
+BinPackArguments: false
+BinPackParameters: false
+PenaltyBreakBeforeFirstCallParameter: 100
 BitFieldColonSpacing: Both
 BreakAfterJavaFieldAnnotations: false
 #BreakArrays: false
