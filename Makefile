@@ -2,17 +2,6 @@
 
 include config.mk
 
-ifneq ($(filter debug valgrind sanitize,$(BUILD)),)
-	DEBUGFLAGS := -D_FORTIFY_SOURCE=3 -fstack-protector-strong -g3 -fno-omit-frame-pointer
-	CFLAGS += $(if $(filter gcc,$(CC)),-ggdb -fvar-tracking-assignments -fno-analyzer-state-merge)
-	CFLAGS += $(if $(filter clang,$(CC)),-glldb -fstandalone-debug)
-endif
-
-ifdef GCOV
-	CFLAGS += --coverage -fno-lto
-	LDFLAGS += --coverage
-endif
-
 ifeq ($(BUILD),release)
 	CFLAGS += -march=native -O2 -flto=auto
 else ifeq ($(BUILD),debug)
@@ -38,6 +27,17 @@ else ifeq ($(BUILD),sanitize)
 		CFLAGS += $(ASANFLAGS)
 		LDFLAGS += $(ASANFLAGS)
 	endif
+endif
+
+ifdef GCOV
+	CFLAGS += --coverage -fno-lto
+	LDFLAGS += --coverage
+endif
+
+ifneq ($(filter debug valgrind sanitize,$(BUILD)),)
+	DEBUGFLAGS := -D_FORTIFY_SOURCE=3 -fstack-protector-strong -g3 -fno-omit-frame-pointer
+	CFLAGS += $(if $(filter gcc,$(CC)),-ggdb -fvar-tracking-assignments -fno-analyzer-state-merge)
+	CFLAGS += $(if $(filter clang,$(CC)),-glldb -fstandalone-debug)
 endif
 
 # Link type
