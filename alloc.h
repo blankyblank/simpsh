@@ -6,6 +6,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef ENABLE_VALGRIND
+  #include <valgrind/cachegrind.h>
+  #include <valgrind/memcheck.h>
+#endif /* ifdef ENABLE_VALGRIND */
 
 /* so far 8000 for minstack_s seems pretty good for performance, but it seems
  * large which can have it's own drawbacks test more sized */
@@ -139,6 +143,9 @@ stackskip:
       s->flist = *(void **)s->flist;
       s->nalloc++;
       *(slab **)p = s;
+#ifdef ENABLE_VALGRIND
+      VALGRIND_MALLOCLIKE_BLOCK((char *)p + sizeof(slab *), c->stsz - sizeof(slab *), 0, 0);
+#endif
       return (char *)p + sizeof(slab *);
     }
     if ((char *)s->p + s->stsz <= (char *)s->end) {
@@ -146,6 +153,9 @@ stackskip:
       s->p = (char *)s->p + s->stsz;
       s->nalloc++;
       *(slab **)p = s;
+#ifdef ENABLE_VALGRIND
+      VALGRIND_MALLOCLIKE_BLOCK((char *)p + sizeof(slab *), c->stsz - sizeof(slab *), 0, 0);
+#endif
       return (char *)p + sizeof(slab *);
     }
     s = newslab(i);
@@ -176,6 +186,9 @@ slfree(void *p)
     free(save);
     return;
   }
+#ifdef ENABLE_VALGRIND
+  VALGRIND_FREELIKE_BLOCK(save, 0);
+#endif
   *(void **)p = s->flist;
   s->flist = p;
   s->nalloc--;
@@ -192,7 +205,7 @@ static inline void
 }
 
 /**  allocate new stack block  */
-__attribute__((always_inline, no_sanitize("unsigned-integer-overflow")))
+__attribute__((always_inline))
 static inline  void *
 st_alloc(size_t dsize)
 {
@@ -212,6 +225,9 @@ st_alloc(size_t dsize)
   char *rp = stnext;
   stnext += asize;
   stleft -= asize;
+#ifdef ENABLE_VALGRIND
+  VALGRIND_MAKE_MEM_UNDEFINED(rp, asize);
+#endif
   return rp;
 }
 

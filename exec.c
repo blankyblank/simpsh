@@ -53,8 +53,6 @@ static const struct {
 static void poptmpvars(tmp_var *, size_t);
 static int save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
-static __attribute__((noreturn)) void shexec(char **restrict, char **restrict, redir *);
-static int shfexec(char **restrict, const cmd_tree *restrict, char **restrict, redir *);
 static pid_t forkrun(int);
 static int run_if(const cmd_tree *);
 static int run_while(const cmd_tree *);
@@ -64,6 +62,10 @@ static int run_pipe(const cmd_tree *);
 static int run_bg(const cmd_tree *);
 static int run_subsh(const cmd_tree *, int);
 static int run_cmd(const cmd_tree *, int);
+static void shexec(char ** restrict, char ** restrict, redir *)
+  __attribute__((noreturn));
+static int shfexec(char ** restrict, const cmd_tree * restrict,
+                   char ** restrict, redir *);
 
 
 static inline int
@@ -94,7 +96,6 @@ apply_redir(redir *r)
     if (!(name = xpnd(r->name)))
       return 1;
     switch (r->type) {
-
       case RDIN:
       case RDAPP:
       case RDCLOB:
@@ -104,7 +105,7 @@ apply_redir(redir *r)
         break;
       case RDOUT:
         if (Cflag) {
-          if ((fd = open(name, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, OPENRW )) <
+          if ((fd = open(name, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, OPENRW)) <
               0) {
             warn("%s", name);
             return 1;
@@ -118,6 +119,7 @@ dupfall:
         DUPFD(fd, r->fd)
         CLOSEFD(fd)
         break;
+
       case RDDUPO:
       case RDDUPI:
         if (name[0] == '-' && name[1] == '\0') {
@@ -133,12 +135,14 @@ dupfall:
           DUPFD(fd, r->fd);
         }
         break;
+
       case RDHERE_D:
       case RDHERE:
         if (!r->heredoc) {
           warn("heredoc not found");
           return 1;
         }
+
         {
           wf b;
           char *body;
@@ -576,7 +580,7 @@ run_subsh(const cmd_tree *n, int chld)
       if (predir && apply_redir(predir))
         _exit(1);
       status = run_commands(n->left, _INCHLD);
-      if (efl && status != 0 && !ifl) // XXX: make sure i should keep
+      if (efl && status != 0 && !ifl)  // XXX: make sure i should keep
         _exit(status);
       fflush(NULL);
       _exit(status);
@@ -717,7 +721,7 @@ run_pipe(const cmd_tree *n)
       child_setup_fg(0);
       CLOSEFD(pipefd[0]);
       DUPFD(pipefd[1], STDOUT_FILENO);
-      CLOSEFD(pipefd[1]); 
+      CLOSEFD(pipefd[1]);
       int _st = run_commands(n->left, _INCHLD);
       fflush(NULL);
       _exit(_st);

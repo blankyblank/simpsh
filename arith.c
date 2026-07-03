@@ -68,14 +68,14 @@ static const int lbp_tab[] = {
 };
 
 /* NOLINTBEGIN(readability-magic-numbers) */
-#define get_lbp(t) ( (t) < A_END ? lbp_tab[t] : 0 )
+#define get_lbp(t) ((t) < A_END ? lbp_tab[t] : 0)
 
-static const char *ap;    // current position
-static size_t alen;       // remaining bytes
-static int atok;          // current token type
-static llongf aval;    // numeric value (for A_NUM)
-static const char *aname; // name pointer (for A_NAME)
-static size_t anlen;      // name length (for A_NAME)
+static const char *ap;     // current position
+static size_t alen;        // remaining bytes
+static int atok;           // current token type
+static llongf aval;        // numeric value (for A_NUM)
+static const char *aname;  // name pointer (for A_NAME)
+static size_t anlen;       // name length (for A_NAME)
 static char *lname;
 static size_t lnlen;
 

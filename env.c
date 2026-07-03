@@ -9,7 +9,6 @@
 #include "env.h"
 #include "error.h"
 #include "lex.h"
-#include "main.h"
 #include "parse.h"
 #include "utils.h"
 
@@ -179,7 +178,6 @@ setfunc(const char *restrict name, cmd_tree *restrict body)
     n->next = func_tab[i];
     func_tab[i] = n;
   }
-
 }
 
 /** find alias by name */

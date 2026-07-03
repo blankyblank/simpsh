@@ -327,9 +327,15 @@ sh_interactive(void)
 static int
 need_more(const char *lines, size_t lineslen)
 {
-  enum { NCTX_NORMAL, NCTX_SQUOTE, NCTX_DQUOTE, NCTX_CSUB,
-         NCTX_ARITH, NCTX_BTICK };
-  int ctx = NCTX_NORMAL;
+  typedef enum {
+    NCTX_NORMAL,
+    NCTX_SQUOTE,
+    NCTX_DQUOTE,
+    NCTX_CSUB,
+    NCTX_ARITH,
+    NCTX_BTICK
+  } nctx;
+  nctx ctx = NCTX_NORMAL;
   int depth = 0;
   int last = 0, prev = 0;
   size_t i;
@@ -339,77 +345,94 @@ need_more(const char *lines, size_t lineslen)
     int next = (i + 1 < lineslen) ? (unsigned char)lines[i + 1] : 0;
 
     switch (ctx) {
-    case NCTX_NORMAL:
-      if (c == '\'')
-        ctx = NCTX_SQUOTE;
-      else if (c == '"')
-        ctx = NCTX_DQUOTE;
-      else if (c == '`')
-        ctx = NCTX_BTICK;
-      else if (c == '\\' && next)
-        i++;
-      else if (c == '$' && next == '(') {
-        i++;
-        if (i + 1 < lineslen && lines[i + 1] == '(') {
+      case NCTX_NORMAL:
+        if (c == '\'')
+          ctx = NCTX_SQUOTE;
+        else if (c == '"')
+          ctx = NCTX_DQUOTE;
+        else if (c == '`')
+          ctx = NCTX_BTICK;
+        else if (c == '\\' && next)
           i++;
-          ctx = NCTX_ARITH;
-          depth = 0;
-        } else {
-          ctx = NCTX_CSUB;
-          depth = 1;
+        if (c == '$' && next == '(') {
+          i++;
+          if (i + 1 < lineslen && lines[i + 1] == '(') {
+            i++;
+            ctx = NCTX_ARITH;
+            depth = 0;
+          } else {
+            ctx = NCTX_CSUB;
+            depth = 1;
+          }
+        } else if (c != '\n' && c != ' ' && c != '\t') {
+          prev = last;
+          last = c;
         }
-      } else if (c != '\n' && c != ' ' && c != '\t') {
-        prev = last;
-        last = c;
-      }
-      break;
-    case NCTX_SQUOTE:
-      if (c == '\'')
-        ctx = NCTX_NORMAL;
-      break;
-    case NCTX_DQUOTE:
-      if (c == '"')
-        ctx = NCTX_NORMAL;
-      else if (c == '\\' && next)
-        i++;
-      break;
-    case NCTX_CSUB:
-      if (c == '(') depth++;
-      else if (c == ')') {
-        if (--depth <= 0) ctx = NCTX_NORMAL;
-      } else if (c == '$' && next == '(') {
-        i++; depth++;
-        if (i + 1 < lineslen && lines[i + 1] == '(')
-          { i++; depth++; }
-      }
-      break;
-    case NCTX_ARITH:
-      if (c == '(') depth++;
-      else if (c == ')') {
-        if (depth > 0) depth--;
-        else if (next == ')') { i++; ctx = NCTX_NORMAL; }
-      } else if (c == '$' && next == '(') {
-        i++; depth++;
-        if (i + 1 < lineslen && lines[i + 1] == '(')
-          { i++; depth++; }
-      }
-      break;
-    case NCTX_BTICK:
-      if (c == '`')
-        ctx = NCTX_NORMAL;
-      else if (c == '\\' && next)
-        i++;
-      break;
+        break;
+      case NCTX_SQUOTE:
+        if (c == '\'')
+          ctx = NCTX_NORMAL;
+        break;
+      case NCTX_DQUOTE:
+        if (c == '"')
+          ctx = NCTX_NORMAL;
+        else if (c == '\\' && next)
+          i++;
+        break;
+      case NCTX_CSUB:
+        if (c == '(') {
+          depth++;
+        } else if (c == ')') {
+          if (--depth <= 0)
+            ctx = NCTX_NORMAL;
+        } else if (c == '$' && next == '(') {
+          i++;
+          depth++;
+          if (i + 1 < lineslen && lines[i + 1] == '(') {
+            i++;
+            depth++;
+          }
+        }
+        break;
+      case NCTX_ARITH:
+        if (c == '(') {
+          depth++;
+        } else if (c == ')') {
+          if (depth > 0) {
+            depth--;
+          } else if (next == ')') {
+            i++;
+            ctx = NCTX_NORMAL;
+          }
+        } else if (c == '$' && next == '(') {
+          i++;
+          depth++;
+          if (i + 1 < lineslen && lines[i + 1] == '(') {
+            i++;
+            depth++;
+          }
+        }
+        break;
+      case NCTX_BTICK:
+        if (c == '`')
+          ctx = NCTX_NORMAL;
+        else if (c == '\\' && next)
+          i++;
+        break;
     }
   }
 
-  if (ctx != NCTX_NORMAL) return 1;
-  if (last == '|') return 1;
-  if (last == '&' && prev == '&') return 1;
+  if (ctx != NCTX_NORMAL)
+    return 1;
+  if (last == '|')
+    return 1;
+  if (last == '&' && prev == '&')
+    return 1;
   if (lineslen >= 2) {
     i = lineslen - 2;
-    while (i > 0 && (lines[i] == ' ' || lines[i] == '\t')) i--;
-    if (i > 0 && lines[i] == '\\' && lines[i-1] != '\\')
+    while (i > 0 && (lines[i] == ' ' || lines[i] == '\t'))
+      i--;
+    if (i > 0 && lines[i] == '\\' && lines[i - 1] != '\\')
       return 1;
   }
   return 0;
@@ -556,7 +579,7 @@ lineread(int ps1)
   nxtline = NULL;
   el.running = 1;
 
-  while (el.running) { 
+  while (el.running) {
     runeventloop(&el, -1);
     if (intsig) {
       intsig = 0;

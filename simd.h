@@ -11,7 +11,7 @@
 typedef __m128i sint;
 /* simd optimized scan to end of word */
 static inline size_t
-sscnword(const char *buf,size_t len)
+sscnword(const char *buf, size_t len)
 {
   sint input, ge_lo, le_hi;
   sint classmask, wordmask, delimmask, allones;
@@ -122,7 +122,10 @@ sskipnl(const char *buf, size_t len)
 
 /* simd optimized scan for delimeters */
 static inline size_t
-sscndelim(const char *restrict buf, size_t len, const char *restrict delims, int ndelims)
+sscndelim(const char * restrict buf,
+          size_t len,
+          const char * restrict delims,
+          int ndelims)
 {
   sint input, match, delim_vec;
   int mask, d;

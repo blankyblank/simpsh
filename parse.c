@@ -1,4 +1,6 @@
 /* parse.c - parser functions */
+/* NOLINT(build/c++11) */
+
 #define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
 #include <string.h>
@@ -139,7 +141,9 @@ newoppnode(token opp_t, cmd_tree *l, cmd_tree *r)
   return n;
 }
 
-/* TODO: fix cascading errors, to stop error message once one syntax error is found. */
+/* TODO:
+ * fix cascading errors, to stop error message once one syntax error is found.
+ */
 
 __attribute__((hot)) cmd_tree *
 parse_list(token s)
@@ -740,9 +744,9 @@ parse_cmd(void)
     if (neg & 1)
       l->flags |= NEG;
 
-    if (!cmb)
+    if (!cmb) {
       cmb = l;
-    else {
+    } else {
       if (eflag) {
         cmb->flags |= EFLAG_SAFE;
         if (cmb->right)

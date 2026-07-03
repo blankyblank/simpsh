@@ -53,6 +53,9 @@ stunalloc(void *p)
 {
   if (p >= (void *)stnext)
     return;
+#ifdef ENABLE_VALGRIND
+  VALGRIND_MAKE_MEM_NOACCESS((char *)p, stnext - (char *)p);
+#endif
   stleft += stnext - (char *)p;
   stnext = p;
 }
@@ -67,6 +70,10 @@ stack_restore(stmark m)
     current = tmp;
   }
   current = m.current;
+#ifdef ENABLE_VALGRIND
+  if (stnext > m.next)
+    VALGRIND_MAKE_MEM_NOACCESS(m.next, stnext - m.next);
+#endif
   stnext = m.next, stleft = m.stleft;
   wf_chunk = NULL;
   wf_chunk_left = 0;
@@ -88,6 +95,9 @@ st_addseg(size_t asize)
   char *rp = stnext;
   stnext += asize;
   stleft -= asize;
+#ifdef ENABLE_VALGRIND
+  VALGRIND_MAKE_MEM_UNDEFINED(rp, asize);
+#endif
   return rp;
 }
 

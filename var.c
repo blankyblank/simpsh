@@ -462,12 +462,12 @@ exportcmd(char **argv)
           shwarn_arg(argv[0], argv[1], "not a valid identifier");
           return 1;
         }
-        v = findvar(argv[i]);
-        if (v) {
+        if ((v = findvar(argv[i]))) {
           v->flags |= VEXPRT;
           env_dirty = 1;
-        } else
+        } else {
           setvar(argv[i], NULL, VEXPRT);
+        }
       } else {
         if (eq == argv[i]) {
           shwarn_arg(argv[0], argv[1], "not a valid identifier");
@@ -517,7 +517,7 @@ int
 readonlycmd(char **argv)
 {
   size_t i, argc = 0;
-  array_len(argv,argc);
+  array_len(argv, argc);
 
   if (argc > 1) {
     for (i = 1; i < argc; i++) {

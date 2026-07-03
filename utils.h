@@ -1,6 +1,7 @@
 /* util.h - misc helper functions */
 #ifndef UTILS_H
 #define UTILS_H
+#define _POSIX_C_SOURCE 200809L
 
 #include <ctype.h>
 #include <stdio.h>
@@ -13,33 +14,23 @@
 
 /* is_ something checks (some replacing ctypes functions) */
 
-#define isalpha_(c) (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z') || (c) == '_')
-
-#define isdigit_(c)  ((c) >= '0' && (c) <= '9')
-
-#define isalnum_(c)  (isalpha_(c) || ((c) >= '0' && (c) <= '9'))
-
-#define is_ws(c) (c == ' ' || c == '\t' || c == '\n')
-
+#define isalpha_(c)      (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z') || (c) == '_')
+#define isdigit_(c)      ((c) >= '0' && (c) <= '9')
+#define isalnum_(c)      (isalpha_(c) || ((c) >= '0' && (c) <= '9'))
+#define is_ws(c)         (c == ' ' || c == '\t' || c == '\n')
 #define is_ifs_nws(c, s) (!is_ws(c) && strchr(s, c))
-
-#define arsz(a, o) (sizeof(a) / sizeof(o))
+#define arsz(a, o)       (sizeof(a) / sizeof(o))
+/**  check if char is line end  */
+#define is_cmd_end(c)    ((c == ' ') | (c == '\t') | (c == '\n'))
+#define nts(s, l)        (s[l] = '\0')
+#define nmemcpy(d, s, l) memcpy((d), (s), (l)), (d)[l] = '\0'
 
 /**  check if char is operator  */
 #define is_operator(c) \
   (c == '&' || c == '|' || c == ';' || c == '(' || c == ')' || c == '{' || \
    c == '}' || c == '<' || c == '>')
 
-/**  check if char is line end  */
-#define is_cmd_end(c) ((c == ' ') | (c == '\t') | (c == '\n'))
-
 /* project specific replacements */
-
-/* null terminate string */
-#define nts(s, l) (s[l] = '\0')
-
-/** null terminated memcpy */
-#define nmemcpy(d,s,l) memcpy((d), (s), (l)), (d)[l] = '\0'
 
 static inline int
 atoi_(const char *s)
@@ -152,7 +143,7 @@ strndup_(const char *restrict s, size_t n)
   return dup;
 }
 
-#define strdup_(s) (strndup_((s),strlen(s)))
+#define strdup_(s) (strndup_((s), strlen(s)))
 
 /** strcat using memcpy */
 static inline char *
@@ -261,7 +252,7 @@ st_read_assn(const char *assn, char **restrict name, char **restrict value)
 }
 
 /**  hash string for hash table  */
-static inline unsigned int __attribute__((no_sanitize("unsigned-integer-overflow")))
+static inline unsigned int
 hash(const char *s, unsigned int buckets)
 {
   ulongf h = 525201411107845655ull;
@@ -272,11 +263,12 @@ hash(const char *s, unsigned int buckets)
     s++;
   }
   return h & (buckets - 1);
-}
+}  // __attribute__((no_sanitize("unsigned-integer-overflow")))
 
 /**  hash string with known length  */
-static inline unsigned int __attribute__((no_sanitize("unsigned-integer-overflow")))
-hash_n(const char *s, size_t n, unsigned int buckets) {
+static inline unsigned int
+hash_n(const char *s, size_t n, unsigned int buckets)
+{
   ulongf h = 525201411107845655ull;
   for (size_t i = 0; i < n; i++) {
     h ^= (unsigned char)s[i];
@@ -284,7 +276,7 @@ hash_n(const char *s, size_t n, unsigned int buckets) {
     h ^= h >> 47;
   }
   return h & (buckets - 1);
-}
+}  // __attribute__((no_sanitize("unsigned-integer-overflow")))
 
 /* quote string handling shell escaping */
 static inline char *

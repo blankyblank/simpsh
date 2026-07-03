@@ -1,4 +1,5 @@
 /* lex.c - tokenizer functions */
+
 /* NOLINTBEGIN(readability-function-cognitive-complexity) */
 #define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
@@ -11,6 +12,7 @@
 #include "error.h"
 #include "input.h"
 #include "lex.h"
+#include "main.h"
 #include "simd.h"
 #include "utils.h"
 
@@ -148,7 +150,7 @@ join_wf(wf *wordf)
   char *s, *buf;
   size_t len = 0;
 
- if (f && !f->next && f->word) {
+  if (f && !f->next && f->word) {
     char *buf = st_alloc(f->len + 1);
     memcpy(buf, f->word, f->len);
     buf[f->len] = '\0';
@@ -298,14 +300,13 @@ get_wf(int c)
                 shungetc(n);
                 arbuf[arlen++] = ch;
               } else if (ch == ')') {
-
                 if (depth > 0) {
                   depth--;
                   arbuf[arlen++] = ')';
                 } else if (arsp > 0) {
                  if ((ch = shgetchar()) == ')') {
                     size_t start, rlen, inlen;
-                    long long val;
+                    ullongf val;
                     char res[32];
                     start = arstack[arsp - 1].pos;
                     val = arith_eval(arbuf + start, arlen - start);
@@ -694,7 +695,7 @@ tokenize(void)
           return SHREDIR(RDHERE);
         }
         if (n == '&')
-          return SHREDIR(RDDUPI); 
+          return SHREDIR(RDDUPI);
         if (n == '>')
           return SHREDIR(RDRW);
         shungetc(n);
@@ -721,7 +722,7 @@ tokenize(void)
         if (!f)
           return SHTOK(TEOF);
 
-        int allnum; // AHEAD OF TIME SCAN
+        int allnum;  /* AHEAD OF TIME SCAN */
         f->flags = 0;
         if (f->qs == QNONE && !f->next)
           f->flags |= WFSINGLE;
