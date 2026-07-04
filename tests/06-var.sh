@@ -12,6 +12,25 @@ else
   test_pass  "out" "matches" "test1=1"
 fi
 
+msg_run 'variable expansion test: echo foo=bar; echo $foo | ../simpsh'
+out=$(echo 'foo=bar; echo $foo' | ../simpsh )
+
+if  [ "$out" = "bar" ]; then
+  test_pass  "out" "matches" "bar"
+else
+  test_fail  "out" "expected" "bar"
+  exit 1
+fi
+
+# NOTE: need to add these tests
+# "$@" with set -- a "" b
+# "$*" with IFS=:
+# "$*" with IFS=
+# $@ with set -- "a b" c
+# set -- then "$@"
+# "${@}" / "${*}"
+# $@ with set -- '*.c'
+
 msg_run 'variable stress test'
 printf '%s\n' \
 "abc1=asdasdf" \
@@ -96,15 +115,5 @@ printf '%s\n' \
 "abc80=asdasdf" | ../simpsh
 
 msg_pass  "all 80 variables were set"
-
-msg_run 'variable expansion test: echo foo=bar; echo $foo | ../simpsh'
-out=$(echo 'foo=bar; echo $foo' | ../simpsh )
-
-if  [ "$out" = "bar" ]; then
-  test_pass  "out" "matches" "bar"
-else
-  test_fail  "out" "expected" "bar"
-  exit 1
-fi
 
 exit 0
