@@ -67,6 +67,7 @@ void trapsig(int);
 void cleartraps(void);
 void setsig(int);
 int getsig(const char *);
+int killcmd(char **);
 int trapcmd(char **);
 
 

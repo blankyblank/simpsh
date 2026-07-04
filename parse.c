@@ -181,8 +181,11 @@ parse_list(token s)
           break;
         }
       }
-      if (tokendlist[t2.type])
+      if (tokendlist[t2.type]) {
+        if (t.type == TBKGRND)
+          l = newoppnode(TBKGRND, l, NULL);
         break;
+      }
       last_tok = t2;
       r = parse_cmd();
       if (!r) {

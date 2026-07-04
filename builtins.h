@@ -15,6 +15,7 @@ extern const builtin builtins[];
 extern int builtin_tab[BUILTIN_BUCKETS];
 
 extern int nbuiltins(void);
+extern int bltin_atoi(char *, char *, char *);
 extern void init_builtins(void);
 
 /**  get builtin command  */

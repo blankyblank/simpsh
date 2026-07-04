@@ -1,14 +1,18 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include <asm-generic/errno-base.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "arg.h"
+#include "builtins.h"
 #include "error.h"
 #include "exec.h"
 #include "job.h"
@@ -23,8 +27,6 @@ struct termios sh_termios;
 
 /* string for printing job status */
 static const char * const jstates[] = { "Running", "Stopped", "Done" };
-
-static job *findjob(const char *);
 
 job *
 newjob(pid_t pgid, const char *cmd)
@@ -82,7 +84,8 @@ killjob(void)
     if (j->state == JDONE)
       continue;
     oldstate = j->state;
-    while ((pid = waitpid(-j->pgid, &wstatus, WNOHANG | WUNTRACED | WCONTINUED)) > 0) {
+    while ((pid = waitpid(-j->pgid, &wstatus,
+                          WNOHANG | WUNTRACED | WCONTINUED)) > 0) {
       if (pid == j->status_pid)
         j->wstatus = wstatus;
       else if (pipeflag)
@@ -104,7 +107,8 @@ killjob(void)
     if (pipeflag && j->nlive <= 0 && j->state == JRUN) {
       int rstatus, cmb;
       rstatus = WIFEXITED(j->wstatus) ? WEXITSTATUS(j->wstatus) : 1;
-      cmb = rstatus ? rstatus : (WIFEXITED(j->lwstatus) ? WEXITSTATUS(j->lwstatus) : 1);
+      cmb = rstatus ? rstatus :
+                      (WIFEXITED(j->lwstatus) ? WEXITSTATUS(j->lwstatus) : 1);
       j->wstatus = cmb << 8;
     }
 
@@ -352,3 +356,120 @@ jobscmd(char **argv)
   return 0;
 }
 
+#define WGETSTATUS(s) \
+  (WIFEXITED(s) ? WEXITSTATUS(s) : WIFSIGNALED(s) ? (128 + WTERMSIG(s)) : 0)
+
+static inline int
+mwait(pid_t pid, int *wstatus)
+{
+  pid_t rpid;
+  while ((rpid = waitpid(pid, wstatus, WNOHANG)) == 0) {
+    runeventloop(&el, -1);
+    if (intsig) {
+      intsig = 0;
+      kill(abs(pid), SIGINT);
+    }
+  }
+  return rpid;
+}
+
+int
+waitcmd(char **argv)
+{
+  int status = 0, wstatus;
+  size_t argc = 0;
+  pid_t wpid;
+
+  array_len(argv, argc);
+  ARGBEGIN
+  {
+    default:
+      bad_opt(argv0, ARGC());
+      return 1;
+  }
+  ARGEND
+
+  killjob();
+  if (argc) {
+    for (size_t i = 0; i < argc; i++) {
+      char *s = argv[i];
+      pid_t wtpid;
+      job *j = NULL;
+      pid_t pid = 0;
+      if (isdigit_(s[0])) {
+        pid = (pid_t)bltin_atoi(s, argv0, "not a pid or a job spec");
+        for (j = job_list; j; j = j->next) {
+          if (j->pgid == pid || j->status_pid == pid)
+            break;
+        }
+      } else if (*s == '%') {
+        j = findjob(s);
+      } else {
+        shwarn_arg(argv0, s, "not a valid job spec");
+        continue;
+      }
+      if (!j) {
+        if (!pid) {
+          shwarn_arg(argv0, s, "no such job");
+          continue;
+        }
+        pid_t fpid = waitpid(pid, &wstatus, WNOHANG);
+        switch (fpid) {
+          case 0:
+            wpid = (mflag) ? mwait(pid, &wstatus) : waitpid(pid, &wstatus, 0);
+            status = (wpid > 0) ? WGETSTATUS(wstatus) : 1;
+            break;
+          case -1:
+            shwarn_arg(argv0, s, "is not a child of this shell");
+            status = 127;
+            break;
+          default:
+            status = WGETSTATUS(wstatus);
+            break;
+        }
+        continue;
+      }
+      wtpid = j->pgid;
+
+      switch (j->state) {
+        case JDONE:
+          status = WGETSTATUS(j->wstatus);
+          continue;
+        case JRUN:
+          while (j->nlive > 0) {
+            wpid = (mflag) ? mwait(-wtpid, &wstatus) : waitpid(-wtpid, &wstatus, 0);
+            switch (wpid) {
+              case -1:
+                if (errno == ECHILD)
+                  j->nlive = 0;
+                else if (errno == EINTR)
+                  continue;
+                break;
+              default:
+                j->nlive--;
+                if (wpid == j->status_pid)
+                  j->wstatus = wstatus;
+                break;
+            }
+          }
+          status = WGETSTATUS(j->wstatus);
+          break;
+        case JSTP:
+          break;
+      }
+    }
+    return status;
+  }
+
+  for (job *j = job_list; j; j = j->next)
+    if (j->nlive > 0)
+      while (j->nlive > 0) {
+        wpid = (mflag) ? mwait(-j->pgid, &wstatus) :
+                         waitpid(-j->pgid, &wstatus, 0);
+        if (wpid > 0)
+          j->nlive--;
+        else if (wpid < 0 && errno == ECHILD)
+          j->nlive = 0;
+      }
+  return 0;
+}

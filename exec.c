@@ -201,7 +201,7 @@ save_fd(redir *r, fdlist *sfd, size_t * restrict sfdc)
   while (t) {
     sfd[*sfdc].orig = t->fd;
     if ((sfd[(*sfdc)++].saved = dup(t->fd)) < 0) {
-      shwarn("redirection", "save fd failed");
+      sherr(1, "redirection", "save fd failed");
       return 1;
     }
     t = t->next;
@@ -235,6 +235,46 @@ fail:
   slfree(fullpath);
   return 1;
 }
+static int
+fgwait_simple(pid_t pid, const char *cmd)
+{
+  int wstatus;
+
+  for (;;) {
+    runeventloop(&el, -1);
+    if (intsig) {
+      intsig = 0;
+      kill(-pid, SIGINT);
+    }
+
+    switch (waitpid(pid, &wstatus, WNOHANG | WUNTRACED)) {
+      case -1:
+        ttyreclaim();
+        return 1;
+      case 0:
+        continue;
+      default:
+        if (WIFSTOPPED(wstatus)) {
+          job *j = newjob(pid, cmd);
+          j->wstatus = wstatus;
+          j->state = JSTP;
+          j->flags = JCHANGED;
+          tcgetattr(tty_fd, &j->ttystate);
+          j->flags |= JSAVEDTTY;
+          j->saved_ttypgrp = tcgetpgrp(tty_fd);
+          if (j->saved_ttypgrp >= 0)
+            j->flags |= JSAVEDTTYPGRP;
+          ttyrestore();
+          jobmsg(j);
+          return 128 + WSTOPSIG(wstatus);
+        }
+        ttyreclaim();
+        if (WIFSIGNALED(wstatus) && WTERMSIG(wstatus) == SIGINT)
+          putchar('\n');
+        return WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+    }
+  }
+}
 
 int
 forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
@@ -253,12 +293,9 @@ forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
     default:
       {
         if (mflag && getpid() == sh_pgid) {
-          job *j;
           setpgid(pid, pid);
-          j = newjob(pid, cmd);
-          j->flags |= JFG;
           startjob(pid);
-          return fgwait(j);
+          return fgwait_simple(pid, cmd);
         }
         return _wait_(pid);
       }
@@ -545,7 +582,7 @@ run_bg(const cmd_tree *n)
       if (mflag)
         setpgid(pid, pid);
       j = newjob(pid, bg_cmd(n->left));
-      jobmsg(j);
+      printf("[%d] %d\n", j->num, pid);
       return run_commands(n->right, 0);
   }
 }

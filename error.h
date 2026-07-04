@@ -11,54 +11,89 @@
 #include "main.h"
 #include "utils.h"
 
+typedef struct {
+  const char *name;
+  const char *usage;
+  const char *help;
+} builtinhelp;
+
+typedef enum {
+  DOTH,
+  LBRACKH,
+  COLONH,
+  ALIASH,
+  BGH,
+  BREAKH,
+  CASEH,
+  CDH,
+  COMMANDH,
+  CONTINUEH,
+  ECHOH,
+  EVALH,
+  EXECH,
+  EXITH,
+  EXPORTH,
+  FALSEH,
+  FORH,
+  FGH,
+  HASHH,
+  HELPH,
+  IFH,
+  JOBSH,
+  KILLH,
+  LOCALH,
+  PWDH,
+  READH,
+  READONLYH,
+  RETURNH,
+  SETH,
+  SHIFTH,
+  TESTH,
+  TIMESH,
+  TRAPH,
+  TRUEH,
+  TYPEH,
+  ULIMITH,
+  UMASKH,
+  UNTILH,
+  UNALIASH,
+  UNSETH,
+  WAITH,
+  WHILEH,
+  BRACEH,
+  HELPCNT
+} helpnum;
+
+extern const builtinhelp helpmsgs[];
 static const char dmsg[] = "\nUse \"exit\" to leave the shell \n";
 
+extern int helpcmd(char **);
+
 /* err but it returns instead of exiting */
-#define err(r, s) \
-  { \
-    perror(s); \
-    return r; \
-  }
-
+#define err(r, s)  { perror(s); return r; }
 /* errx but it returns instead of exiting */
-#define errx(r, s) \
-  { \
-    fprintf(stderr, "%s\n", s); \
-    return r; \
-  }
-
-/* error (returns doesn't exit) with simpsh: builtin: message: (errno message),
- * format */
-/* be careful in if statements */
-#define sherr(r, b, m) \
-  warn("%s: %s", b, m); \
-  return r
-
-/* same as sherr  but doesn't return */
-#define shwarn(b, m) warn("%s: %s", b, m)
-
+#define errx(r, s) { fprintf(stderr, "%s\n", s); return r; }
+/* error (returns doesn't exit) with simpsh: builtin: message: (errno message), format */
+#define sherr(r, b, m) warn("%s: %s", b, m); return r
 /* warning with simpsh: builtin: message, format */
 #define shwarnx(b, m) fprintf(stderr, "%s: %s: %s\n", shname, b, m)
-
 /* error message with simpsh: builtin: arg: message, format */
 #define shwarn_arg(b, a, m) \
   fprintf(stderr, "%s: %s: %s: %s\n", shname, b, a, m)
 
 #define UFLAGMSG(v) fprintf(stderr, "%s: %s: unbound variable\n", shname, v)
-
 /* unknow cli flag error message */
 #define bad_opt(p, c) \
   (fprintf(stderr, "%s: %s: bad option %c\n", shname, p, c))
-
 /*  missing required arguement error message */
 #define no_opt(p, c) \
   (fprintf(stderr, "%s: %s: %c: requires arguement\n", shname, p, c))
+
 
 #define usage(prog, usg) fprintf(stderr, "Usage: %s %s\n",(prog), (usg))
 
 /* return the right syntax error message */
 #define parserr(l, e, m, t) ((iflag) ? lnsyntxerr(l, e, m, t) : syntxerr(m, t))
-
 static const char *
 tokstr(token t)
 {

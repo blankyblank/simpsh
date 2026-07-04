@@ -22,7 +22,6 @@
 #include "env.h"
 #include "exec.h"
 #include "error.h"
-#include "help.h"
 #include "input.h"
 #include "job.h"
 #include "main.h"
@@ -52,9 +51,9 @@ static int shiftcmd(char **);
 static int timescmd(char **);
 static int truecmd(char **);
 static int typecmd(char **);
+static int ulimitcmd(char **);
 static int umaskcmd(char **);
 
-static int bltin_atoi(char *, char *);
 static int classify_cmd(char *, int, int);
 static char *pwdpath(char *);
 
@@ -79,6 +78,7 @@ const builtin builtins[] = {
   { "hash",     &hashcmd     },
   { "help",     &helpcmd     },
   { "jobs",     &jobscmd     },
+  { "kill",     &killcmd     },
   { "local",    &localcmd    },
   { "pwd",      &pwdcmd      },
   { "read",     &readcmd     },
@@ -91,9 +91,11 @@ const builtin builtins[] = {
   { "trap",     &trapcmd     },
   { "true",     &truecmd     },
   { "type",     &typecmd     },
+  { "ulimit",   &ulimitcmd   },
   { "umask",    &umaskcmd    },
   { "unalias",  &unaliascmd  },
   { "unset",    &unsetcmd    },
+  { "wait",     &waitcmd     },
 };
 
 static const char *keywd[] = {
@@ -134,27 +136,14 @@ init_builtins(void)
   }
 }
 
-  /*
-   * INFO:
-   *     we collaps any // to a single /, for .. when encountered
-   *     we move back a path segment (between slashes /here/)
-   *     for . we collapse it like the // case. we get rid of any 
-   *     trailing / also we get rid of any . in the beginning
-   *     like ./dir 
-   *     we are modifying the string in place using res as the result
-   *     buffer chars are getting copied to (and overwriting things we
-   *     want to get rid of) and src is the pointer we copy from. it moves
-   *     up when we need to skip something while res stays in place, or res
-   *     moves back when we get rid of a segment.
-   */
-
-static int
-bltin_atoi(char *s, char *b)
+/* convert char to int, doing extra checks, and handling error messages */
+int
+bltin_atoi(char *s, char *b, char *msg)
 {
   int n;
   for (intf i = 0; s[i]; i++) {
     if (!isdigit_(s[i])) {
-      shwarn_arg(b, s, "a numeric arguement is required");
+      shwarn_arg(b, s, msg);
       return -1;
     }
   }
@@ -244,6 +233,20 @@ classify_cmd(char *s, int vrb, int def)
   return 1;
 }
 
+  /*
+   * INFO:
+   *     we collaps any // to a single /, for .. when encountered
+   *     we move back a path segment (between slashes /here/)
+   *     for . we collapse it like the // case. we get rid of any 
+   *     trailing / also we get rid of any . in the beginning
+   *     like ./dir 
+   *     we are modifying the string in place using res as the result
+   *     buffer chars are getting copied to (and overwriting things we
+   *     want to get rid of) and src is the pointer we copy from. it moves
+   *     up when we need to skip something while res stays in place, or res
+   *     moves back when we get rid of a segment.
+   */
+
 /**  normalize path to set PWD variable with logical path  */
 static char *
 pwdpath(char *path) {
@@ -301,7 +304,8 @@ breakcmd(char **argv)
   if (argc < 2) {
     n = 1;
   } else if (argc == 2) {
-    if ((n = bltin_atoi(argv[1], argv[0])) <= 0) {
+    n = bltin_atoi(argv[1], argv[0], "a numeric arguement is required");
+    if (n <= 0) {
       if (!n)
         shwarn_arg(argv[0], argv[1], "must be a positive integer");
       return 1;
@@ -503,7 +507,8 @@ continuecmd(char **argv)
   if (argc < 2) {
     n = 1;
   } else if (argc == 2) {
-    if ((n = bltin_atoi(argv[1], argv[0])) <= 0) {
+    if ((n = bltin_atoi(argv[1], argv[0], "a numeric arguement is required")) <=
+        0) {
       if (!n)
         shwarn_arg(argv[0], argv[1], "must be a positive integer");
       return 1;
@@ -679,9 +684,11 @@ echocmd(char *argv[])
         return 1;
       }
 
-      if (argc == 2)
-        if ((exnum = bltin_atoi(argv[1], argv[0])) < 0)
+      if (argc == 2) {
+        exnum = bltin_atoi(argv[1], argv[0], "a numeric arguement is required");
+        if (exnum < 0)
           return 1;
+      }
       slclear();
       exit(exnum);
     }
@@ -916,7 +923,8 @@ shiftcmd(char **argv)
   if (argc == 1) {
     n = 1;
   } else if (argc == 2) {
-    if ((n = bltin_atoi(argv[1], argv[0])) < 0)
+    n = bltin_atoi(argv[1], argv[0], "a numeric arguement is required");
+    if (n < 0)
       return 1;
   } else {
     shwarn_arg(argv[0], argv[2], "too many arguements");
@@ -990,6 +998,146 @@ typecmd(char **argv)
     if (classify_cmd(argv[i], 1, 0))
       status = 1;
   return status;
+}
+
+typedef struct {
+  const char *name;
+  int resource; /* cmd to get/set */
+  int factor; /* multiply by to get rlim_{cur,max} values */
+  char option; /* option character (-d, -f, ...) */
+} limit;
+#define SOFT 1 << 0
+#define HARD 1 << 1
+
+int
+ulimitcmd(char **argv)
+{
+  int argc = 0;
+  int ltype = SOFT, all = 0;
+  size_t optc = 0;
+  const limit *l;
+  char *opt = st_alloc(10 * sizeof(char));
+
+  static const limit limits[] = {
+    { "time(cpu-seconds)",    RLIMIT_CPU,     1,    't'  },
+    { "file(blocks)",         RLIMIT_FSIZE,   512,  'f'  },
+    { "coredump(blocks)",     RLIMIT_CORE,    512,  'c'  },
+    { "data(kbytes)",         RLIMIT_DATA,    1024, 'd'  },
+    { "stack(kbytes)",        RLIMIT_STACK,   1024, 's'  },
+    { "lockedmem(kbytes)",    RLIMIT_MEMLOCK, 1024, 'l'  },
+    { "memory(kbytes)",       RLIMIT_RSS,     1024, 'm'  },
+    { "nofiles(descriptors)", RLIMIT_NOFILE,  1,    'n'  },
+    { "processes",            RLIMIT_NPROC,   1,    'p'  },
+    { NULL,                   0,              0,    '\0' },
+  };
+
+  array_len(argv, argc);
+  ARGBEGIN
+  {
+    case 'a':
+      all = 1;
+      break;
+    case 'c':
+    case 'd':
+    case 'f':
+    case 'l':
+    case 'm':
+    case 'n':
+    case 'p':
+    case 's':
+    case 't':
+      opt[optc++] = ARGC();
+      break;
+    case 'H':
+      ltype = HARD;
+      break;
+    case 'S':
+      ltype = SOFT;
+      break;
+    default:
+      bad_opt(argv0, ARGC());
+      return 1;
+  }
+  ARGEND
+  opt[optc] = '\0';
+
+  if (all) {
+    if (*argv) {
+      usage(argv0, helpmsgs[ULIMITH].usage);
+      return 1;
+    }
+    opt = "cdflmnpst";
+  }
+  if (!*argv) {
+    for (char *s = opt; *s; s++) {
+      struct rlimit lim;
+      rlim_t val = 0;
+
+      l = limits;
+      while (l->name && l->option != *s)
+        l++;
+      if (!l->name) {
+        shwarn_arg(argv0, s, "unknown option");
+        return 1;
+      }
+      getrlimit(l->resource, &lim);
+      if (ltype & HARD)
+        val = lim.rlim_max;
+      else
+        val = lim.rlim_cur;
+      if (all)
+        printf("%s\t\t", l->name);
+      if (val == RLIM_INFINITY) {
+        printf("unlimited\n");
+        continue;
+      }
+      val /= l->factor;
+      printf("%lu\n", val);
+      continue;
+    }
+    return 0;
+  }
+
+  if (argv[1]) {
+    shwarn_arg(argv0, *argv, "too many arguements");
+    return 1;
+  }
+  char *arg = *argv;
+  int n = 0;
+  rlim_t val;
+
+  if (*arg == 'u' && strcmp(arg, "unlimited") == 0) {
+    val = RLIM_INFINITY;
+  } else if (isdigit_(*arg)) {
+    if ((n = bltin_atoi(arg, argv0, "invalid number")) < 0)
+      return 1;
+    val = n;
+  } else {
+    shwarn_arg(argv0, arg, "invalid number");
+    return 1;
+  }
+
+  for (char *s = opt; *s; s++) {
+    struct rlimit lim;
+    l = limits;
+    while (l->name && l->option != *s)
+      l++;
+    if (!l->name) {
+      shwarn_arg(argv0, s, "unknown option");
+      return 1;
+    }
+
+    getrlimit(l->resource, &lim);
+    if (ltype & HARD)
+      lim.rlim_max = (val == RLIM_INFINITY) ? val : val * l->factor;
+    else
+      lim.rlim_cur = (val == RLIM_INFINITY) ? val : val * l->factor;
+
+    if (setrlimit(l->resource, &lim) < 0) {
+      sherr(1, argv0, "setrlimit");
+    }
+  }
+  return 0;
 }
 
 /* NOLINTBEGIN(readability-magic-numbers) */

@@ -52,7 +52,6 @@ init_sig(void)
   init_eventloop(&el);
   addeventloop(&el, selfpipe[0], POLLIN, chld_cb, NULL);
   addeventloop(&el, intpipe[0], POLLIN, int_cb, NULL);
-
   init_traps();
 }
 
@@ -371,6 +370,103 @@ exittrap(int status)
 }
 
 int
+killcmd(char **argv)
+{
+  int flag = 0, sig = 15, status = 0;
+  char *sname = NULL;
+  char *argv0;
+
+  (void)sname;
+  (void)argv0;
+  (void)flag;
+  argv0 = *argv;
+  argv++;
+
+  if (!*argv)
+    goto err;
+  for (; *argv; argv++) {
+    char *arg = *argv;
+    if (*arg == '-') {
+      arg++;
+      switch (*arg) {
+        case '-':
+          argv++;
+          goto cont;
+        case 'l':
+          if (arg[1] && arg[1] != '\0')
+            goto err;
+          flag = FLAG_l;
+          continue;
+        case 's':
+          if (arg[1] && arg[1] != '\0')
+            goto err;
+          flag = FLAG_s;
+          continue;
+        default:
+          if ((sig = getsig(arg)) < 0) {
+            shwarn_arg(argv0, arg, "invalid signal spec");
+            return 1;
+          }
+          break;
+      }
+    } else {
+      break;
+    }
+  }
+cont:
+
+  if (flag & FLAG_l) {
+    if (!*argv) {
+      for (int i = 0; i < NSIG; i++) {
+        if (signame[i] != signum[i])
+          printf("%s\n", signame[i]);
+      }
+      return 0;
+    }
+    int n;
+    n = atoi_(*argv) - 128;
+    if (n < 0 && n >= NSIG) {
+      shwarn_arg(argv0, *argv, "invalid signal spec");
+      return 1;
+    }
+    printf("%s\n", signame[n]);
+    return 0;
+  }
+
+  if (flag & FLAG_s)
+    if ((sig = getsig(*argv)) < 0) {
+      shwarn_arg(argv0, *argv, "invalid signal spec");
+      return 1;
+    }
+
+  for (; *argv; argv++) {
+    char *s = *argv;
+    pid_t pid = 0;
+    if (*s == '%') {
+      job *j;
+      if (!(j = findjob(s))) {
+        shwarn_arg(argv0, s, "no such job");
+        status = 1;
+        continue;
+      }
+      pid = j->pgid;
+    } else {
+      pid = atoi_(s);
+    }
+    if (pid)
+      if (kill(pid, sig) < 0) {
+        shwarn_arg(argv0, *argv, strerror(errno));
+        status = 1;
+      }
+  }
+
+  return status;
+err:
+  usage(argv0, helpmsgs[KILLH].usage);
+  return 1;
+}
+
+int
 trapcmd(char **argv)
 {
   size_t s = 0, argc = 0;
@@ -403,8 +499,7 @@ trapcmd(char **argv)
         shwarn_arg(argv0, argv[i], "bad trap");
         return 1;
       } else {
-        if (strcmp(signame[n], "KILL") == 0 ||
-            strcmp(signame[n], "STOP") == 0)
+        if (strcmp(signame[n], "KILL") == 0 || strcmp(signame[n], "STOP") == 0)
           continue;
 
         if (trap[n])

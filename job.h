@@ -7,6 +7,14 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "main.h"
+
+// typedef enum {
+//   JRUN = 0,
+//   JSTP = 1,
+//   JDONE = 2,
+// } jstate;
+
 typedef struct job job;
 struct job {
   pid_t pgid;          /* process group */
@@ -15,7 +23,7 @@ struct job {
   int wstatus;         /* wait status of status_pid */
   int lwstatus; /* wait status of for chld on left (pipefail needs this) */
   short nlive;  /* # of processes still running (not yet exited) */
-  unsigned char state;     /* JRUN, JSTP, JDONE */
+  int state;     /* JRUN, JSTP, JDONE */
   unsigned char flags;     /* JCHANGED, JFG, JSAVEDTTY, JSAVEDTTYPGRP */
   int num;                 /* job number */
   int age;                 /* monotonic counter for current-job selection */
@@ -44,10 +52,12 @@ extern void jobmsg(job *j);
 extern void child_setup_fg(pid_t);
 extern void child_setup_bg(void);
 extern int startjob(pid_t);
+extern job *findjob(const char *);
 
 extern int bgcmd(char **);
 extern int fgcmd(char **);
 extern int jobscmd(char **);
+extern int waitcmd(char **);
 
 #define init_pgrp() sh_pgid = getpgrp()
 
