@@ -34,7 +34,7 @@ static shinput *init_interactive(void);
 
 #ifdef LIBEDIT
 #define DIRPERMS (S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH)
-static EditLine *thel;
+static EditLine *edl;
 static History *hist;
 static int ps1mode;
 
@@ -267,13 +267,15 @@ sh_interactive(void)
 
 #ifdef LIBEDIT
   HistEvent ev;
-  thel = el_init(sh_argv0, stdin, stdout, stderr);
-  el_set(thel, EL_EDITOR, "vi");
-  el_set(thel, EL_SIGNAL, 1);
-  el_set(thel, EL_GETCFN, input_notify);
-  el_set(thel, EL_PROMPT, prompt_fn);
+  edl = el_init(sh_argv0, stdin, stdout, stderr);
+  el_set(edl, EL_EDITOR, "vi");
+  el_set(edl, EL_SIGNAL, 1);
+  el_set(edl, EL_GETCFN, input_notify);
+  el_set(edl, EL_PROMPT, prompt_fn);
+  el_set(edl, EL_ADDFN, "sh-complete", "Shell Completion", _el_fn_sh_complete);
+  el_set(edl, EL_BIND, "^I", "sh-complete", NULL);
   hist = history_init();
-  el_set(thel, EL_HIST, history, hist);
+  el_set(edl, EL_HIST, history, hist);
   init_history();
 #endif
 
@@ -489,7 +491,7 @@ lineread(int ps1)
 
 again:
   ps1mode = ps1;
-  line = el_gets(thel, &count);
+  line = el_gets(edl, &count);
   if (!line) {
     if (!count) {
       putchar('\n');
