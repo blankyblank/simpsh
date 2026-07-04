@@ -54,6 +54,7 @@ const char shoptch[OPTC] = {
   'v',
   'V',
   'x',
+  'E',
 };
 
 static int setopts(char *, int, char *);

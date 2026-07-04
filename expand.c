@@ -40,6 +40,19 @@ static wf **splitword(wf *restrict, size_t *restrict);
     streallocar(arv, c, arc, t); \
   }
 
+static inline char *
+vardash(size_t *o)
+{
+  char *buf = st_alloc(32);
+  int p = 0;
+  for (int i = 0; i < SHOPTC; i++) {
+    if (shopts[i])
+      buf[p++] = shoptch[i];
+  }
+  buf[p] = '\0', *o = p;
+  return buf;
+}
+
 /** get the variable for the return status of last command */
 static inline char *
 varstatus(size_t *o)
@@ -153,7 +166,7 @@ char *
 exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
 {
   size_t i = 0, vlen, end, tlen = 0;
-  char buf[16], *val;
+  char buf[32], *val;
 
   while (i < slen) {
     size_t s = i;
@@ -187,6 +200,10 @@ exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
       case '#':
         vlen = lltoa(sh_argc, buf);
         val = buf;
+        end = i + 2;
+        break;
+      case '-':
+        val = vardash(&vlen);
         end = i + 2;
         break;
       case '{':
@@ -329,6 +346,9 @@ expand_ps1(char *p)
           case '!':
             val = varbgpid();
             vlen = strlen(val);
+            break;
+          case '-':
+            val = vardash(&vlen);
             break;
           case '#':
             {
@@ -682,6 +702,9 @@ exp_word(wf *wordf, size_t * restrict rlen)
             case '!':
               val = varbgpid();
               vlen = strlen(val);
+              break;
+            case '-':
+              val = vardash(&vlen);
               break;
             case '#':
               vlen = lltoa(sh_argc, buf);

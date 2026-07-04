@@ -3,6 +3,7 @@
 
 #include "main.h"
 #define OPTC 19
+#define SHOPTC 16 /* short option count */
 extern ucharf nounseterr;
 
 #define aflag shopts[0]

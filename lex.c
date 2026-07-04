@@ -443,9 +443,8 @@ get_wf(int c)
             goto done;
           continue;
 
-          /* $$ $? $! $# */
-        } else if (n == '$' || n == '?' || n == '!' ||  //
-                   n == '#' || n == '@' || n == '*') {
+        } else if (n == '$' || n == '?' || n == '!' ||  /* $$ $? $! $# */
+                   n == '#' || n == '@' || n == '*' || n == '-') {
           flushword(&head, &tail, w, len,
                     current_ctx == M_DQUOTE ? QDOUBLE : QNONE);
           st_putc(n);
