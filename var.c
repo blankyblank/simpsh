@@ -23,7 +23,7 @@
 #define INTSIZE 16
 
 /* shell variables */
-intf sh_lineno;
+i32 sh_lineno;
 pid_t sh_pid;
 pid_t sh_ppid;
 char *sh_ppid_s = NULL;
@@ -42,7 +42,7 @@ unsigned int var_cnt;
 tmp_var localvars[LOCAL_MAX];
 unsigned int localsp;
 static char **env_cache;
-static ucharf env_dirty = 1;
+static u8 env_dirty = 1;
 static shvar linevar;
 static char linebuf[256];  /* 7 header + some digits */
 

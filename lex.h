@@ -109,10 +109,10 @@ typedef struct {
 
 extern wf *wf_chunk;
 extern unsigned int wf_chunk_left;
-extern ucharf alias_depth;
-extern ucharf notclosed;
+extern u8 alias_depth;
+extern u8 notclosed;
 extern sh_tok last_tok;
-extern ucharf chkwd;
+extern u8 chkwd;
 
 #define WF_CHUNK_SIZE 4
 #define SHTOK(t) ((sh_tok){ .type = t, .sub = 0 })

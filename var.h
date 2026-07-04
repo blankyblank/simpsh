@@ -2,14 +2,18 @@
 #define VAR_H
 #include <stddef.h>
 #include <string.h>
+#include <sys/types.h>
+
+#include "main.h"
 
 typedef int shvar_flags;
 typedef struct shvar shvar;
 struct shvar {
   char *var;                  /* Name=value */
   shvar_flags flags;          /* VEXPRT | VREADONLY | VUNSET */
-  ushortf nlen;                /* name lenght */
-  unsigned int flen;                /* full length */
+  u16 nlen;                   /* name lenght */
+  u16 vlen;                   /* value length */
+  unsigned int flen;          /* full length */
   void (*func)(const char *); /* callback func */
 };
 
@@ -43,7 +47,7 @@ extern tmp_var localvars[LOCAL_MAX];
 extern unsigned int localsp;
 
 /* shell variables */
-extern intf sh_lineno;
+extern int sh_lineno;
 extern pid_t sh_pid;
 extern pid_t sh_ppid;
 extern pid_t sh_bgpid;

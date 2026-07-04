@@ -18,10 +18,10 @@
 
 wf *wf_chunk = NULL;
 unsigned int wf_chunk_left = 0;
-ucharf alias_depth = 0;
-ucharf notclosed = 0;
+u8 alias_depth = 0;
+u8 notclosed = 0;
 sh_tok last_tok = { .type = TNONE };
-ucharf chkwd = 0;
+u8 chkwd = 0;
 #define CTX_MAX 8
 #define NCHR(c) (nchars[(unsigned char)(c)])
 #define DCHR(c) (dqchars[(unsigned char)(c)])
@@ -306,7 +306,7 @@ get_wf(int c)
                 } else if (arsp > 0) {
                  if ((ch = shgetchar()) == ')') {
                     size_t start, rlen, inlen;
-                    ullongf val;
+                    u64 val;
                     char res[32];
                     start = arstack[arsp - 1].pos;
                     val = arith_eval(arbuf + start, arlen - start);

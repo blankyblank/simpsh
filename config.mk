@@ -1,12 +1,12 @@
 ## cc | gcc | clang
-CC := clang
+CC := gcc
 
 ## paths
 PREFIX := /usr/local
 BINDIR := $(DESTDIR)$(PREFIX)/bin
 
 ## release | debug | sanitize | valgrind | profile | trace
-BUILD       ?= sanitize
+BUILD       ?= release
 
 ## dynamic | static | static-musl
 BUILD_LINK  ?= dynamic

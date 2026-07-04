@@ -61,7 +61,7 @@ source_file(const char *path)
 }
 
 static char *
-update_prompt(intf ps1)
+update_prompt(i32 ps1)
 {
   char *p;
 

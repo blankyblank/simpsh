@@ -73,17 +73,17 @@ static const int lbp_tab[] = {
 static const char *ap;     // current position
 static size_t alen;        // remaining bytes
 static int atok;           // current token type
-static llongf aval;        // numeric value (for A_NUM)
+static i64 aval;        // numeric value (for A_NUM)
 static const char *aname;  // name pointer (for A_NAME)
 static size_t anlen;       // name length (for A_NAME)
 static char *lname;
 static size_t lnlen;
 
-static llongf expr_bp(int);
+static i64 expr_bp(int);
 static void next_tok(void);
-static llongf nud(void);
-static llongf led(llongf);
-static llongf lookupavar(void);
+static i64 nud(void);
+static i64 led(i64);
+static i64 lookupavar(void);
 
 static inline int
 hexval(char c)
@@ -253,10 +253,10 @@ next_tok(void)
   }
 }
 
-static llongf
+static i64
 nud(void)
 {
-  llongf val;
+  i64 val;
   switch (atok) {
     case A_NUM:
       lname = NULL;
@@ -302,10 +302,10 @@ nud(void)
   }
 }
 
-static llongf
-led(llongf left)
+static i64
+led(i64 left)
 {
-  llongf rb;
+  i64 rb;
   switch (atok) {
     case A_PLUS:
       next_tok();
@@ -373,7 +373,7 @@ led(llongf left)
       return left || expr_bp(5);
     case A_ASSN:
       next_tok();
-      llongf rhs;
+      i64 rhs;
       char valbuf[32];
       char *name = lname;
       rhs = expr_bp(2);
@@ -390,10 +390,10 @@ led(llongf left)
   }
 }
 
-static llongf
+static i64
 expr_bp(int min_bp)
 {
-  llongf left;
+  i64 left;
 
   left = nud();
   for (;;) {
@@ -406,10 +406,10 @@ expr_bp(int min_bp)
   return left;
 }
 
-llongf
+i64
 arith_eval(const char *expr, size_t len)
 {
-  llongf res;
+  i64 res;
 
   ap = expr;
   alen = len;
@@ -418,11 +418,11 @@ arith_eval(const char *expr, size_t len)
   return res;
 }
 
-static llongf
+static i64
 lookupavar(void)
 {
   shvar *rvar;
-  llongf res;
+  i64 res;
 
   rvar = findvar_n(aname, anlen);
   if (!rvar)

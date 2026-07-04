@@ -10,7 +10,7 @@ typedef struct {
   size_t len;
 } ifssect;
 
-extern ucharf ifsnull;
+extern u8 ifsnull;
 
 extern void ifsupdt(const char *);
 extern char *exp_tilde(char *restrict, size_t, size_t *restrict, size_t *restrict);

@@ -31,7 +31,7 @@
 #define MAX_TMP_VARS 40
 #define xpnd(a) (join_wf(exp_word(a, NULL)))
 
-ucharf func_depth = 0;
+u8 func_depth = 0;
 redir *predir = NULL;
 
 typedef struct fdlist {
@@ -738,7 +738,7 @@ run_pipe(const cmd_tree *n)
   int status, lwstatus;
   int lstatus, rstatus;
   int pipefd[2], outer;
-  static ucharf pipedepth;
+  static u8 pipedepth;
   int mfl;
   pid_t lpid, rpid;
 

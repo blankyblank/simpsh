@@ -20,7 +20,7 @@
 #include "utils.h"
 #include "var.h"
 
-ucharf ifsnull = 0;
+u8 ifsnull = 0;
 static char ifschar[256];
 
 static wf **splitword(wf *restrict, size_t *restrict);
@@ -629,23 +629,28 @@ exp_word(wf *wordf, size_t * restrict rlen)
           val = st_strndup(buf, vlen);
           goto append;
         }
-        size_t op = 0;
+        size_t op = 0, nlen = 0;
         for (size_t j = 0; j < f->len; j++) {
           if (f->word[j] == ':') {
             char c = f->word[j + 1];
             if (c == '-' || c == '=' || c == '?' || c == '+') {
-              op = j + 1;
+              op = j + 1, nlen = op - 1;
               break;
             }
+          } else if ((f->word[j] == '#' || f->word[j] == '%') && j > 0) {
+            op = nlen = j;
+            break;
           }
         }
         if (op > 0) {
           int isnull;
-          v = findvar_n(f->word, op - 1);
-          if (v)
+          v = findvar_n(f->word, nlen);
+          if (v) {
             val = shvar_val(v);
-          else
+            vlen = strlen(val);
+          } else {
             val = NULL;
+          }
           isnull = (val == NULL || *val == '\0');
 
           switch (f->word[op]) {
@@ -679,6 +684,79 @@ exp_word(wf *wordf, size_t * restrict rlen)
                 vlen = 0;
               }
               break;
+            case '#':
+              {
+                int lrg = 0, pstrt, plen;
+                size_t explen;
+                char *expat, *vcpy;
+
+                lrg = (f->word[op + 1] == '#');
+                pstrt = op + 1 + lrg;
+                plen = f->len - pstrt;
+                expat = exp_str(f->word + pstrt, plen, &explen);
+                vcpy = st_strndup(val, vlen);
+                if (!vlen || !explen)
+                  break;
+
+                if (lrg) {
+                  for (size_t n = vlen; n > 0; n--) {
+                    char sv = vcpy[n];
+                    vcpy[n] = '\0';
+                    if (globmatch(expat, vcpy, 0)) {
+                      vcpy[n] = sv;
+                      val = st_strndup(vcpy + n, vlen - n);
+                      vlen -= n;
+                      break;
+                    }
+                    vcpy[n] = sv;
+                  }
+                } else {
+                  for (size_t n = 1; n <= vlen; n++) {
+                    char sv = vcpy[n];
+                    vcpy[n] = '\0';
+                    if (globmatch(expat, vcpy, 0)) {
+                      vcpy[n] = sv;
+                      val = st_strndup(vcpy + n, vlen - n);
+                      vlen -= n;
+                      break;
+                    }
+                    vcpy[n] = sv;
+                  }
+                }
+              }
+              break;
+            case '%':
+              {
+                int lrg = 0, pstrt, plen;
+                size_t explen;
+                char *expat, *vcpy;
+
+                lrg = (f->word[op + 1] == '%');
+                pstrt = op + 1 + lrg;
+                plen = f->len - pstrt;
+                expat = exp_str(f->word + pstrt, plen, &explen);
+                vcpy = st_strndup(val, vlen);
+
+                if (!vlen || !explen)
+                  break;
+                if (lrg) {
+                  for (size_t n = vlen; n > 0; n--) {
+                    if (globmatch(expat, vcpy + vlen - n, 0)) {
+                      val = st_strndup(vcpy, vlen - n);
+                      vlen -= n;
+                      break;
+                    }
+                  }
+                } else {
+                  for (size_t n = 1; n <= vlen; n++) {
+                    if (globmatch(expat, vcpy + vlen - n, 0)) {
+                      val = st_strndup(vcpy, vlen - n);
+                      break;
+                    }
+                  }
+                }
+              }
+              break;
             default:
               break;
           }
@@ -687,6 +765,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
             vlen = strlen(val);
           goto append;
         }
+
       /* falls through */
       case QVAR:
       case QVAR_DQ:

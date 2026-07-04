@@ -14,7 +14,7 @@
 #include "sig.h"
 
 #define _INCHLD (1 << 0)
-extern ucharf func_depth;
+extern u8 func_depth;
 
 #define builtin_launch(b, a) (b->fn(a))
 

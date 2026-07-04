@@ -5,6 +5,6 @@
 #include "main.h"
 
 #define MAX_ARITH 24
-extern longf arith_eval(const char *, size_t);
+extern i64 arith_eval(const char *, size_t);
 
 #endif /* ARITH_H */

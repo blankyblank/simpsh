@@ -13,7 +13,7 @@
 #include "utils.h"
 #include "var.h"
 
-ucharf nounseterr = 0;
+u8 nounseterr = 0;
 
 char shopts[OPTC];
 const char *shoptname[OPTC] = {

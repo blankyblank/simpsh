@@ -41,10 +41,10 @@ atoi_(const char *s)
     return n;
 }
 
-static inline llongf
-atoll_(const char *restrict s, llongf *restrict res)
+static inline i64
+atoll_(const char *restrict s, i64 *restrict res)
 {
-  llongf n = 0;
+  i64 n = 0;
   int neg = 0;
 
   if (*s == '-') {
@@ -64,10 +64,10 @@ atoll_(const char *restrict s, llongf *restrict res)
 
 /* convert long long to string  */
 static inline size_t
-lltoa(llongf val, char *buf)
+lltoa(i64 val, char *buf)
 {
   char *p, *start, *end;
-  ullongf uval;
+  i64 uval;
 
   p = buf;
 
@@ -255,7 +255,7 @@ st_read_assn(const char *assn, char **restrict name, char **restrict value)
 static inline unsigned int
 hash(const char *s, unsigned int buckets)
 {
-  ulongf h = 525201411107845655ull;
+  u64 h = 525201411107845655ull;
   while (*s) {
     h ^= (unsigned char)*s;
     h *= 0x5bd1e9955bd1e995;
@@ -269,7 +269,7 @@ hash(const char *s, unsigned int buckets)
 static inline unsigned int
 hash_n(const char *s, size_t n, unsigned int buckets)
 {
-  ulongf h = 525201411107845655ull;
+  u64 h = 525201411107845655ull;
   for (size_t i = 0; i < n; i++) {
     h ^= (unsigned char)s[i];
     h *= 0x5bd1e9955bd1e995;

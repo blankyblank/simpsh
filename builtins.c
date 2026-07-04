@@ -141,7 +141,7 @@ int
 bltin_atoi(char *s, char *b, char *msg)
 {
   int n;
-  for (intf i = 0; s[i]; i++) {
+  for (i32 i = 0; s[i]; i++) {
     if (!isdigit_(s[i])) {
       shwarn_arg(b, s, msg);
       return -1;
