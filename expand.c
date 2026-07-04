@@ -219,7 +219,7 @@ exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
               v = findvar_n(str + i + 2, vtl);
               if (v) {
                 val = shvar_val(v);
-                vlen = strlen(val);
+                vlen = vallen(v);
               }
             }
             end = j + 1;
@@ -237,7 +237,7 @@ exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
           v = findvar_n(str + i + 1, j - (i + 1));
           if (v) {
             val = shvar_val(v);
-            vlen = strlen(val);
+            vlen = vallen(v);
           }
           end = j;
         } else {
@@ -366,7 +366,7 @@ expand_ps1(char *p)
               shvar *v = findvar_n(vcpy + 1, strlen(vcpy + 1));
               if (v) {
                 val = shvar_val(v);
-                vlen = strlen(val);
+                vlen = vallen(v);
               }
             }
         }
@@ -647,7 +647,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
           v = findvar_n(f->word, nlen);
           if (v) {
             val = shvar_val(v);
-            vlen = strlen(val);
+            vlen = vallen(v);
           } else {
             val = NULL;
           }
@@ -686,6 +686,8 @@ exp_word(wf *wordf, size_t * restrict rlen)
               break;
             case '#':
               {
+                if (!val)
+                  break;
                 int lrg = 0, pstrt, plen;
                 size_t explen;
                 char *expat, *vcpy;
@@ -727,6 +729,8 @@ exp_word(wf *wordf, size_t * restrict rlen)
               break;
             case '%':
               {
+                if (!val)
+                  break;
                 int lrg = 0, pstrt, plen;
                 size_t explen;
                 char *expat, *vcpy;
@@ -751,6 +755,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
                   for (size_t n = 1; n <= vlen; n++) {
                     if (globmatch(expat, vcpy + vlen - n, 0)) {
                       val = st_strndup(vcpy, vlen - n);
+                      vlen -= n;
                       break;
                     }
                   }
@@ -760,9 +765,9 @@ exp_word(wf *wordf, size_t * restrict rlen)
             default:
               break;
           }
-          // vlen = v->flen - (v->nlen + 2);
           if (!vlen && val)
             vlen = strlen(val);
+            // vlen = v->vlen; // XXX: check if it will work here
           goto append;
         }
 
@@ -806,7 +811,8 @@ exp_word(wf *wordf, size_t * restrict rlen)
         if (v) {
           val = shvar_val(v);
           // vlen = v->flen - (v->nlen + 2);
-          vlen = strlen(val);
+          // vlen = strlen(val);
+          vlen = vallen(v);
         } else if (uflag && f->len > 0) {
           char name[64];
           nmemcpy(name, f->word, f->len);

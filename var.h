@@ -12,7 +12,6 @@ struct shvar {
   char *var;                  /* Name=value */
   shvar_flags flags;          /* VEXPRT | VREADONLY | VUNSET */
   u16 nlen;                   /* name lenght */
-  u16 vlen;                   /* value length */
   unsigned int flen;          /* full length */
   void (*func)(const char *); /* callback func */
 };
