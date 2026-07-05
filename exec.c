@@ -862,7 +862,7 @@ run_cmd(const cmd_tree *n, int inchld)
 
   if (xflag) {
     char *xline, *ps4;
-    ps4 = getvar(ps4n);
+    ps4 = getvar(STR("PS4"));
     xline = join_strn(final, &len);
     printf("%s %s\n", ps4, xline);
   }

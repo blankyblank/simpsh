@@ -261,7 +261,7 @@ exp_tilde(char *restrict word, size_t s, size_t *restrict e, size_t *restrict ol
   if (word[s] != '~')
     return NULL;
   if (s == 0 && (word[s + 1] == '\0' || word[s + 1] == '/')) {
-    if (!(hm = getvar(homen)))
+    if (!(hm = getvar(STR("HOME"))))
       return NULL;
     *e = s + 1;
     *olen = strlen(hm);
@@ -432,7 +432,7 @@ expand_argv(wf **args, size_t *restrict t)
       }
       shvar *ifs;
       int ifsc = 0;
-      if ((ifs = findvar_n(ifsn, 3))) {
+      if ((ifs = findvar_n(STR("IFS"), 3))) {
         if (ifs->var)
           ifsc = (int)*shvar_val(ifs);
       } else {

@@ -65,7 +65,7 @@ update_prompt(i32 ps1)
 {
   char *p;
 
-  if (!(p = getvar(ps1 ? ps1n : ps2n)))
+  if (!(p = getvar(ps1 ? STR("PS1") : STR("PS2"))))
     return ps1 ? " $ " : " > ";
   return expand_ps1(p);
 }
@@ -174,7 +174,7 @@ init_rc(int flag)
     char *f;
     size_t elen;
     shvar *e;
-    if ((e = findvar_n(envn, 3))) {
+    if ((e = findvar_n(STR("ENV"), 3))) {
       f = exp_str(shvar_val(e), vallen(e), &elen);
       source_file(f);
     }

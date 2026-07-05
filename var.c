@@ -82,7 +82,7 @@ findvar_n(const char *restrict name, size_t nlen)
   unsigned int ci, bucket;
   shvar *v, *cv, *end;
 
-  if (nlen == 6 && smemcmp(name, linen, nlen)) {
+  if (nlen == 6 && smemcmp(name, STR("LINENO"), nlen)) {
     size_t ll = lltoa(sh_lineno, linebuf + 7);
     linebuf[6] = '=';
     linebuf[7  + ll] = '\0';
@@ -401,11 +401,11 @@ init_env(void)
     slfree(val);
   }
 
-  if ((p = findvar_n(pathn, 4)))
+  if ((p = findvar_n(STR("PATH"), 4)))
     p->func = rmchash;
-  if (!(ifs = findvar_n(ifsn, 3))) {
-    setvar(ifsn, " \t\n", 0);
-    ifs = findvar_n(ifsn, 3);
+  if (!(ifs = findvar_n(STR("IFS"), 3))) {
+    setvar(STR("IFS"), " \t\n", 0);
+    ifs = findvar_n(STR("IFS"), 3);
   }
   ifs->func = ifsupdt;
   ifsupdt(shvar_val(ifs));
@@ -418,29 +418,29 @@ init_env(void)
     exit(1);
   }
 
-  if (!(findvar_n(ps1n, 3)))
-    setvar(ps1n, " $ ", 0);
-  if (!(findvar_n(ps2n, 3)))
-    setvar(ps2n, " > ", 0);
-  if (!(findvar_n(ps4n, 3)))
-    setvar(ps4n, " + ", 0);
+  if (!(findvar_n(STR("PS1"), 3)))
+    setvar(STR("PS1"), " $ ", 0);
+  if (!(findvar_n(STR("PS2"), 3)))
+    setvar(STR("PS2"), " > ", 0);
+  if (!(findvar_n(STR("PS4"), 3)))
+    setvar(STR("PS4"), " + ", 0);
 
   if (!getcwd(pwd, PATH_MAX))
     shwarnx("getcwd", "couldn't get PWD");
   else
-    setvar(pwdn, pwd, VEXPRT);
+    setvar(STR("PWD"), pwd, VEXPRT);
 
   sh_ppid = getppid();
   sh_pid = getpid();
-  shlvl_s = getvar(shlvln);
+  shlvl_s = getvar(STR("SHLVL"));
   shlvl = (shlvl_s) ? atoi_(shlvl_s) : 0;
   shlvl++;
   lltoa(shlvl, shlvl_s);
   lltoa(sh_pid, sh_pid_s);
   lltoa(sh_ppid, sh_ppid_s);
-  setvar(ppidn, sh_ppid_s, VREADONLY);
-  setvar(shlvln, shlvl_s, VEXPRT);
-  if ((home = getenv(homen)))
+  setvar(STR("PPID"), sh_ppid_s, VREADONLY);
+  setvar(STR("SHLVL"), shlvl_s, VEXPRT);
+  if ((home = getenv(STR("HOME"))))
     homelen = strlen(home);
 }
 

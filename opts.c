@@ -259,10 +259,7 @@ setcmd(char **argv)
 
     minus = (arg[0] == '-');
 
-    if (!arg[1]) {
-      pparams = 1;
-      continue;
-    } else if (arg[1] == '-' && !arg[2]) {
+    if (!arg[1] || (arg[1] == '-' && !arg[2])) {
       pparams = 1;
       continue;
     } else if (arg[1] == 'o') {

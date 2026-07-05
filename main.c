@@ -33,12 +33,13 @@ const char pathn[16] = "PATH";
 const char ppidn[16] = "PPID";
 const char shlvln[16] = "SHLVL";
 const char shelln[16] = "SHELL";
-const char shname[] = "simpsh";
 const char linen[16] = "LINENO";
 const char cdpthn[16] = "CDPATH";
 const char ps1n[16] = "PS1";
 const char ps2n[16] = "PS2";
 const char ps4n[16] = "PS4";
+
+const char shname[] = "simpsh";
 const char shusg[43] = "[-abCefhiImnosvVx] [-o longopt] [-c 'cmd']";
 
 /* global shell variables */

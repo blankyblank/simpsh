@@ -9,11 +9,11 @@
 
 #include "main.h"
 
-// typedef enum {
-//   JRUN = 0,
-//   JSTP = 1,
-//   JDONE = 2,
-// } jstate;
+typedef enum {
+  JRUN = 0,
+  JSTP = 1,
+  JDONE = 2,
+} jstate;
 
 typedef struct job job;
 struct job {
@@ -23,7 +23,7 @@ struct job {
   int wstatus;         /* wait status of status_pid */
   int lwstatus; /* wait status of for chld on left (pipefail needs this) */
   short nlive;  /* # of processes still running (not yet exited) */
-  int state;     /* JRUN, JSTP, JDONE */
+  jstate state; /* JRUN, JSTP, JDONE */
   unsigned char flags;     /* JCHANGED, JFG, JSAVEDTTY, JSAVEDTTYPGRP */
   int num;                 /* job number */
   int age;                 /* monotonic counter for current-job selection */
@@ -32,9 +32,6 @@ struct job {
   struct termios ttystate; /* saved on stop (valid when JSAVEDTTY) */
 };
 
-#define JRUN 0
-#define JSTP 1
-#define JDONE 2
 #define JCHANGED 0x01      /* state changed since last notification */
 #define JFG 0x02           /* currently in foreground (has terminal) */
 #define JSAVEDTTY 0x04     /* j->ttystate is valid */

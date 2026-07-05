@@ -15,9 +15,19 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define MAX_ENV 500
+#define MAX_ENV      500
 #define HISTORY_SIZE 1000
-#define defpath "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+#define defpath      "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+#define STR(s)       ((const char[16]) { s })
+
+typedef int8_t i8;
+typedef u_int8_t u8;
+typedef int16_t i16;
+typedef u_int16_t u16;
+typedef int32_t i32;
+typedef u_int32_t u32;
+typedef int64_t i64;
+typedef u_int64_t u64;
 
 enum {
   FLAG_c = 1 << 0,
@@ -34,30 +44,7 @@ enum {
   LOGIN = 1 << 11,
 };
 
-typedef int8_t i8;
-typedef u_int8_t u8;
-typedef int16_t i16;
-typedef u_int16_t u16;
-typedef int32_t i32;
-typedef u_int32_t u32;
-typedef int64_t i64;
-typedef u_int64_t u64;
-
-extern const char pwdn[16];
-extern const char ifsn[16];
-extern const char envn[16];
-extern const char oldpwdn[16];
-extern const char homen[16];
-extern const char pathn[16];
-extern const char ppidn[16];
-extern const char shlvln[16];
 extern const char shname[];
-extern const char shelln[16];
-extern const char cdpthn[16];
-extern const char linen[16];
-extern const char ps1n[16];
-extern const char ps2n[16];
-extern const char ps4n[16];
 extern const char shusg[43];
 
 extern char **environ;

@@ -196,7 +196,7 @@ classify_cmd(char *s, int vrb, int def)
         return 0;
       }
     }
-    if ((e = chkpath((def) ? defpath : getvar(pathn), s, X_OK, 0))) {
+    if ((e = chkpath((def) ? defpath : getvar(STR("PATH")), s, X_OK, 0))) {
       printf("%s is %s\n", s, e);
       return 0;
     }
@@ -226,7 +226,7 @@ classify_cmd(char *s, int vrb, int def)
       return 0;
     }
   }
-  if ((e = chkpath((def) ? defpath : getvar(pathn), s, X_OK, 0))) {
+  if ((e = chkpath((def) ? defpath : getvar(STR("PATH")), s, X_OK, 0))) {
     printf("%s\n", e);
     return 0;
   }
@@ -352,13 +352,13 @@ cdcmd(char **argv)
     return 1;
   }
 
-  oldpwd = findvar(oldpwdn);
-  pwd = findvar(pwdn);
+  oldpwd = findvar(STR("OLDPWD"));
+  pwd = findvar(STR("PWD"));
   if (pwd)
     pwdval = shvar_val(pwd);
   else
     pwdval = getcwd(respath, PATH_MAX);
-  cdpth = findvar(cdpthn);
+  cdpth = findvar(STR("CDPATH"));
   if (cdpth) {
     if (*argv && argv[0][0] != '/' &&
         !(argv[0][0] == '-' && argv[0][1] == '\0') &&
@@ -434,8 +434,8 @@ cdcmd(char **argv)
       return 1;
     }
   }
-  setvar(oldpwdn, pwdval, VEXPRT);
-  setvar(pwdn, respath, VEXPRT);
+  setvar(STR("OLDPWD"), pwdval, VEXPRT);
+  setvar(STR("PWD"), respath, VEXPRT);
   return 0;
 }
 
@@ -480,7 +480,7 @@ commandcmd(char **argv)
   if ((b = findbuiltin(argv[0]))) {
     return builtin_launch(b, argv);
   }
-  if ((path = (def) ? defpath : getvar(pathn)))
+  if ((path = (def) ? defpath : getvar(STR("PATH"))))
     path = defpath;
   if (!(fpath = chkpath(path, argv[0], X_OK, 0))) {
     shwarnx(argv[0], "command not found");
@@ -548,7 +548,7 @@ dotcmd(char **argv)
     file = argv[1];
   } else {
     char *fpath, *path;
-    if ((path = getvar(pathn)))
+    if ((path = getvar(STR("PATH"))))
       fpath = chkpath(path, argv[1], R_OK, 0);
     else
       fpath = chkpath(defpath, argv[1], R_OK, 0);
@@ -653,93 +653,97 @@ echocmd(char *argv[])
   return 0;
 }
 
-    int evalcmd(char **argv)
-    {
-      size_t tlen = 0;
-      char *cmdstrn;
-      int status;
+int
+evalcmd(char **argv)
+{
+  size_t tlen = 0;
+  char *cmdstrn;
+  int status;
 
-      if (!argv[1])
-        return 0;
+  if (!argv[1])
+    return 0;
 
-      for (size_t i = 1; argv[i]; i++)
-        tlen += strlen(argv[i]);
-      cmdstrn = join_strn(argv + 1, &tlen);
+  for (size_t i = 1; argv[i]; i++)
+    tlen += strlen(argv[i]);
+  cmdstrn = join_strn(argv + 1, &tlen);
 
-      setinputstrn(cmdstrn, tlen);
-      status = eval_run();
-      popinput();
-      return status;
+  setinputstrn(cmdstrn, tlen);
+  status = eval_run();
+  popinput();
+  return status;
+}
+
+static int
+exitcmd(char **argv)
+{
+  size_t argc = 0;
+  int exnum;
+
+  exnum = 0;
+  array_len(argv, argc);
+  if (argc > 2) {
+    shwarnx(argv[0], "too many arguements"); /*NOLINT*/
+    return 1;
+  }
+
+  if (argc == 2) {
+    exnum = bltin_atoi(argv[1], argv[0], "a numeric arguement is required");
+    if (exnum < 0)
+      return 1;
+  }
+  slclear();
+  exit(exnum);
+}
+
+static int
+falsecmd(char **args)
+{
+  (void)args;
+  return 1;
+}
+
+static int
+pwdcmd(char **argv)
+{
+  int argc = 0;
+  (void)argc;
+  char flag = '\0';
+  char pwdbuf[PATH_MAX + 1];
+
+  ARGBEGIN
+  {
+    case 'L':
+      flag = FLAG_L;
+      break;
+    case 'P':
+      flag = FLAG_P;
+      break;
+    default:
+      bad_opt(argv0, ARGC());
+      return 1;
+  }
+  ARGEND;
+
+  if (flag != FLAG_P) {
+    char *pwd = getvar(STR("PWD"));
+    struct stat sbuf, cwdsbuf;
+
+    if (!pwd) {
+      goto physical;
     }
-
-    static int exitcmd(char **argv)
-    {
-      size_t argc = 0;
-      int exnum;
-
-      exnum = 0;
-      array_len(argv, argc);
-      if (argc > 2) {
-        shwarnx(argv[0], "too many arguements"); /*NOLINT*/
-        return 1;
-      }
-
-      if (argc == 2) {
-        exnum = bltin_atoi(argv[1], argv[0], "a numeric arguement is required");
-        if (exnum < 0)
-          return 1;
-      }
-      slclear();
-      exit(exnum);
+    if (stat(pwd, &sbuf) < 0) {
+      goto physical;
     }
-
-    static int falsecmd(char **args)
-    {
-      (void)args;
+    if (stat(".", &cwdsbuf) < 0) {
+      warn("pwd");
       return 1;
     }
+    if ((sbuf.st_ino != cwdsbuf.st_ino || sbuf.st_dev != cwdsbuf.st_dev))
+      goto physical;
 
-    static int pwdcmd(char **argv)
-    {
-      int argc = 0;
-      (void)argc;
-      char flag = '\0';
-      char pwdbuf[PATH_MAX + 1];
-
-      ARGBEGIN
-      {
-        case 'L':
-          flag = FLAG_L;
-          break;
-        case 'P':
-          flag = FLAG_P;
-          break;
-        default:
-          bad_opt(argv0, ARGC());
-          return 1;
-      }
-      ARGEND;
-
-      if (flag != FLAG_P) {
-        char *pwd = getvar(pwdn);
-        struct stat sbuf, cwdsbuf;
-
-        if (!pwd) {
-          goto physical;
-        }
-        if (stat(pwd, &sbuf) < 0) {
-          goto physical;
-        }
-        if (stat(".", &cwdsbuf) < 0) {
-          warn("pwd");
-          return 1;
-        }
-        if ((sbuf.st_ino != cwdsbuf.st_ino || sbuf.st_dev != cwdsbuf.st_dev))
-          goto physical;
-
-        printf("%s\n", pwd);
-        return 0;
-      }
+    printf("%s\n", pwd);
+    return 0;
+  }
 
 physical:
   if (getcwd(pwdbuf, PATH_MAX + 1)) {

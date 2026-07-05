@@ -79,7 +79,7 @@ killjob(void)
   pid_t pid;
 
   for (j = job_list; j; j = j->next) {
-    int oldstate;
+    jstate oldstate;
 
     if (j->state == JDONE)
       continue;

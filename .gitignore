@@ -21,6 +21,9 @@ simsh.geany
 .zed
 .gdb_history
 .dir-locals.el
+GPATH
+GTAGS
+GRTAGS
 *vterm*
 *.ede
 *.seer
