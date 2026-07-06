@@ -315,7 +315,7 @@ unaliascmd(char **argv)
   if (e) {
     rmalias(argv[1]);
   } else {
-    shwarnx(argv[0], "alias not found");
+    shwarn(argv[0], "alias not found");
     return 1;
   }
 

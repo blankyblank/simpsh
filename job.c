@@ -49,8 +49,8 @@ newjob(pid_t pgid, const char *cmd)
   nj->saved_ttypgrp = -1;
   nj->next = job_list;
   job_list = nj;
-  sh_bgpid = pgid;
-  lltoa(sh_bgpid, sh_bgpid_s);
+  shbgpid = pgid;
+  lltoa(shbgpid, sh_bgpid_s);
   return nj;
 }
 
@@ -247,7 +247,7 @@ bgcmd(char **argv)
   if (argc < 2) {
     j = findjob(NULL);
     if (!j) {
-      shwarnx(argv[0], "no current job"); /*NOLINT*/
+      shwarn(argv[0], "no current job"); /*NOLINT*/
       return 1;
     }
     if (kill(-j->pgid, SIGCONT) < 0) {
@@ -290,7 +290,7 @@ fgcmd(char **argv)
   if (argc < 2) {
     j = findjob(NULL);
     if (!j) {
-      shwarnx(argv[0], "no current job"); /*NOLINT*/
+      shwarn(argv[0], "no current job"); /*NOLINT*/
       return 1;
     }
   } else {

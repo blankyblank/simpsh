@@ -31,7 +31,6 @@
 #define MAX_TMP_VARS 40
 #define xpnd(a) (join_wf(exp_word(a, NULL)))
 
-u8 func_depth = 0;
 redir *predir = NULL;
 
 typedef struct fdlist {
@@ -218,7 +217,7 @@ execcmd(char **argv)
   char **env = build_env(NULL);
 
   if (!env)
-    shwarnx(argv[0], "failed to get environ"); /*NOLINT*/
+    shwarn(argv[0], "failed to get environ"); /*NOLINT*/
 
   fullpath = getpath(argv[1]);
   if (!fullpath)
@@ -345,7 +344,7 @@ shexec(char **restrict args, char **restrict env, redir *r)
 {
   char *fpath;
   if (!(fpath = getpath(args[0]))) {
-    fprintf(stderr, "%s: %s: command not found\n", sh_argv0, args[0]);
+    fprintf(stderr, "%s: %s: command not found\n", shargv0, args[0]);
     _exit(127);
   }
 
@@ -368,7 +367,7 @@ shfexec(char ** restrict argv, const cmd_tree * restrict n,
   /* get full command path */
   fullpath = getpath(argv[0]);
   if (!fullpath) {
-    fprintf(stderr, "%s: %s: command not found\n", sh_argv0,
+    fprintf(stderr, "%s: %s: command not found\n", shargv0,
             argv[0]); /*NOLINT*/
     return 1;
   }
@@ -435,10 +434,10 @@ run_for(const cmd_tree *n)
   if (CFOR(n).words) {
     wrdv = expand_argv(CFOR(n).words, &wrdc);
   } else {
-    wrdc = sh_argc;
+    wrdc = shargc;
     wrdv = st_alloc((wrdc + 1) * sizeof(char *));
     for (size_t i = 0; i < wrdc; i++)
-      wrdv[i] = st_strdup(sh_argv[i]);
+      wrdv[i] = st_strdup(shargv[i]);
     wrdv[wrdc] = NULL;
   }
 
@@ -520,15 +519,15 @@ run_func(const cmd_tree *n, char **args)
 
   loc = localvars;
   fmark = stack_mark();
-  savedsp = localsp;
-  oldargc = sh_argc;
-  oldargv = sh_argv;
-  oldalloced = alloc_sh_argv;
-  sh_argc = 0;
-  array_len(args, sh_argc);
-  sh_argc--;
-  sh_argv = args + 1;
-  alloc_sh_argv = 0;
+  savedsp = localcnt;
+  oldargc = shargc;
+  oldargv = shargv;
+  oldalloced = alloc_shargv;
+  shargc = 0;
+  array_len(args, shargc);
+  shargc--;
+  shargv = args + 1;
+  alloc_shargv = 0;
 
 
   if (func_depth >= MAX_FUNC_DEPTH) {
@@ -548,19 +547,19 @@ run_func(const cmd_tree *n, char **args)
 
 done:
 
-  while (localsp > savedsp) {
-    localsp--;
-    if (loc[localsp].set)
-      setvar(loc[localsp].name, loc[localsp].val, loc[localsp].oldflags);
+  while (localcnt > savedsp) {
+    localcnt--;
+    if (loc[localcnt].set)
+      setvar(loc[localcnt].name, loc[localcnt].val, loc[localcnt].oldflags);
     else
-      rmvar(loc[localsp].name);
+      rmvar(loc[localcnt].name);
   }
 
   stack_restore(fmark);
   freeshargv();
-  alloc_sh_argv = oldalloced;
-  sh_argv = oldargv;
-  sh_argc = oldargc;
+  alloc_shargv = oldalloced;
+  shargv = oldargv;
+  shargc = oldargc;
   return status;
 }
 
@@ -736,7 +735,7 @@ static int
 run_pipe(const cmd_tree *n)
 {
   int status, lwstatus;
-  int lstatus, rstatus;
+  int l_status, rstatus;
   int pipefd[2], outer;
   static u8 pipedepth;
   int mfl;
@@ -806,8 +805,8 @@ run_pipe(const cmd_tree *n)
       waitpid(rpid, &wstatus, 0);
       waitpid(lpid, &lwstatus, 0);
       rstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
-      lstatus = WIFEXITED(lwstatus) ? WEXITSTATUS(lwstatus) : 1;
-      status = pipeflag ? (rstatus ? rstatus : lstatus) : rstatus;
+      l_status = WIFEXITED(lwstatus) ? WEXITSTATUS(lwstatus) : 1;
+      status = pipeflag ? (rstatus ? rstatus : l_status) : rstatus;
     } else {
       for (;;) {
         if (waitpid(rpid, &wstatus, WNOHANG) > 0)
@@ -821,8 +820,8 @@ run_pipe(const cmd_tree *n)
       }
       waitpid(lpid, &lwstatus, 0);
       rstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
-      lstatus = WIFEXITED(lwstatus) ? WEXITSTATUS(lwstatus) : 1;
-      status = pipeflag ? (rstatus ? rstatus : lstatus) : rstatus;
+      l_status = WIFEXITED(lwstatus) ? WEXITSTATUS(lwstatus) : 1;
+      status = pipeflag ? (rstatus ? rstatus : l_status) : rstatus;
     }
   }
 

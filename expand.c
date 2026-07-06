@@ -20,8 +20,7 @@
 #include "utils.h"
 #include "var.h"
 
-u8 ifsnull = 0;
-static char ifschar[256];
+char ifschar[256];
 
 static wf **splitword(wf *restrict, size_t *restrict);
 
@@ -31,7 +30,7 @@ static wf **splitword(wf *restrict, size_t *restrict);
 #define varargc() \
   char *buf; \
   buf = st_alloc(16); \
-  *olen = lltoa(sh_argc, buf); \
+  *olen = lltoa(shargc, buf); \
   return buf;
 
 #define chk_cap(arc, c, arv, t) \
@@ -84,11 +83,11 @@ static inline char *
 get_posparam(int n)
 {
   if (n == 0)
-    return sh_argv0 ? sh_argv0 : "";
+    return shargv0 ? shargv0 : "";
 
-  if (n < 0 || n > sh_argc)
+  if (n < 0 || n > shargc)
     return "";
-  return sh_argv[n - 1] ? sh_argv[n - 1] : "";
+  return shargv[n - 1] ? shargv[n - 1] : "";
 }
 
 /** find if variable is positional parameter */
@@ -103,18 +102,6 @@ is_posparam(const char *var, size_t var_l)
       return 0;
   }
   return 1;
-}
-
-void
-ifsupdt(const char *ifs)
-{
-  memset(ifschar, 0, 256);
-  if (!ifs)
-    ifs = " \t\n";
-  ifsnull = !*ifs;
-  for (; *ifs; ifs++)
-    if (!is_ws(*ifs))
-      ifschar[(unsigned char)*ifs] = 1;
 }
 
 char *
@@ -198,7 +185,7 @@ exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
         end = i + 2;
         break;
       case '#':
-        vlen = lltoa(sh_argc, buf);
+        vlen = lltoa(shargc, buf);
         val = buf;
         end = i + 2;
         break;
@@ -353,7 +340,7 @@ expand_ps1(char *p)
           case '#':
             {
               char buf[16];
-              vlen = lltoa(sh_argc, buf);
+              vlen = lltoa(shargc, buf);
               val = buf;
               break;
             }
@@ -421,10 +408,10 @@ expand_argv(wf **args, size_t *restrict t)
       *t += w->len;
       continue;
     }
-    if (sh_argc && w->len == 1 && (w->word[0] == '@' || w->word[0] == '*') &&
+    if (shargc && w->len == 1 && (w->word[0] == '@' || w->word[0] == '*') &&
         (w->qs & (QVAR | QVAR_DQ | QBRACE | QBRACE_DQ))) {
       if (w->word[0] == '@' && (w->qs & (QVAR_DQ | QBRACE_DQ))) {
-        for (int j = 1; j <= sh_argc; j++) {
+        for (int j = 1; j <= shargc; j++) {
           chk_cap(fargc, cap, argv, char *);
           argv[fargc++] = st_strdup(get_posparam(j));
         }
@@ -438,21 +425,21 @@ expand_argv(wf **args, size_t *restrict t)
       } else {
         ifsc = ' ';
       }
-      size_t pos = 0, tlen = 0, lenarr[sh_argc + 1];
-      for (int j = 1; j <= sh_argc; j++) {
+      size_t pos = 0, tlen = 0, lenarr[shargc + 1];
+      for (int j = 1; j <= shargc; j++) {
         char *p = get_posparam(j);
         tlen += lenarr[j] = p ? strlen(p) : 0;
-        if (j < sh_argc && ifsc)
+        if (j < shargc && ifsc)
           tlen++;
       }
       char *buf = st_alloc(tlen + 1);
-      for (int j = 1; j <= sh_argc; j++) {
+      for (int j = 1; j <= shargc; j++) {
         char *p = get_posparam(j);
         if (p) {
           memcpy(buf + pos, p, lenarr[j]);
           pos += lenarr[j];
         }
-        if (j < sh_argc && ifsc)
+        if (j < shargc && ifsc)
           buf[pos++] = ifsc;
       }
       buf[pos] = '\0';
@@ -670,7 +657,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
             case '?':
               if (isnull) {
                 name = st_strndup(f->word, op - 1);
-                shwarnx(name, f->word + op + 1);
+                shwarn(name, f->word + op + 1);
                 if (!iflag)
                   exit(1);
                 return NULL;
@@ -791,7 +778,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
               val = vardash(&vlen);
               break;
             case '#':
-              vlen = lltoa(sh_argc, buf);
+              vlen = lltoa(shargc, buf);
               val = st_strndup(buf, vlen);
               break;
             default:

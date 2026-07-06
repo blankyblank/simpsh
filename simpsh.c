@@ -9,9 +9,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #ifdef LIBEDIT
-#include <histedit.h>
+  #include <histedit.h>
 #else
-#include "utils.h"
+  #include "utils.h"
 #endif /* ifdef LIBEDIT */
 
 #include "alloc.h"
@@ -33,7 +33,8 @@ static int read_cmd(char ** restrict, size_t * restrict);
 static shinput *init_interactive(void);
 
 #ifdef LIBEDIT
-#define DIRPERMS (S_IRWXU|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH)
+  #define DIRPERMS \
+    (S_IRWXU | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH)
 static EditLine *edl;
 static History *hist;
 static int ps1mode;
@@ -81,15 +82,12 @@ feed_input(shinput *inpt, const char *lines, size_t llen)
   inpt->unget = 0;
 }
 
-
 static int
 read_cont(char **lines, size_t *llen)
 {
   char *line;
   size_t n;
-  stmark mark = stack_mark();
   while (need_more(*lines, *llen)) {
-    stack_restore(mark);
     line = lineread(0);
     if (!line)
       return -1;
@@ -100,7 +98,7 @@ read_cont(char **lines, size_t *llen)
 
     n = strlen(line);
     char *new = st_alloc(*llen + n + 2);
-    memcpy(new, lines, *llen);
+    memcpy(new, *lines, *llen);
     memcpy(new + *llen, line, n);
     new[*llen + n] = '\n';
     new[*llen + n + 1] = '\0';
@@ -111,7 +109,7 @@ read_cont(char **lines, size_t *llen)
 }
 
 static int
-read_cmd(char **restrict cmd, size_t *restrict len)
+read_cmd(char ** restrict cmd, size_t * restrict len)
 {
   char *line = lineread(1);
   if (!line)
@@ -267,7 +265,7 @@ sh_interactive(void)
 
 #ifdef LIBEDIT
   HistEvent ev;
-  edl = el_init(sh_argv0, stdin, stdout, stderr);
+  edl = el_init(shargv0, stdin, stdout, stderr);
   el_set(edl, EL_EDITOR, "vi");
   el_set(edl, EL_SIGNAL, 1);
   el_set(edl, EL_GETCFN, input_notify);
@@ -324,7 +322,6 @@ sh_interactive(void)
   ttyrestore();
   return lstatus;
 }
-
 
 static int
 need_more(const char *lines, size_t lineslen)
@@ -439,7 +436,6 @@ need_more(const char *lines, size_t lineslen)
   }
   return 0;
 }
-
 
 #ifdef LIBEDIT
 static int
@@ -597,4 +593,3 @@ lineread(int ps1)
   return nxtline;
 }
 #endif /* ifdef LIBEDIT */
-

@@ -354,7 +354,7 @@ testcmd(char **argv) {
   array_len(argv, argc);
   if (*argv[0] == '[' && argv[0][1] == '\0') {
     if (argv[argc - 1][0] != ']' || argv[argc - 1][1] != '\0') {
-      shwarnx("[", "missing ']'");
+      shwarn("[", "missing ']'");
       return 2;
     }
     argc--;
@@ -385,7 +385,7 @@ testcmd(char **argv) {
   tv.wpend = argv + argc;
   res = parse_test(&tv);
   if (tv.flags & terr) {
-    shwarnx(*argv, "syntax error");
+    shwarn(*argv, "syntax error");
     return 2;
   }
   return res ? 0 : 1;

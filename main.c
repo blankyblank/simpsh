@@ -23,36 +23,11 @@
 
 char histfile[PATH_MAX];
 int builtin_tab[BUILTIN_BUCKETS];
-
-const char ifsn[16] = "IFS";
-const char envn[16] = "ENV";
-const char pwdn[16] = "PWD";
-const char oldpwdn[16] = "OLDPWD";
-const char homen[16] = "HOME";
-const char pathn[16] = "PATH";
-const char ppidn[16] = "PPID";
-const char shlvln[16] = "SHLVL";
-const char shelln[16] = "SHELL";
-const char linen[16] = "LINENO";
-const char cdpthn[16] = "CDPATH";
-const char ps1n[16] = "PS1";
-const char ps2n[16] = "PS2";
-const char ps4n[16] = "PS4";
-
 const char shname[] = "simpsh";
 const char shusg[43] = "[-abCefhiImnosvVx] [-o longopt] [-c 'cmd']";
+GSTATE gstate;
 
 /* global shell variables */
-int sh_argc;
-char *sh_argv0;
-char **sh_argv;
-u8 alloc_sh_argv = 0;
-int lstatus;
-int retval = 0;
-u8 retnow = 0;
-int loopdepth = 0;
-int loopbreak = 0;
-int loopcontinue = 0;
 
  /* __attribute__((visibility("default"))) */
 /** shell entry point */
@@ -154,7 +129,7 @@ main(int argc, char **argv)
     init_job();
   }
 
-  sh_argv0 = argv0;
+  shargv0 = argv0;
   init_rc(flags);
 
   if (flags & FLAG_c) {
@@ -165,9 +140,9 @@ main(int argc, char **argv)
       iflag = 0;
       mflag = 0;
     }
-    sh_argv0 = argc > 1 ? argv[1] : argv0;
-    sh_argv = argc > 2 ? argv + 2 : NULL;
-    sh_argc = argc > 2 ? argc - 2 : 0;
+    shargv0 = argc > 1 ? argv[1] : argv0;
+    shargv = argc > 2 ? argv + 2 : NULL;
+    shargc = argc > 2 ? argc - 2 : 0;
     sh_ccmd(argv[0]);
     exittrap(lstatus);
   } else if (!sflag && *argv) {
@@ -179,19 +154,19 @@ main(int argc, char **argv)
       perror("simpsh");
       exittrap(1);
     }
-    sh_argv0 = argv0;
-    sh_argv = argv + 1;
-    sh_argc = argc - 1;
+    shargv0 = argv0;
+    shargv = argv + 1;
+    shargc = argc - 1;
     sh_script(fd);
     exittrap(lstatus);
   } else if (!iflag || sflag) {
-    sh_argv0 = argv0;
-    sh_argv = argv;
-    sh_argc = argc;
+    shargv0 = argv0;
+    shargv = argv;
+    shargc = argc;
     sh_stdin();
     exittrap(lstatus);
   } else {
-    sh_argv0 = argv0;
+    shargv0 = argv0;
     /* run the main loop */
     exittrap(sh_interactive());
   }

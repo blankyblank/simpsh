@@ -1,8 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "error.h"
-#include "main.h"
 #include "utils.h"
+#include "var.h"
 
 static const char caseusg[] = "WORD in [PATTERN [| PATTERN]) COMMANDS ;;] ... esac";
 static const char execusg[] = "[redirection] [command [arg]]";
@@ -546,7 +546,7 @@ helpcmd(char **argv)
         }
       }
       if (!fnd) {
-        fprintf(stderr, "%s: %s: no help topics match '%s'\n", sh_argv0, argv[0], argv[i]);
+        fprintf(stderr, "%s: %s: no help topics match '%s'\n", shargv0, argv[0], argv[i]);
         status = 1;
         break;
       }

@@ -9,7 +9,6 @@
 #include "error.h"
 #include "input.h"
 #include "lex.h"
-#include "main.h"
 #include "opts.h"
 #include "parse.h"
 #include "utils.h"

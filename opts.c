@@ -13,10 +13,7 @@
 #include "utils.h"
 #include "var.h"
 
-u8 nounseterr = 0;
-
-char shopts[OPTC];
-const char *shoptname[OPTC] = {
+static const char *shoptname[OPTC] = {
   "allexport",
   "notify",
   "noclobber",
@@ -162,14 +159,14 @@ init_opts(void)
 void
 freeshargv(void)
 {
-  if (alloc_sh_argv) {
-    for (int i = 0; i < sh_argc; i++)
-      slfree(sh_argv[i]);
-    slfree(sh_argv);
+  if (alloc_shargv) {
+    for (int i = 0; i < shargc; i++)
+      slfree(shargv[i]);
+    slfree(shargv);
   }
-  sh_argv = NULL;
-  sh_argc = 0;
-  alloc_sh_argv = 0;
+  shargv = NULL;
+  shargc = 0;
+  alloc_shargv = 0;
 }
 
 static int
@@ -204,8 +201,8 @@ setcmd(char **argv)
     size_t c, f;
 
     c = 0;
-    for (size_t i = 0; i < var_tab_size; i++) {
-      v = &var_tab[i];
+    for (size_t i = 0; i < vartab_size; i++) {
+      v = &vartab[i];
       if (!v->var || v->var == TOMBSTONE)
         continue;
       c++;
@@ -214,8 +211,8 @@ setcmd(char **argv)
       return 0;
     enva = st_alloc((c + 1) * sizeof(char *));
     f = 0;
-    for (size_t i = 0; i < var_tab_size; i++) {
-      v = &var_tab[i];
+    for (size_t i = 0; i < vartab_size; i++) {
+      v = &vartab[i];
       if (!v->var || v->var == TOMBSTONE)
         continue;
       enva[f++] = v->var;
@@ -289,9 +286,9 @@ setcmd(char **argv)
       pos = salloc(argc * sizeof(char *));
     pos[pcnt] = NULL;
     freeshargv();
-    alloc_sh_argv = 1;
-    sh_argv = pos;
-    sh_argc = pcnt;
+    alloc_shargv = 1;
+    shargv = pos;
+    shargc = pcnt;
   } else {
     if (pos)
       slfree(pos);
@@ -313,7 +310,7 @@ getbuildinfo(void) {
   printf("%s build info:\n"
          "build date: %s %s\n"
          "ansi C standard conformance: %ld\n",
-         sh_argv0, __DATE__, __TIME__, __STDC_ISO_10646__);
+         shargv0, __DATE__, __TIME__, __STDC_ISO_10646__);
 }
 #endif /* ifndef MUSL */
 

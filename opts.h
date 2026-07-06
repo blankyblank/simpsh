@@ -2,9 +2,6 @@
 #define OPTS_H
 
 #include "main.h"
-#define OPTC 19
-#define SHOPTC 16 /* short option count */
-extern u8 nounseterr;
 
 #define aflag shopts[0]
 #define bflag shopts[1]
@@ -23,9 +20,7 @@ extern u8 nounseterr;
 #define xflag shopts[14]
 #define pipeflag shopts[17]
 
-extern char shopts[OPTC];
 extern const char shoptch[OPTC];
-extern const char *shoptname[OPTC];
 
 extern void init_opts(void);
 extern void freeshargv(void);

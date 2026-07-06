@@ -44,6 +44,7 @@ static int echocmd(char **);
 static int evalcmd(char **);
 static int exitcmd(char **);
 static int falsecmd(char **);
+static int getoptscmd(char **);
 static int pwdcmd(char **);
 static int readcmd(char **);
 static int returncmd(char **);
@@ -75,6 +76,7 @@ const builtin builtins[] = {
   { "export",   &exportcmd   },
   { "false",    &falsecmd    },
   { "fg",       &fgcmd       },
+  { "getopts",  &getoptscmd  },
   { "hash",     &hashcmd     },
   { "help",     &helpcmd     },
   { "jobs",     &jobscmd     },
@@ -297,7 +299,7 @@ breakcmd(char **argv)
   int n;
 
   if (!loopdepth) {
-    shwarnx(argv[0], "not in a loop");
+    shwarn(argv[0], "not in a loop");
     return 1;
   }
   array_len(argv, argc);
@@ -348,7 +350,7 @@ cdcmd(char **argv)
   }
   ARGEND;
   if (argc > 1) {
-    shwarnx(bargv0, "Too many arguements"); /*NOLINT*/
+    shwarn(bargv0, "Too many arguements"); /*NOLINT*/
     return 1;
   }
 
@@ -383,7 +385,7 @@ cdcmd(char **argv)
     destlen = homelen;
   } else if (*dest == '-' && dest[1] == '\0') {
     if (!oldpwd) {
-      shwarnx(bargv0, "OLDPWD not set"); /*NOLINT*/
+      shwarn(bargv0, "OLDPWD not set"); /*NOLINT*/
       return 1;
     }
     dir = shvar_val(oldpwd);
@@ -430,7 +432,7 @@ cdcmd(char **argv)
       *end = '\0';
     }
     if (!pwdpath(respath)) {
-      shwarnx(bargv0, "path normalization failure"); /*NOLINT*/
+      shwarn(bargv0, "path normalization failure"); /*NOLINT*/
       return 1;
     }
   }
@@ -483,7 +485,7 @@ commandcmd(char **argv)
   if ((path = (def) ? defpath : getvar(STR("PATH"))))
     path = defpath;
   if (!(fpath = chkpath(path, argv[0], X_OK, 0))) {
-    shwarnx(argv[0], "command not found");
+    shwarn(argv[0], "command not found");
     return 1;
   }
   jcmd = join_strn(argv, NULL);
@@ -500,7 +502,7 @@ continuecmd(char **argv)
   size_t argc = 0;
 
   if (!loopdepth) {
-    shwarnx(argv[0], "not in a loop");
+    shwarn(argv[0], "not in a loop");
     return 1;
   }
   array_len(argv, argc);
@@ -536,7 +538,7 @@ dotcmd(char **argv)
   array_len(argv, argc);
 
   if (argc < 2) {
-    shwarnx(argv[0], "filename arguement require");
+    shwarn(argv[0], "filename arguement require");
     return 1;
   }
 
@@ -573,29 +575,29 @@ dotcmd(char **argv)
   setinputf(fd, file, 0);
 
   if (argc == 2) {
-    o_argv0 = strdup_(sh_argv0);
-    sh_argv0 = strdup_(file);
+    o_argv0 = strdup_(shargv0);
+    shargv0 = strdup_(file);
   } else {
-    o_argc = sh_argc;
-    sh_argc = argc - 2;
-    o_argv0 = strdup_(sh_argv0);
-    sh_argv0 = strdup_(file);
+    o_argc = shargc;
+    shargc = argc - 2;
+    o_argv0 = strdup_(shargv0);
+    shargv0 = strdup_(file);
 
     o_argv = salloc(sizeof(char *) * (o_argc + 1));
     for (int i = 0; i < o_argc; i++)
-      o_argv[i] = strdup_(sh_argv[i]);
+      o_argv[i] = strdup_(shargv[i]);
     o_argv[o_argc] = NULL;
-    if (alloc_sh_argv && sh_argv) {
+    if (alloc_shargv && shargv) {
       for (int i = 0; i < o_argc; i++)
-        slfree(sh_argv[i]);
-      slfree(sh_argv);
+        slfree(shargv[i]);
+      slfree(shargv);
     }
-    sh_argv = salloc(sizeof(char *) * (argc + 1));
+    shargv = salloc(sizeof(char *) * (argc + 1));
     size_t j = 0;
     for (size_t i = 2; argv[i]; i++)
-      sh_argv[j++] = strdup_(argv[i]);
-    sh_argv[sh_argc] = NULL;
-    alloc_sh_argv = 1;
+      shargv[j++] = strdup_(argv[i]);
+    shargv[shargc] = NULL;
+    alloc_shargv = 1;
   }
 
   eval_run();
@@ -604,17 +606,17 @@ dotcmd(char **argv)
 
 restore:
   if (o_argv) {
-    for (size_t i = 0; sh_argv[i]; i++)
-      slfree(sh_argv[i]);
-    slfree(sh_argv);
-    sh_argv = o_argv;
+    for (size_t i = 0; shargv[i]; i++)
+      slfree(shargv[i]);
+    slfree(shargv);
+    shargv = o_argv;
   }
   if (o_argv0) {
-    slfree(sh_argv0);
-    sh_argv0 = o_argv0;
+    slfree(shargv0);
+    shargv0 = o_argv0;
   }
   if (o_argc)
-    sh_argc = o_argc;
+    shargc = o_argc;
   if (st)
     perror(argv[1]);
   return st ? st : lstatus;
@@ -682,7 +684,7 @@ exitcmd(char **argv)
   exnum = 0;
   array_len(argv, argc);
   if (argc > 2) {
-    shwarnx(argv[0], "too many arguements"); /*NOLINT*/
+    shwarn(argv[0], "too many arguements"); /*NOLINT*/
     return 1;
   }
 
@@ -700,6 +702,13 @@ falsecmd(char **args)
 {
   (void)args;
   return 1;
+}
+
+static int
+getoptscmd(char **argv)
+{
+  (void)argv;
+  return 0;
 }
 
 static int
@@ -899,7 +908,7 @@ returncmd(char **argv)
   array_len(argv, argc);
 
   if (argc > 2) {
-    shwarnx(argv[0], "too many arguements");
+    shwarn(argv[0], "too many arguements");
     return 1;
   }
 
@@ -936,18 +945,18 @@ shiftcmd(char **argv)
   }
   if (!n)
     return 0;
-  if (n > sh_argc) {
-    shwarnx(argv[0], "can't shift that many");
+  if (n > shargc) {
+    shwarn(argv[0], "can't shift that many");
     return 1;
   }
 
-  if (alloc_sh_argv)
+  if (alloc_shargv)
     for (int i = 0; i < n; i++)
-      slfree(sh_argv[i]);
-  memmove(sh_argv, sh_argv + n, (sh_argc - n) * sizeof(char *));
-  for (int i = sh_argc - n; i < sh_argc; i++)
-    sh_argv[i] = NULL;
-  sh_argc -= n;
+      slfree(shargv[i]);
+  memmove(shargv, shargv + n, (shargc - n) * sizeof(char *));
+  for (int i = shargc - n; i < shargc; i++)
+    shargv[i] = NULL;
+  shargc -= n;
 
   return 0;
 }
@@ -1230,7 +1239,7 @@ umaskcmd(char **argv)
 
     op = *c;
     if (*c != '=' && *c != '+' && *c != '-') {
-      fprintf(stderr, "%s: %s: %c:  not a valid operator \n", sh_argv0, argv0,
+      fprintf(stderr, "%s: %s: %c:  not a valid operator \n", shargv0, argv0,
               *c);
       return 1;
     }

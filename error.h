@@ -1,11 +1,11 @@
 /* error.h - error message macros/funcs */
 #ifndef ERROR_H
 #define ERROR_H
-
-#include "alloc.h"
 #define _POSIX_C_SOURCE 200809L
+
 #include <stddef.h>
 
+#include "alloc.h"
 #include "input.h"
 #include "lex.h"
 #include "main.h"
@@ -76,7 +76,8 @@ extern int helpcmd(char **);
 /* error (returns doesn't exit) with simpsh: builtin: message: (errno message), format */
 #define sherr(r, b, m) warn("%s: %s", b, m); return r
 /* warning with simpsh: builtin: message, format */
-#define shwarnx(b, m) fprintf(stderr, "%s: %s: %s\n", shname, b, m)
+#define shwarn(b, m) fprintf(stderr, "%s: %s: %s\n", shname, b, m)
+#define sherrx(m) fprintf(stderr, "%s: %s\n", shname, (m))
 /* error message with simpsh: builtin: arg: message, format */
 #define shwarn_arg(b, a, m) \
   fprintf(stderr, "%s: %s: %s: %s\n", shname, b, a, m)
