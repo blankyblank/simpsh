@@ -44,7 +44,6 @@ static int echocmd(char **);
 static int evalcmd(char **);
 static int exitcmd(char **);
 static int falsecmd(char **);
-static int getoptscmd(char **);
 static int pwdcmd(char **);
 static int readcmd(char **);
 static int returncmd(char **);
@@ -702,13 +701,6 @@ falsecmd(char **args)
 {
   (void)args;
   return 1;
-}
-
-static int
-getoptscmd(char **argv)
-{
-  (void)argv;
-  return 0;
 }
 
 static int

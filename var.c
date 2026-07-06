@@ -21,6 +21,11 @@
 
 #define INTSIZE 16
 
+/* string literals */
+const char oinn[16] = "OPTIND";
+const char oargn[16] = "OPTARG";
+const char oerrn[16] = "OPTERR";
+
 /* shell variables */
 static shvar var_tab_init[VAR_BUCKETS_INIT];
 static pid_t shpid;

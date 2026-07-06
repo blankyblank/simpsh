@@ -36,6 +36,7 @@ typedef enum {
   FALSEH,
   FORH,
   FGH,
+  GETOPTSH,
   HASHH,
   HELPH,
   IFH,

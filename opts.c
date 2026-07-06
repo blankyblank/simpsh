@@ -57,6 +57,17 @@ const char shoptch[OPTC] = {
 static int setopts(char *, int, char *);
 static int cmpname(const void *, const void *);
 
+
+#ifndef MUSL
+void
+getbuildinfo(void) {
+  printf("%s build info:\n"
+         "build date: %s %s\n"
+         "ansi C standard conformance: %ld\n",
+         shargv0, __DATE__, __TIME__, __STDC_ISO_10646__);
+}
+#endif /* ifndef MUSL */
+
 static int
 setopts(char *arg, int n, char *argv0)
 {
@@ -304,13 +315,139 @@ err:
   return 1;
 }
 
-#ifndef MUSL
-void
-getbuildinfo(void) {
-  printf("%s build info:\n"
-         "build date: %s %s\n"
-         "ansi C standard conformance: %ld\n",
-         shargv0, __DATE__, __TIME__, __STDC_ISO_10646__);
-}
-#endif /* ifndef MUSL */
+static int
+checkopts(char *optstr, char **argv, char *o, int opterr)
+{
+  int narg, has = 0, quiet = 0;
+  char *s, *p, c;
 
+  if (!(p = *(argv + optind - 1)))
+    return 1;
+  if (optoff < 0) {
+    if (*p == '-') {
+      if (*(p + 1) == '-' && *(p + 2) == '\0') {
+        optind++;
+        return 1;
+      }
+      if (*(p + 1) == '\0')
+        return 1;
+      optind++, optoff = 1;
+    } else {
+      return 1;
+    }
+  } else {
+    p = *(argv + optind - 2);
+  }
+
+  s = *(argv + optind - 1);
+  c = *(p + optoff++);
+  quiet = (*optstr == ':');
+  for (char *op = optstr + quiet; *op; op++) {
+    if (*op == ':')
+      continue;
+    if (*op == c) {
+      narg = (*(op + 1) == ':');
+      has = 1;
+      break;
+    }
+  }
+
+  if (!has) {
+    if (quiet) {
+      *o = '?';
+      setvar(oargn, (char[2]) { c, '\0' }, 0);
+    } else {
+      rmvar(oargn);
+      if (opterr)
+        fprintf(stderr, "idk an error\n");
+    }
+    if (!*(p + optoff))
+      optoff = -1;
+    return 0;
+  }
+
+  if (narg) {
+    if (*(p + optoff)) {
+      setvar(oargn, p + optoff, 0);
+      optoff = -1;
+    } else if (s) {
+      setvar(oargn, s, 0);
+      optind++, optoff = -1;
+    } else {
+      if (!*(p + optoff)) {
+        optoff = -1;
+        if (quiet) {
+          *o = ':';
+          setvar(oargn, (char[2]) { c, '\0' }, 0);
+        } else {
+          *o = '?';
+          rmvar(oargn);
+          if (opterr)
+            fprintf(stderr, "idk need to decide on msg\n");
+        }
+        return 0;
+      }
+    }
+    // optind = opti, optoff = opto;
+    *o = c;
+    return 0;
+  }
+  setvar(STR("OPTARG"), "", 0);
+  if (!*(p + optoff))
+    optoff = -1;
+  *o = c;
+  return 0;
+}
+
+int
+getoptscmd(char **argv)
+{
+  int opterr = 1, argc = 0, argpc;
+  char *oerr, *argv0 = *argv;
+  char **argp;
+
+  array_len(argv, argc);
+  switch (argc) {
+    case 1:
+    case 2:
+      usage(argv0, helpmsgs[GETOPTSH].usage);
+      return 1;
+    case 3:
+      if (!shargc || !*shargv) {
+        setvar(argv[2], "?", 0);
+        return 1;
+      }
+      argp = shargv, argpc = shargc;
+      break;
+    default:
+      argp = argv + 3, argpc = argc - 3; // is array_len needed when i can do argc - 3?
+      break;
+  }
+
+  char res, buf[16], nb[2];
+  int status;
+
+  if (optind < 1 || optind > argpc + 1)
+    optind = 1, optoff = -1;
+
+  if ((oerr = getvar(oerrn)))
+    opterr = (!(oerr[0] == '0' && oerr[1] == '\0'));
+
+  status = checkopts(argv[1], argp, &res, opterr);
+  itoa(optind, buf);
+  setvar(oinn, buf, VNOCB);
+  nb[0] = (status) ? '?' : res;
+  nb[1] = '\0';
+  setvar(argv[2], nb, 0);
+
+  return status;
+}
+//
+//
+//
+//
+//
+//
+//
+//
+//
