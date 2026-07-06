@@ -197,7 +197,7 @@ setvar(const char *restrict name, const char *restrict val, shvar_flags flags)
   n->var = nvar;
   n->nlen = nlen;
   n->flen = flen;
-  n->flags = flags;
+  v->flags = flags;
   n->func = NULL;
   v = n;
   varcnt++;
@@ -416,7 +416,7 @@ init_env(void)
     { "PS1=$ ",    0,      0          },
     { "PS2=> ",    0,      0          },
     { "PS4=+ ",    0,      0          },
-    { "OPTIND=1",  0,      optindupdt },
+    { "OPTIND=1",  VNOCB,  optindupdt },
     { "OPTERR=1",  0,      0          },
   };
   for (size_t i = 0; i < sizeof(varinit_tab) / sizeof(varinit_tab[0]); i++) {
@@ -429,7 +429,7 @@ init_env(void)
       char name[16];
       memcpy(name, varinit_tab[i].text, nlen);
       name[nlen] = '\0';
-      setvar(name, (char *)(eq + 1), varinit_tab[i].flags | VNOCB);
+      setvar(name, (char *)(eq + 1), varinit_tab[i].flags);
       v = findvar_n(varinit_tab[i].text, nlen);
     }
     if (v && varinit_tab[i].func)
