@@ -87,9 +87,7 @@ globmatch(const char *restrict p, const char *restrict s, int pfl)
   const char *sp = NULL, *ss = NULL;
   const char *send = s + strlen(s);
 
-  if (*p == '*' && p[1] == '\0')
-    return 1;
-  else if (strcmp(p, s) == 0 || (!*p && !*s))
+  if ((*p == '*' && p[1] == '\0') || (strcmp(p, s) == 0 || (!*p && !*s)))
     return 1;
 
   while (*p) {

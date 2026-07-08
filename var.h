@@ -35,28 +35,22 @@ typedef struct {
 } varinit;
 
 typedef struct  {
-  shvar *var_tab; /* variable table */
-  size_t var_tab_size; /* variable table size */
-  unsigned int var_cnt; /* variable count */
-  shvar *var_cache[VAR_CACHE_S]; /* cache for recently accessed vars */
-  tmp_var local_vars[LOCAL_MAX] /* local variables */;
-  unsigned int local_cnt;
-  int sh_line_no;
-  pid_t sh_bgpid;
-  char *sh_pid_str; /* the shell's pid */
-  char *sh_ppid_str; /* the shell's ppid */
-  char *sh_bgpid_str;  /* the last background processes pid */
-  char *homevar;
-  size_t homevarlen;
-  char **sh_argv;
-  int sh_argc;
-  char *sh_argv0;
-  u8 alloced_sh_argv;
-  u8 ifs_null;
-  int sh_optind;
-  int sh_optoff;
-  shvar line_no_var;
-  char line_buf[256];
+  shvar *vartab; /* variable table */
+  size_t vartab_size; /* variable table size */
+  unsigned int varcnt; /* variable count */
+  shvar *varcache[VAR_CACHE_S]; /* cache for recently accessed vars */
+  tmp_var localvars[LOCAL_MAX] /* local variables */;
+  unsigned int localcnt;
+  u8 ifsnull;
+  char ifsv[64];
+  size_t ifsvlen;
+  char *home;
+  size_t homelen;
+  char *pid_s; /* the shell's pid */
+  char *ppid_s; /* the shell's ppid */
+  char *bgpid_s;  /* the last background processes pid */
+  shvar linenov;
+  char linebuf[16];
 } GVAR;
 
 enum {
@@ -66,32 +60,18 @@ enum {
   VNOCB = 1 << 3,
 };
 
-#define TOMBSTONE ((char *)1)
-#define vartab        (gvar.var_tab)
-#define vartab_size   (gvar.var_tab_size)
-#define varcnt        (gvar.var_cnt)
-#define varcache      (gvar.var_cache)
-#define localvars     (gvar.local_vars)
-#define localcnt       (gvar.local_cnt)
-#define sh_lineno     (gvar.sh_line_no)
-#define shbgpid       (gvar.sh_bgpid)
-#define sh_pid_s      (gvar.sh_pid_str)
-#define sh_ppid_s     (gvar.sh_ppid_str)
-#define sh_bgpid_s    (gvar.sh_bgpid_str)
-#define home          (gvar.homevar)
-#define homelen       (gvar.homevarlen)
-#define shargv        (gvar.sh_argv)
-#define shargc        (gvar.sh_argc)
-#define shargv0       (gvar.sh_argv0)
-#define alloc_shargv (gvar.alloced_sh_argv)
-#define ifsnull       (gvar.ifs_null)
-#define optind        (gvar.sh_optind)
-#define optoff        (gvar.sh_optoff)
-#define linevar       (gvar.line_no_var)
-#define linebuf       (gvar.line_buf)
+#define TOMBSTONE    ((char *)1)
+#define VARTAB       (gvar.vartab)
+#define VARTAB_SIZE  (gvar.vartab_size)
+#define VARCNT       (gvar.varcnt)
+#define VARCACHE     (gvar.varcache)
+#define LOCALVARS    (gvar.localvars)
+#define LOCALCNT     (gvar.localcnt)
+#define LINENO       (gvar.linenov)
+
 #define shvar_val(v) ((v)->var + (v)->nlen + 1)
-#define vallen(v) ((v)->flen - (v)->nlen - 1)
-#define findvar(v) findvar_n(v, strlen(v))
+#define vallen(v)    ((v)->flen - (v)->nlen - 2)
+#define findvar(v)   findvar_n(v, strlen(v))
 
 extern const char oinn[16];
 extern const char oargn[16];

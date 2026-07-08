@@ -297,7 +297,7 @@ breakcmd(char **argv)
   size_t argc = 0;
   int n;
 
-  if (!loopdepth) {
+  if (!LOOPDEPTH) {
     shwarn(argv[0], "not in a loop");
     return 1;
   }
@@ -316,9 +316,9 @@ breakcmd(char **argv)
     return 1;
   }
 
-  if (n > loopdepth)
-    n = loopdepth;
-  loopbreak = n;
+  if (n > LOOPDEPTH)
+    n = LOOPDEPTH;
+  gstate.loopbreak = n;
   return 0;
 }
 
@@ -380,8 +380,8 @@ cdcmd(char **argv)
   }
 
   if (!dest) {
-    dir = home;
-    destlen = homelen;
+    dir = gvar.home;
+    destlen = gvar.homelen;
   } else if (*dest == '-' && dest[1] == '\0') {
     if (!oldpwd) {
       shwarn(bargv0, "OLDPWD not set"); /*NOLINT*/
@@ -445,7 +445,7 @@ commandcmd(char **argv)
 {
   int flags = 0, argc = 0;
   int def = 0, status = 0;
-  char *path;
+  const char *path;
 
   array_len(argv, argc);
   if (argc == 1)
@@ -500,7 +500,7 @@ continuecmd(char **argv)
   int n;
   size_t argc = 0;
 
-  if (!loopdepth) {
+  if (!LOOPDEPTH) {
     shwarn(argv[0], "not in a loop");
     return 1;
   }
@@ -519,9 +519,9 @@ continuecmd(char **argv)
     return 1;
   }
 
-  if (n > loopdepth)
-    n = loopdepth;
-  loopcontinue = n;
+  if (n > LOOPDEPTH)
+    n = LOOPDEPTH;
+  gstate.loopcontinue = n;
   return 0;
 }
 
@@ -530,9 +530,8 @@ static int
 dotcmd(char **argv)
 {
   size_t argc = 0;
-  char *o_argv0 = NULL, **o_argv = NULL;
   char *file;
-  int o_argc = 0, st = 0, fd;
+  int fd;
 
   array_len(argv, argc);
 
@@ -542,10 +541,8 @@ dotcmd(char **argv)
   }
 
   if (strchr(argv[1], '/')) {
-    if (access(argv[1], R_OK) < 0) {
-      st = 1;
-      goto restore;
-    }
+    if (access(argv[1], R_OK) < 0)
+      return 1;
     file = argv[1];
   } else {
     char *fpath, *path;
@@ -556,69 +553,42 @@ dotcmd(char **argv)
     if (fpath) {
       file = fpath;
     } else {
-      if (access(argv[1], R_OK) < 0) {
-        st = 1;
-        goto restore;
-      }
+      if (access(argv[1], R_OK) < 0)
+        return 1;
       file = argv[1];
     }
   }
-  if (!file) {
-    st = 1;
-    goto restore;
-  }
-  if ((fd = open(file, O_RDONLY)) < 0) {
-    st = 1;
-    goto restore;
-  }
+  if (!file)
+    return 1;
+  if ((fd = open(file, O_RDONLY)) < 0)
+    return 1;
   setinputf(fd, file, 0);
 
-  if (argc == 2) {
-    o_argv0 = strdup_(shargv0);
-    shargv0 = strdup_(file);
-  } else {
-    o_argc = shargc;
-    shargc = argc - 2;
-    o_argv0 = strdup_(shargv0);
-    shargv0 = strdup_(file);
+  pushframe();
+  SHARGV0 = strdup_(file);
 
-    o_argv = salloc(sizeof(char *) * (o_argc + 1));
-    for (int i = 0; i < o_argc; i++)
-      o_argv[i] = strdup_(shargv[i]);
-    o_argv[o_argc] = NULL;
-    if (alloc_shargv && shargv) {
-      for (int i = 0; i < o_argc; i++)
-        slfree(shargv[i]);
-      slfree(shargv);
-    }
-    shargv = salloc(sizeof(char *) * (argc + 1));
-    size_t j = 0;
-    for (size_t i = 2; argv[i]; i++)
-      shargv[j++] = strdup_(argv[i]);
-    shargv[shargc] = NULL;
-    alloc_shargv = 1;
+  if (argc > 2) {
+    if (ALLOCED)
+      freeshargv();
+    SHARGC = argc - 2;
+    SHARGV = salloc(sizeof(char *) * (SHARGC + 1));
+    for (int i = 0; i < SHARGC; i++)
+      SHARGV[i] = strdup_(argv[i + 2]);
+    SHARGV[SHARGC] = NULL;
+    ALLOCED = 1;
   }
+  RETNOW = LOOPDEPTH = gstate.loopbreak = gstate.loopcontinue = 0;
 
   eval_run();
-  retnow = 0;
+  RETNOW = 0;
   popinput();
 
-restore:
-  if (o_argv) {
-    for (size_t i = 0; shargv[i]; i++)
-      slfree(shargv[i]);
-    slfree(shargv);
-    shargv = o_argv;
-  }
-  if (o_argv0) {
-    slfree(shargv0);
-    shargv0 = o_argv0;
-  }
-  if (o_argc)
-    shargc = o_argc;
-  if (st)
-    perror(argv[1]);
-  return st ? st : lstatus;
+
+  if (ALLOCED)
+    freeshargv();
+  slfree(SHARGV0);
+  popframe();
+  return LSTATUS;
 }
 
 static int
@@ -914,7 +884,7 @@ returncmd(char **argv)
     status = atoi_(argv[1]);
     // status = (status < 256) ? status : lstatus;
   }
-  retval = status, retnow = 1;
+  RETVAL = status, RETNOW = 1;
   return status;
 }
 
@@ -937,18 +907,18 @@ shiftcmd(char **argv)
   }
   if (!n)
     return 0;
-  if (n > shargc) {
+  if (n > SHARGC) {
     shwarn(argv[0], "can't shift that many");
     return 1;
   }
 
-  if (alloc_shargv)
+  if (ALLOCED)
     for (int i = 0; i < n; i++)
-      slfree(shargv[i]);
-  memmove(shargv, shargv + n, (shargc - n) * sizeof(char *));
-  for (int i = shargc - n; i < shargc; i++)
-    shargv[i] = NULL;
-  shargc -= n;
+      slfree(SHARGV[i]);
+  memmove(SHARGV, SHARGV + n, (SHARGC - n) * sizeof(char *));
+  for (int i = SHARGC - n; i < SHARGC; i++)
+    SHARGV[i] = NULL;
+  SHARGC -= n;
 
   return 0;
 }
@@ -1231,7 +1201,7 @@ umaskcmd(char **argv)
 
     op = *c;
     if (*c != '=' && *c != '+' && *c != '-') {
-      fprintf(stderr, "%s: %s: %c:  not a valid operator \n", shargv0, argv0,
+      fprintf(stderr, "%s: %s: %c:  not a valid operator \n", SHARGV0, argv0,
               *c);
       return 1;
     }

@@ -57,7 +57,7 @@ source_file(const char *path)
     return;
   setinputf(fd, path, 0);
   eval_run();
-  retnow = 0;
+  RETNOW = 0;
   popinput();
 }
 
@@ -154,13 +154,13 @@ init_rc(int flag)
 {
   if (flag & LOGIN) {
     source_file("/etc/profile");
-    if (home) {
+    if (gvar.home) {
       size_t hl, flen;
       const size_t plen = 8;
       char hprof[PATH_MAX];
-      hl = strlen(home);
+      hl = strlen(gvar.home);
       flen = hl + plen + 2;
-      memcpy(hprof, home, hl);
+      memcpy(hprof, gvar.home, hl);
       hprof[hl] = '/';
       memcpy(hprof + hl + 1, ".profile", plen);
       hprof[flen - 1] = '\0';
@@ -200,7 +200,7 @@ eval_run(void)
     }
     if (!nflag)
       status = run_commands(c, 0);
-    if (retnow) {
+    if (RETNOW) {
       stack_restore(mark);
       break;
     }
@@ -234,8 +234,8 @@ simpsh_run(void)
     if (!nflag)
       run_commands(c, 0);
     fflush(stdout);
-    if (retnow) {
-      retnow = 0;
+    if (RETNOW) {
+      RETNOW = 0;
       stack_restore(mark);
       break;
     }
@@ -265,7 +265,7 @@ sh_interactive(void)
 
 #ifdef LIBEDIT
   HistEvent ev;
-  edl = el_init(shargv0, stdin, stdout, stderr);
+  edl = el_init(SHARGV0, stdin, stdout, stderr);
   el_set(edl, EL_EDITOR, "vi");
   el_set(edl, EL_SIGNAL, 1);
   el_set(edl, EL_GETCFN, input_notify);
@@ -320,7 +320,7 @@ sh_interactive(void)
     stack_restore(mark);
   }
   ttyrestore();
-  return lstatus;
+  return LSTATUS;
 }
 
 static int
@@ -515,11 +515,11 @@ init_history(void)
 {
   char buf[PATH_MAX];
   HistEvent ev;
-  snprintf(histfile, PATH_MAX, "%s/.local/state/simpsh/simpsh_history", home);
+  snprintf(histfile, PATH_MAX, "%s/.local/state/simpsh/simpsh_history", gvar.home);
   history(hist, &ev, H_SETSIZE, HISTORY_SIZE);
   if (access(histfile, W_OK) < 0) {
     static const char *histdir = ".local/state/simpsh";
-    snprintf(buf, PATH_MAX, "%s/%s", home, histdir);
+    snprintf(buf, PATH_MAX, "%s/%s", gvar.home, histdir);
     if (!pmkdir(buf))
       return;
   }

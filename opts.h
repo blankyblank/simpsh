@@ -3,22 +3,22 @@
 
 #include "main.h"
 
-#define aflag shopts[0]
-#define bflag shopts[1]
-#define Cflag shopts[2]
-#define eflag shopts[3]
-#define fflag shopts[4]
-#define hflag shopts[5]
-#define iflag shopts[6]
-#define Iflag shopts[7]
-#define mflag shopts[8]
-#define nflag shopts[9]
-#define sflag shopts[10]
-#define uflag shopts[11]
-#define vflag shopts[12]
-#define Vflag shopts[13]
-#define xflag shopts[14]
-#define pipeflag shopts[17]
+#define aflag SHOPTS[0]
+#define bflag SHOPTS[1]
+#define Cflag SHOPTS[2]
+#define eflag SHOPTS[3]
+#define fflag SHOPTS[4]
+#define hflag SHOPTS[5]
+#define iflag SHOPTS[6]
+#define Iflag SHOPTS[7]
+#define mflag SHOPTS[8]
+#define nflag SHOPTS[9]
+#define sflag SHOPTS[10]
+#define uflag SHOPTS[11]
+#define vflag SHOPTS[12]
+#define Vflag SHOPTS[13]
+#define xflag SHOPTS[14]
+#define pipeflag SHOPTS[17]
 
 extern const char shoptch[OPTC];
 

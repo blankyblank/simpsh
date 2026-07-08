@@ -64,7 +64,7 @@ getbuildinfo(void) {
   printf("%s build info:\n"
          "build date: %s %s\n"
          "ansi C standard conformance: %ld\n",
-         shargv0, __DATE__, __TIME__, __STDC_ISO_10646__);
+         shname, __DATE__, __TIME__, __STDC_ISO_10646__);
 }
 #endif /* ifndef MUSL */
 
@@ -147,12 +147,12 @@ listopts(int m)
   if (m) {
     puts("Current Shell Option Settings");
     for (size_t i = 0; i < OPTC; i++) {
-      printf("%-12s\t\t\t\t%s\n",shoptname[i], onoff[(int)shopts[i]]);
+      printf("%-12s\t\t\t\t%s\n",shoptname[i], onoff[(int)SHOPTS[i]]);
     }
   } else {
     for (size_t i = 0; i < OPTC; i++) {
       char s;
-      s = (shopts[i]) ? '-' : '+';
+      s = (SHOPTS[i]) ? '-' : '+';
       printf("set %co %s\n", s, shoptname[i]);
     }
   }
@@ -162,7 +162,7 @@ void
 init_opts(void)
 {
   for (int i = 0; i < OPTC; i++)
-    shopts[i] = 0;
+    SHOPTS[i] = 0;
 
   hflag = mflag = iflag = isatty(STDIN_FILENO);
 }
@@ -170,14 +170,14 @@ init_opts(void)
 void
 freeshargv(void)
 {
-  if (alloc_shargv) {
-    for (int i = 0; i < shargc; i++)
-      slfree(shargv[i]);
-    slfree(shargv);
+  if (ALLOCED) {
+    for (int i = 0; i < SHARGC; i++)
+      slfree(SHARGV[i]);
+    slfree(SHARGV);
   }
-  shargv = NULL;
-  shargc = 0;
-  alloc_shargv = 0;
+  SHARGV = NULL;
+  SHARGC = 0;
+  ALLOCED = 0;
 }
 
 static int
@@ -212,8 +212,8 @@ setcmd(char **argv)
     size_t c, f;
 
     c = 0;
-    for (size_t i = 0; i < vartab_size; i++) {
-      v = &vartab[i];
+    for (size_t i = 0; i < VARTAB_SIZE; i++) {
+      v = &VARTAB[i];
       if (!v->var || v->var == TOMBSTONE)
         continue;
       c++;
@@ -222,8 +222,8 @@ setcmd(char **argv)
       return 0;
     enva = st_alloc((c + 1) * sizeof(char *));
     f = 0;
-    for (size_t i = 0; i < vartab_size; i++) {
-      v = &vartab[i];
+    for (size_t i = 0; i < VARTAB_SIZE; i++) {
+      v = &VARTAB[i];
       if (!v->var || v->var == TOMBSTONE)
         continue;
       enva[f++] = v->var;
@@ -284,7 +284,7 @@ setcmd(char **argv)
       idx = chkopt(o);
       if (idx < 0)
         return 1;
-      shopts[idx] = minus;
+      SHOPTS[idx] = minus;
       continue;
     }
 
@@ -297,9 +297,9 @@ setcmd(char **argv)
       pos = salloc(argc * sizeof(char *));
     pos[pcnt] = NULL;
     freeshargv();
-    alloc_shargv = 1;
-    shargv = pos;
-    shargc = pcnt;
+    ALLOCED = 1;
+    SHARGV = pos;
+    SHARGC = pcnt;
   } else {
     if (pos)
       slfree(pos);
@@ -321,26 +321,26 @@ checkopts(char *optstr, char **argv, char *o, int opterr)
   int narg, has = 0, quiet = 0;
   char *s, *p, c;
 
-  if (!(p = *(argv + optind - 1)))
+  if (!(p = *(argv + OPTIND - 1)))
     return 1;
-  if (optoff < 0) {
+  if (OPTOFF < 0) {
     if (*p == '-') {
       if (*(p + 1) == '-' && *(p + 2) == '\0') {
-        optind++;
+        OPTIND++;
         return 1;
       }
       if (*(p + 1) == '\0')
         return 1;
-      optind++, optoff = 1;
+      OPTIND++, OPTOFF = 1;
     } else {
       return 1;
     }
   } else {
-    p = *(argv + optind - 2);
+    p = *(argv + OPTIND - 2);
   }
 
-  s = *(argv + optind - 1);
-  c = *(p + optoff++);
+  s = *(argv + OPTIND - 1);
+  c = *(p + OPTOFF++);
   quiet = (*optstr == ':');
   for (char *op = optstr + quiet; *op; op++) {
     if (*op == ':')
@@ -361,21 +361,21 @@ checkopts(char *optstr, char **argv, char *o, int opterr)
       if (opterr)
         fprintf(stderr, "idk an error\n");
     }
-    if (!*(p + optoff))
-      optoff = -1;
+    if (!*(p + OPTOFF))
+      OPTOFF = -1;
     return 0;
   }
 
   if (narg) {
-    if (*(p + optoff)) {
-      setvar(oargn, p + optoff, 0);
-      optoff = -1;
+    if (*(p + OPTOFF)) {
+      setvar(oargn, p + OPTOFF, 0);
+      OPTOFF = -1;
     } else if (s) {
       setvar(oargn, s, 0);
-      optind++, optoff = -1;
+      OPTIND++, OPTOFF = -1;
     } else {
-      if (!*(p + optoff)) {
-        optoff = -1;
+      if (!*(p + OPTOFF)) {
+        OPTOFF = -1;
         if (quiet) {
           *o = ':';
           setvar(oargn, (char[2]) { c, '\0' }, 0);
@@ -388,13 +388,13 @@ checkopts(char *optstr, char **argv, char *o, int opterr)
         return 0;
       }
     }
-    // optind = opti, optoff = opto;
+    // OPTIND = opti, OPTOFF = opto;
     *o = c;
     return 0;
   }
   setvar(STR("OPTARG"), "", 0);
-  if (!*(p + optoff))
-    optoff = -1;
+  if (!*(p + OPTOFF))
+    OPTOFF = -1;
   *o = c;
   return 0;
 }
@@ -413,11 +413,11 @@ getoptscmd(char **argv)
       usage(argv0, helpmsgs[GETOPTSH].usage);
       return 1;
     case 3:
-      if (!shargc || !*shargv) {
+      if (!SHARGC || !*SHARGV) {
         setvar(argv[2], "?", 0);
         return 1;
       }
-      argp = shargv, argpc = shargc;
+      argp = SHARGV, argpc = SHARGC;
       break;
     default:
       argp = argv + 3, argpc = argc - 3; // is array_len needed when i can do argc - 3?
@@ -427,14 +427,14 @@ getoptscmd(char **argv)
   char res, buf[16], nb[2];
   int status;
 
-  if (optind < 1 || optind > argpc + 1)
-    optind = 1, optoff = -1;
+  if (OPTIND < 1 || OPTIND > argpc + 1)
+    OPTIND = 1, OPTOFF = -1;
 
   if ((oerr = getvar(oerrn)))
     opterr = (!(oerr[0] == '0' && oerr[1] == '\0'));
 
   status = checkopts(argv[1], argp, &res, opterr);
-  itoa(optind, buf);
+  itoa(OPTIND, buf);
   setvar(oinn, buf, VNOCB);
   nb[0] = (status) ? '?' : res;
   nb[1] = '\0';

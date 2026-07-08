@@ -25,6 +25,13 @@
 const char oinn[16] = "OPTIND";
 const char oargn[16] = "OPTARG";
 const char oerrn[16] = "OPTERR";
+static const char oinvn[16] = "OPTIND=1";
+static const char oerrvn[16] = "OPTERR=1";
+static const char ifsvn[16] = "IFS= \t\n";
+static const char ps1vn[16] = "PS1=$ ";
+static const char ps2vn[16] = "PS2=> ";
+static const char ps4vn[16] = "PS4=+ ";
+
 
 /* shell variables */
 static shvar var_tab_init[VAR_BUCKETS_INIT];
@@ -32,8 +39,8 @@ static pid_t shpid;
 static pid_t shppid;
 
 GVAR gvar = {
-  .var_tab = var_tab_init,
-  .var_tab_size = VAR_BUCKETS_INIT,
+  .vartab = var_tab_init,
+  .vartab_size = VAR_BUCKETS_INIT,
 };
 
 static char **env_cache;
@@ -46,17 +53,23 @@ ifsupdt(const char *ifs)
   memset(ifschar, 0, 256);
   if (!ifs)
     ifs = " \t\n";
-  ifsnull = !*ifs;
+  gvar.ifsnull = !*ifs;
+  gvar.ifsvlen = 3;
+  gvar.ifsv[0] = ' ';
+  gvar.ifsv[1] = '\t';
+  gvar.ifsv[2] = '\n';
   for (; *ifs; ifs++)
-    if (!is_ws(*ifs))
+    if (!is_ws(*ifs)) {
       ifschar[(unsigned char)*ifs] = 1;
+      gvar.ifsv[gvar.ifsvlen++] = *ifs;
+    }
 }
 
 static void
 optindupdt(const char *val)
 {
   optind = val ? atoi_(val) : 1;
-  optoff = -1;
+  OPTOFF = -1;
 }
 
 void
@@ -65,14 +78,14 @@ resize_var_tab(void)
   size_t ns;
   shvar *n;
 
-  ns = vartab_size * 2;
+  ns = VARTAB_SIZE * 2;
   if (!(n = slcalloc(ns, sizeof(shvar))))
     return;
 
-  for (size_t i = 0; i < vartab_size; i++) {
+  for (size_t i = 0; i < VARTAB_SIZE; i++) {
     shvar *v;
     size_t h;
-    v = &vartab[i];
+    v = &VARTAB[i];
     if (!v->var || v->var == TOMBSTONE)
       continue;
     h = hash_n(v->var, v->nlen, ns);
@@ -81,11 +94,11 @@ resize_var_tab(void)
     n[h] = *v;
   }
 
-  if (vartab != var_tab_init)
-    slfree(vartab);
-  vartab = n;
-  vartab_size = ns;
-  memset(varcache, 0, sizeof(varcache));
+  if (VARTAB != var_tab_init)
+    slfree(VARTAB);
+  VARTAB = n;
+  VARTAB_SIZE = ns;
+  memset(VARCACHE, 0, sizeof(VARCACHE));
 }
 
 /** find variable by name */
@@ -96,25 +109,25 @@ findvar_n(const char *restrict name, size_t nlen)
   shvar *v, *cv, *end;
 
   if (nlen == 6 && smemcmp(name, STR("LINENO"), nlen)) {
-    size_t ll = lltoa(sh_lineno, linebuf + 7);
-    linebuf[6] = '=';
-    linebuf[7  + ll] = '\0';
-    linevar.var = linebuf;
-    linevar.nlen = 6;
-    linevar.flags = VREADONLY;
-    linevar.func = NULL;
-    return &linevar;
+    size_t ll = lltoa(gstate.lineno, gvar.linebuf + 7);
+    gvar.linebuf[6] = '=';
+    gvar.linebuf[7  + ll] = '\0';
+    LINENO.var = gvar.linebuf;
+    LINENO.nlen = 6;
+    LINENO.flags = VREADONLY;
+    LINENO.func = NULL;
+    return &LINENO;
   }
-  bucket =  hash_n(name, nlen, vartab_size);
+  bucket =  hash_n(name, nlen, VARTAB_SIZE);
   ci = bucket & (VAR_CACHE_S - 1);
-  cv = varcache[ci];
+  cv = VARCACHE[ci];
   if (cv && cv->var && cv->var != TOMBSTONE && cv->nlen == nlen &&
       smemcmp(cv->var, name, nlen)) {
     return cv;
   }
 
-  end = vartab + vartab_size;
-  v = vartab + bucket;
+  end = VARTAB + VARTAB_SIZE;
+  v = VARTAB + bucket;
   for (;;) {
     if (!v->var)
       return NULL;
@@ -122,7 +135,7 @@ findvar_n(const char *restrict name, size_t nlen)
       return v;
     }
     if (++v >= end)
-      v = vartab;
+      v = VARTAB;
   }
 }
 
@@ -140,8 +153,8 @@ setvar(const char *restrict name, const char *restrict val, shvar_flags flags)
     return;
   vlen = val ? strlen(val) : 0;
   flen = nlen + vlen + 2;
-  end = vartab + vartab_size;
-  v = vartab + hash_n(name, nlen, vartab_size);
+  end = VARTAB + VARTAB_SIZE;
+  v = VARTAB + hash_n(name, nlen, VARTAB_SIZE);
   n = NULL;
 
   for (;;) {
@@ -181,7 +194,7 @@ setvar(const char *restrict name, const char *restrict val, shvar_flags flags)
       goto callback;
     }
     if (++v >= end)
-      v = vartab;
+      v = VARTAB;
   }
 
   if (!(nvar = salloc(flen)))
@@ -200,24 +213,24 @@ setvar(const char *restrict name, const char *restrict val, shvar_flags flags)
   v->flags = flags;
   n->func = NULL;
   v = n;
-  varcnt++;
-  if (varcnt > vartab_size * 7 / 10) {
+  VARCNT++;
+  if (VARCNT > VARTAB_SIZE * 7 / 10) {
     resize_var_tab();
-    end = vartab + vartab_size;
-    v = vartab + hash_n(name, nlen, vartab_size);
+    end = VARTAB + VARTAB_SIZE;
+    v = VARTAB + hash_n(name, nlen, VARTAB_SIZE);
     for (;;) {
       if (v->var && v->var != TOMBSTONE && v->nlen == nlen &&
           smemcmp(v->var, name, nlen)) {
         break;
       }
       if (++v >= end)
-        v = vartab;
+        v = VARTAB;
     }
   }
 
 callback:
   ci = hash_n(name, nlen, VAR_CACHE_S);
-  varcache[ci] = v;
+  VARCACHE[ci] = v;
   if (!(flags & VNOCB) && v->func)
     v->func(val);
 }
@@ -231,8 +244,8 @@ rmvar(const char *name)
   size_t nlen;
 
   nlen = strlen(name);
-  end = vartab + vartab_size;
-  v = vartab + hash_n(name, nlen, vartab_size);
+  end = VARTAB + VARTAB_SIZE;
+  v = VARTAB + hash_n(name, nlen, VARTAB_SIZE);
 
   for (;;) {
     if (!v->var)
@@ -244,15 +257,15 @@ rmvar(const char *name)
       v->nlen = 0;
       v->flags = 0;
       v->func = NULL;
-      varcnt--;
+      VARCNT--;
       env_dirty = 1;
       ci = hash_n(name, nlen, VAR_CACHE_S);
-      if (varcache[ci] == v)
-        varcache[ci] = NULL;
+      if (VARCACHE[ci] == v)
+        VARCACHE[ci] = NULL;
       return;
     }
     if (++v >= end)
-      v = vartab;
+      v = VARTAB;
   }
 }
 
@@ -276,14 +289,14 @@ grabvar(char *name)
   return tmp;
 }
 
-char **
+static char **
 rebuild_env(char **sh_env)
 {
+  /* TODO: find a way to hold on to shvar lengths until here */
   static size_t tmplen[MAX_ENV], lenarr[MAX_ENV];
   size_t c, sh_c, j, len, skipc;
   static char *tmpname[MAX_ENV], *shadowed[MAX_ENV];
   char **arr, **cmd_env, **mem;
-
   cmd_env = NULL;
   c = 0;
   j = 0;
@@ -304,11 +317,10 @@ rebuild_env(char **sh_env)
       len += lenarr[c++];
     }
   }
-
-  for (size_t i = 0; i < vartab_size; i++) {
+  for (size_t i = 0; i < VARTAB_SIZE; i++) {
     size_t namelen, skip;
     shvar *v;
-    v = &vartab[i];
+    v = &VARTAB[i];
     if (!v->var || v->var == TOMBSTONE)
       continue;
     if (v->flags & VEXPRT) {
@@ -344,10 +356,10 @@ rebuild_env(char **sh_env)
       buf += lenarr[j++];
     }
   }
-  for (size_t i = 0; i < vartab_size; i++) {
+  for (size_t i = 0; i < VARTAB_SIZE; i++) {
     size_t skip;
     shvar *v;
-    v = &vartab[i];
+    v = &VARTAB[i];
     if (!v->var || v->var == TOMBSTONE)
       continue;
     if (v->flags & VEXPRT) {
@@ -399,26 +411,19 @@ void
 init_env(void)
 {
   size_t i, env_c = 0;
-
-  varcnt = 0;
+  VARCNT = 0;
   array_len(environ, env_c);
-  for (i = 0; i < env_c; i++) {
-    char *name, *val;
-    read_assn(environ[i], &name, &val);
-    setvar(name, val, VEXPRT);
-    slfree(name);
-    slfree(val);
-  }
 
   static const varinit varinit_tab[] = {
-    { "IFS= \t\n", 0,      ifsupdt    },
-    { defpath,     VEXPRT, rmchash    },
-    { "PS1=$ ",    0,      0          },
-    { "PS2=> ",    0,      0          },
-    { "PS4=+ ",    0,      0          },
-    { "OPTIND=1",  VNOCB,  optindupdt },
-    { "OPTERR=1",  0,      0          },
+    { ifsvn,   0,      ifsupdt    },
+    { defpathn, VEXPRT, rmchash    },
+    { ps1vn,   0,      0          },
+    { ps2vn,   0,      0          },
+    { ps4vn,   0,      0          },
+    { oinvn,   VNOCB,  optindupdt },
+    { oerrvn,  0,      0          },
   };
+
   for (size_t i = 0; i < sizeof(varinit_tab) / sizeof(varinit_tab[0]); i++) {
     shvar *v;
     const char *eq;
@@ -435,6 +440,14 @@ init_env(void)
     if (v && varinit_tab[i].func)
       v->func = varinit_tab[i].func;
   }
+
+  for (i = 0; i < env_c; i++) {
+    char *name, *val;
+    read_assn(environ[i], &name, &val);
+    setvar(name, val, VEXPRT);
+    slfree(name);
+    slfree(val);
+  }
   shvar *ifs;
   int shlvl;
   char *shlvl_s, pwd[PATH_MAX];
@@ -447,18 +460,18 @@ init_env(void)
   else
     setvar(STR("PWD"), pwd, VEXPRT);
 
-  sh_pid_s = salloc(INTSIZE);
-  sh_bgpid_s = salloc(INTSIZE);
-  sh_ppid_s = salloc(INTSIZE);
-  if (!sh_pid_s || !sh_bgpid_s || !sh_ppid_s) {
+  gvar.pid_s = salloc(INTSIZE);
+  gvar.bgpid_s = salloc(INTSIZE);
+  gvar.ppid_s = salloc(INTSIZE);
+  if (!gvar.pid_s || !gvar.bgpid_s || !gvar.ppid_s) {
     sherrx("malloc failed");
     exit(1);
   }
   shppid = getppid();
   shpid = getpid();
-  lltoa(shpid, sh_pid_s);
-  lltoa(shppid, sh_ppid_s);
-  setvar(STR("PPID"), sh_ppid_s, VREADONLY);
+  lltoa(shpid, gvar.pid_s);
+  lltoa(shppid, gvar.ppid_s);
+  setvar(STR("PPID"), gvar.ppid_s, VREADONLY);
 
   shlvl_s = getvar(STR("SHLVL"));
   shlvl = (shlvl_s) ? atoi_(shlvl_s) : 0;
@@ -466,8 +479,8 @@ init_env(void)
   lltoa(shlvl, shlvl_s);
   setvar(STR("SHLVL"), shlvl_s, VEXPRT);
 
-  if ((home = getenv(STR("HOME"))))
-    homelen = strlen(home);
+  if ((gvar.home = getenv(STR("HOME"))))
+    gvar.homelen = strlen(gvar.home);
 }
 
 int
@@ -516,7 +529,7 @@ localcmd(char **argv)
   size_t argc = 0;
   array_len(argv, argc);
 
-  if (func_depth == 0) {
+  if (gstate.funcdepth == 0) {
     fprintf(stderr, "simpsh: local: can only be used in a function\n"); /*NOLINT*/
     return 1;
   }
@@ -525,13 +538,13 @@ localcmd(char **argv)
       char *name, *val;
 
       st_read_assn(argv[i], &name, &val);
-      localvars[localcnt++] = grabvar(name);
-      if (localcnt >= LOCAL_MAX)
+      LOCALVARS[LOCALCNT++] = grabvar(name);
+      if (LOCALCNT >= LOCAL_MAX)
         err(1, "local variables exceeded max");
       if (val) {
         setvar(name, val, 0);
       } else {
-        val = localvars[localcnt - 1].val ? localvars[localcnt - 1].val : "";
+        val = LOCALVARS[LOCALCNT - 1].val ? LOCALVARS[LOCALCNT - 1].val : "";
         setvar(name, val, 0);
       }
     }

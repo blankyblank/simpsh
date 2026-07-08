@@ -385,7 +385,7 @@ testcmd(char **argv) {
   tv.wpend = argv + argc;
   res = parse_test(&tv);
   if (tv.flags & terr) {
-    shwarn(*argv, "syntax error");
+    syntaxmsg(gstate.lineno, "expected integer");
     return 2;
   }
   return res ? 0 : 1;

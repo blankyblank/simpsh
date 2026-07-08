@@ -18,10 +18,10 @@
 
 wf *wf_chunk = NULL;
 unsigned int wf_chunk_left = 0;
-u8 alias_depth = 0;
-u8 notclosed = 0;
+int alias_depth = 0;
+int notclosed = 0;
 sh_tok last_tok = { .type = TNONE };
-u8 chkwd = 0;
+int chkwd = 0;
 #define CTX_MAX 8
 #define NCHR(c) (nchars[(unsigned char)(c)])
 #define DCHR(c) (dqchars[(unsigned char)(c)])
@@ -151,7 +151,7 @@ join_wf(wf *wordf)
   size_t len = 0;
 
   if (f && !f->next && f->word) {
-    char *buf = st_alloc(f->len + 1);
+    buf = st_alloc(f->len + 1);
     memcpy(buf, f->word, f->len);
     buf[f->len] = '\0';
     return buf;

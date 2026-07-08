@@ -71,31 +71,29 @@ static const char dmsg[] = "\nUse \"exit\" to leave the shell \n";
 extern int helpcmd(char **);
 
 /* err but it returns instead of exiting */
-#define err(r, s)  { perror(s); return r; }
+#define err(r, s)  { perror(s); return (r); }
 /* errx but it returns instead of exiting */
-#define errx(r, s) { fprintf(stderr, "%s\n", s); return r; }
+#define errx(r, s) { fprintf(stderr, "%s\n", (s)); return (r); }
 /* error (returns doesn't exit) with simpsh: builtin: message: (errno message), format */
-#define sherr(r, b, m) warn("%s: %s", b, m); return r
+#define sherr(r, b, m) warn("%s: %s", (b), (m)); return (r)
 /* warning with simpsh: builtin: message, format */
-#define shwarn(b, m) fprintf(stderr, "%s: %s: %s\n", shname, b, m)
+#define shwarn(b, m) fprintf(stderr, "%s: %s: %s\n", shname, (b), (m))
 #define sherrx(m) fprintf(stderr, "%s: %s\n", shname, (m))
 /* error message with simpsh: builtin: arg: message, format */
 #define shwarn_arg(b, a, m) \
-  fprintf(stderr, "%s: %s: %s: %s\n", shname, b, a, m)
-
-#define UFLAGMSG(v) fprintf(stderr, "%s: %s: unbound variable\n", shname, v)
+  fprintf(stderr, "%s: %s: %s: %s\n", shname, (b), (a), (m))
+#define UFLAGMSG(v) fprintf(stderr, "%s: %s: unbound variable\n", shname, (v))
 /* unknow cli flag error message */
 #define bad_opt(p, c) \
-  (fprintf(stderr, "%s: %s: bad option %c\n", shname, p, c))
+  fprintf(stderr, "%s: %s: bad option %c\n", shname, (p), (c))
 /*  missing required arguement error message */
 #define no_opt(p, c) \
-  (fprintf(stderr, "%s: %s: %c: requires arguement\n", shname, p, c))
-
+  (fprintf(stderr, "%s: %s: %c: requires arguement\n", shname, (p), (c)))
 
 #define usage(prog, usg) fprintf(stderr, "Usage: %s %s\n",(prog), (usg))
+#define syntaxmsg(l, m) fprintf(stderr, "%s: %s: %s\n", shname, geterrline(l), (m))
 
 /* return the right syntax error message */
-#define parserr(l, e, m, t) ((iflag) ? lnsyntxerr(l, e, m, t) : syntxerr(m, t))
 static const char *
 tokstr(token t)
 {
@@ -152,7 +150,7 @@ synunexpected(int ln, sh_tok wrong)
   else
     fprintf(stderr, "%s: syntax error: unexpected token \"%s\"\n",
             shname, errtok(wrong));
-  lstatus = 2;
+  LSTATUS = 2;
   return NULL;
 }
 
@@ -167,7 +165,7 @@ synexpected(int ln, sh_tok wrong, token t)
   else
     fprintf(stderr, "%s: syntax error: found \"%s\" expected \"%s\"\n",
             shname, errtok(wrong), tokstr(t));
-  lstatus = 2;
+  LSTATUS = 2;
   return NULL;
 }
 
@@ -183,7 +181,7 @@ syntxerr(int ln, char *msg, token t)
   else
     fprintf(stderr, "%s: syntax error: %s \"%s\"\n",
             shname, msg, tokstr(t));
-  lstatus = 2;
+  LSTATUS = 2;
   return NULL;
 }
 

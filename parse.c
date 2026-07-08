@@ -12,7 +12,6 @@
 #include "opts.h"
 #include "parse.h"
 #include "utils.h"
-#include "var.h"
 
 static const char tokendlist[] = {
   [TEOF] = 1,  [TRP] = 1, [TRB] = 1, [TTHEN] = 1, [TELIF] = 1,
@@ -522,7 +521,7 @@ parse_simple_cmd(size_t neg)
   size_t vc, wc, cap;
   int cmdflags;
 
-  sh_lineno = shinpt->linenum;
+  gstate.lineno = shinpt->linenum;
   cap = WFCAP;
   args = st_alloc(cap * sizeof(wf *));
   redirs = NULL;

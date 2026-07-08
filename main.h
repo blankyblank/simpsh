@@ -45,33 +45,103 @@ typedef u_int64_t u64;
 #define SHOPTC 16 /* short option count */
 #define defpath      "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 #define STR(s)       ((const char[16]) { s })
-#define lstatus      (gstate.l_status)
-#define retval       (gstate.ret_val)
-#define retnow       (gstate.ret_now)
-#define loopdepth    (gstate.loop_depth)
-#define loopbreak    (gstate.loop_break)
-#define loopcontinue (gstate.loop_continue)
-#define func_depth   (gstate.shfunc_depth)
-#define nounseterr   (gstate.no_unset_err)
-#define shopts       (gstate.sh_opts)
 
 /* the current shell state within a given context */
+struct stackframe {
+  char **argv;
+  char *argv0;
+  int argc;
+  int alloced;
+  int loop_depth;
+  int loop_break;
+  int loop_cont;
+  int ret_now;
+  int ret_val;
+  int l_status;
+  int opt_ind;
+  int opt_off;
+  int lineno;
+};
+
 typedef struct {
   int l_status; /* last exit status */
   int ret_val; /* value from 'return n' */
-  u8 ret_now; /* if set return from func or . file */
+  int ret_now; /* if set return from func or . file */
   int loop_depth; /* current loop nesting depth */
-  int loop_break; /* remaining break depth */
-  int loop_continue; /* remaining continue depth */
-  u8 shfunc_depth;
-  u8 no_unset_err;
-  char sh_opts[OPTC];
+  int loopbreak; /* remaining break depth */
+  int loopcontinue; /* remaining continue depth */
+  int nounseterr;
+  struct {
+    char **argv;
+    char *argv0;
+    int argc;
+    int alloced;
+    int opt_ind;
+    int opt_off;
+  } shparm;
+  int lineno;
+  int bgpgid;
+  int funcdepth;
+  char shopts[OPTC];
+  struct stackframe stackframes[64];
+  int stackdepth;
 } GSTATE;
 
+extern const char defpathn[80];
 extern GSTATE gstate;
 extern const char shname[];
 extern const char shusg[43];
 extern char **environ;
 extern char histfile[PATH_MAX];
+
+#define LSTATUS     (gstate.l_status)
+#define RETVAL      (gstate.ret_val)
+#define RETNOW      (gstate.ret_now)
+#define LOOPDEPTH   (gstate.loop_depth)
+#define SHOPTS      (gstate.shopts)
+#define SHARGV        (gstate.shparm.argv)
+#define SHARGC        (gstate.shparm.argc)
+#define SHARGV0       (gstate.shparm.argv0)
+#define ALLOCED     (gstate.shparm.alloced)
+#define OPTIND      (gstate.shparm.opt_ind)
+#define OPTOFF      (gstate.shparm.opt_off)
+
+static inline void
+pushframe(void)
+{
+  struct stackframe *f = &gstate.stackframes[++gstate.stackdepth];
+  f->argv = SHARGV;
+  f->argv0 = SHARGV0;
+  f->argc = SHARGC;
+  f->alloced = ALLOCED;
+  f->loop_depth = LOOPDEPTH;
+  f->loop_break = gstate.loopbreak;
+  f->loop_cont = gstate.loopcontinue;
+  f->ret_now = RETNOW;
+  f->ret_val = RETVAL;
+  f->l_status = LSTATUS;
+  f->opt_ind = OPTIND;
+  f->opt_off = OPTOFF;
+  f->lineno = gstate.lineno;
+}
+
+static inline void
+popframe(void)
+{
+  struct stackframe *f = &gstate.stackframes[gstate.stackdepth--];
+  SHARGV = f->argv;
+  SHARGV0 = f->argv0;
+  SHARGC = f->argc;
+  ALLOCED = f->alloced;
+  LOOPDEPTH = f->loop_depth;
+  gstate.loopbreak = f->loop_break;
+  gstate.loopcontinue = f->loop_cont;
+  RETNOW = f->ret_now;
+  RETVAL = f->ret_val;
+  LSTATUS = f->l_status;
+  OPTIND = f->opt_ind;
+  OPTOFF = f->opt_off;
+  gstate.lineno = f->lineno;
+}
 
 #endif /* !MAIN_H */

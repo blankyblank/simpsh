@@ -25,9 +25,8 @@ char histfile[PATH_MAX];
 int builtin_tab[BUILTIN_BUCKETS];
 const char shname[] = "simpsh";
 const char shusg[43] = "[-abCefhiImnosvVx] [-o longopt] [-c 'cmd']";
-GSTATE gstate;
-
-/* global shell variables */
+const char defpathn[80] = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+GSTATE gstate = { .shparm.opt_ind = 1, .shparm.opt_off = -1 };
 
  /* __attribute__((visibility("default"))) */
 /** shell entry point */
@@ -84,7 +83,7 @@ main(int argc, char **argv)
       oarg = EARGF(usage(shname, shusg));
       i = chkopt(oarg);
       if (i >= 0)
-        shopts[i] = 1;
+        SHOPTS[i] = 1;
       else {
         fprintf(stderr, "%s: -o: %s: invalid option name\n", argv0, oarg);
         exit(1);
@@ -129,7 +128,7 @@ main(int argc, char **argv)
     init_job();
   }
 
-  shargv0 = argv0;
+  SHARGV0 = argv0;
   init_rc(flags);
 
   if (flags & FLAG_c) {
@@ -140,11 +139,11 @@ main(int argc, char **argv)
       iflag = 0;
       mflag = 0;
     }
-    shargv0 = argc > 1 ? argv[1] : argv0;
-    shargv = argc > 2 ? argv + 2 : NULL;
-    shargc = argc > 2 ? argc - 2 : 0;
+    SHARGV0 = argc > 1 ? argv[1] : argv0;
+    SHARGV = argc > 2 ? argv + 2 : NULL;
+    SHARGC = argc > 2 ? argc - 2 : 0;
     sh_ccmd(argv[0]);
-    exittrap(lstatus);
+    exittrap(LSTATUS);
   } else if (!sflag && *argv) {
     if (!(flags & FLAG_i)) {
       iflag = 0;
@@ -154,19 +153,19 @@ main(int argc, char **argv)
       perror("simpsh");
       exittrap(1);
     }
-    shargv0 = argv0;
-    shargv = argv + 1;
-    shargc = argc - 1;
-    sh_script(fd);
-    exittrap(lstatus);
+    SHARGV0 = argv0;
+    SHARGV = argv + 1;
+    SHARGC = argc - 1;
+    sh_script(fd, *argv);
+    exittrap(LSTATUS);
   } else if (!iflag || sflag) {
-    shargv0 = argv0;
-    shargv = argv;
-    shargc = argc;
+    SHARGV0 = argv0;
+    SHARGV = argv;
+    SHARGC = argc;
     sh_stdin();
-    exittrap(lstatus);
+    exittrap(LSTATUS);
   } else {
-    shargv0 = argv0;
+    SHARGV0 = argv0;
     /* run the main loop */
     exittrap(sh_interactive());
   }

@@ -49,8 +49,8 @@ newjob(pid_t pgid, const char *cmd)
   nj->saved_ttypgrp = -1;
   nj->next = job_list;
   job_list = nj;
-  shbgpid = pgid;
-  lltoa(shbgpid, sh_bgpid_s);
+  gstate.bgpgid = pgid;
+  lltoa(gstate.bgpgid, gvar.bgpid_s);
   return nj;
 }
 

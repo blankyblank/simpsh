@@ -25,12 +25,12 @@ char ifschar[256];
 static wf **splitword(wf *restrict, size_t *restrict);
 
 /** get the pid shell variable */
-#define varpid() (st_strdup(sh_pid_s))
-#define varbgpid() (st_strdup(sh_bgpid_s))
+#define varpid() (st_strdup(gvar.pid_s))
+#define varbgpid() (st_strdup(gvar.bgpid_s))
 #define varargc() \
   char *buf; \
   buf = st_alloc(16); \
-  *olen = lltoa(shargc, buf); \
+  *olen = lltoa(SHARGC, buf); \
   return buf;
 
 #define chk_cap(arc, c, arv, t) \
@@ -45,7 +45,7 @@ vardash(size_t *o)
   char *buf = st_alloc(32);
   int p = 0;
   for (int i = 0; i < SHOPTC; i++) {
-    if (shopts[i])
+    if (SHOPTS[i])
       buf[p++] = shoptch[i];
   }
   buf[p] = '\0', *o = p;
@@ -60,7 +60,7 @@ varstatus(size_t *o)
   char *buf, t;
 
   i = 0;
-  n = lstatus;
+  n = LSTATUS;
   buf = st_alloc(4);
   do {
     buf[i++] = (n % 10) + '0';
@@ -83,11 +83,11 @@ static inline char *
 get_posparam(int n)
 {
   if (n == 0)
-    return shargv0 ? shargv0 : "";
+    return SHARGV0 ? SHARGV0 : "";
 
-  if (n < 0 || n > shargc)
+  if (n < 0 || n > SHARGC)
     return "";
-  return shargv[n - 1] ? shargv[n - 1] : "";
+  return SHARGV[n - 1] ? SHARGV[n - 1] : "";
 }
 
 /** find if variable is positional parameter */
@@ -167,25 +167,25 @@ exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
     val = NULL;
     switch (str[i + 1]) {
       case '$':
-        val = sh_pid_s;
+        val = gvar.pid_s;
         vlen = strlen(val);
         end = i + 2;
         break;
       case '?':
         {
           char _buf[16];
-          vlen = lltoa(lstatus, _buf);
+          vlen = lltoa(LSTATUS, _buf);
           val = _buf;
           end = i + 2;
         }
         break;
       case '!':
-        val = sh_bgpid_s;
+        val = gvar.bgpid_s;
         vlen = strlen(val);
         end = i + 2;
         break;
       case '#':
-        vlen = lltoa(shargc, buf);
+        vlen = lltoa(SHARGC, buf);
         val = buf;
         end = i + 2;
         break;
@@ -245,13 +245,14 @@ exp_tilde(char *restrict word, size_t s, size_t *restrict e, size_t *restrict ol
   char *hm, strt;
   size_t end;
 
+  hm = gvar.home;
   if (word[s] != '~')
     return NULL;
   if (s == 0 && (word[s + 1] == '\0' || word[s + 1] == '/')) {
-    if (!(hm = getvar(STR("HOME"))))
+    if (!hm)
       return NULL;
     *e = s + 1;
-    *olen = strlen(hm);
+    *olen = gvar.homelen;
     return st_strdup(hm);
   } else {
     end = s + 1;
@@ -263,7 +264,7 @@ exp_tilde(char *restrict word, size_t s, size_t *restrict e, size_t *restrict ol
     word[end] = strt;
     if (hm) {
       *e = end;
-      *olen = strlen(hm);
+      *olen = gvar.homelen;
       return hm;
     }
   }
@@ -312,7 +313,7 @@ expand_ps1(char *p)
         vcpy[varlen] = '\0';
       } else {
         if (p[i + 1] == ' ' || p[i + 1] == '\t' || p[i + 1] == '\0') {
-          f[flen++] = lstatus == 0 ? '$' : 'X';
+          f[flen++] = LSTATUS == 0 ? '$' : 'X';
           i++;
           continue;
         }
@@ -340,7 +341,7 @@ expand_ps1(char *p)
           case '#':
             {
               char buf[16];
-              vlen = lltoa(shargc, buf);
+              vlen = lltoa(SHARGC, buf);
               val = buf;
               break;
             }
@@ -390,9 +391,9 @@ expand_argv(wf **args, size_t *restrict t)
 {
   size_t i, elen, tlen;
   char **argv;
-  unsigned int cap = 64;
-  unsigned int fargc = 0;
-  unsigned int argc = 0;
+  size_t cap = 64;
+  size_t fargc = 0;
+  size_t argc = 0;
   *t = 0;
   wf **fargv = NULL;
 
@@ -408,10 +409,10 @@ expand_argv(wf **args, size_t *restrict t)
       *t += w->len;
       continue;
     }
-    if (shargc && w->len == 1 && (w->word[0] == '@' || w->word[0] == '*') &&
+    if (SHARGC && w->len == 1 && (w->word[0] == '@' || w->word[0] == '*') &&
         (w->qs & (QVAR | QVAR_DQ | QBRACE | QBRACE_DQ))) {
       if (w->word[0] == '@' && (w->qs & (QVAR_DQ | QBRACE_DQ))) {
-        for (int j = 1; j <= shargc; j++) {
+        for (int j = 1; j <= SHARGC; j++) {
           chk_cap(fargc, cap, argv, char *);
           argv[fargc++] = st_strdup(get_posparam(j));
         }
@@ -425,21 +426,21 @@ expand_argv(wf **args, size_t *restrict t)
       } else {
         ifsc = ' ';
       }
-      size_t pos = 0, tlen = 0, lenarr[shargc + 1];
-      for (int j = 1; j <= shargc; j++) {
+      size_t pos = 0, tlen = 0, lenarr[SHARGC + 1];
+      for (int j = 1; j <= SHARGC; j++) {
         char *p = get_posparam(j);
         tlen += lenarr[j] = p ? strlen(p) : 0;
-        if (j < shargc && ifsc)
+        if (j < SHARGC && ifsc)
           tlen++;
       }
       char *buf = st_alloc(tlen + 1);
-      for (int j = 1; j <= shargc; j++) {
+      for (int j = 1; j <= SHARGC; j++) {
         char *p = get_posparam(j);
         if (p) {
           memcpy(buf + pos, p, lenarr[j]);
           pos += lenarr[j];
         }
-        if (j < shargc && ifsc)
+        if (j < SHARGC && ifsc)
           buf[pos++] = ifsc;
       }
       buf[pos] = '\0';
@@ -520,29 +521,30 @@ exp_word(wf *wordf, size_t * restrict rlen)
       case QNONE:
         i = 0;
         while (i < f->len) {
-          if (f->word[i] == '~') {
-            size_t elen = 0;
-            expanded = exp_tilde(f->word, i, &end, &elen);
+          size_t off, tpos, elen;
+          off = memchr_((f->word + i), (f->len - i), '~');
+          if (off >= f->len - i) {
+            append_wf(&head, &tail, (f->word + i), (f->len - i), f->qs);
+            len += f->len - i;
+            break;
+          }
+          if (off > 0) {
+            append_wf(&head, &tail, (f->word + i), off, f->qs);
+            len += off;
+            i += off;
+          }
+          tpos = i;
+          elen = 0;
+          expanded = exp_tilde(f->word, tpos, &end, &elen);
             if (expanded) {
               append_wf(&head, &tail, expanded, elen, f->qs);
               len += elen;
               i = end;
             } else {
-              size_t r = i;
-              i++;
-              while (i < f->len && f->word[i] != '~')
-                i++;
-              append_wf(&head, &tail, f->word + r, i - r, f->qs);
-              len += i - r;
+              append_wf(&head, &tail, f->word + tpos, 1, f->qs);
+              len++;
+              i = tpos + 1;
             }
-          } else {
-            size_t r = i;
-            i++;
-            while (i < f->len && f->word[i] != '~')
-              i++;
-            append_wf(&head, &tail, f->word + r, i - r, f->qs);
-            len += i - r;
-          }
         }
         break;
       case QARITH:
@@ -778,7 +780,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
               val = vardash(&vlen);
               break;
             case '#':
-              vlen = lltoa(shargc, buf);
+              vlen = lltoa(SHARGC, buf);
               val = st_strndup(buf, vlen);
               break;
             default:
@@ -787,7 +789,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
         }
 
         if (is_posparam(f->word, f->len)) {
-          int n = 0;
+          size_t n = 0;
           for (size_t i = 0; i < f->len; i++)
             n = n * 10 + (f->word[i] - '0');
           val = get_posparam(n);
@@ -804,7 +806,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
           char name[64];
           nmemcpy(name, f->word, f->len);
           UFLAGMSG(name);
-          nounseterr = 1;
+          gstate.nounseterr = 1;
         }
 append:
         if (val) {
@@ -844,12 +846,12 @@ splitword(wf *f, size_t * restrict tlen)
   };
   wf **fargv;
   wf *chead, *ctail, *cf;
-  unsigned int fpos, cap, fargc, ttl = 0;
+  size_t fpos, cap, fargc, ttl = 0;
 
   if (tlen)
     *tlen = 0;
 
-  if (ifsnull || !f) {
+  if (gvar.ifsnull || !f) {
     fargv = st_alloc(2 * sizeof(wf *));
     fargv[0] = f;
     fargv[1] = NULL;
@@ -868,7 +870,16 @@ splitword(wf *f, size_t * restrict tlen)
   while (cf) {
     size_t s = fpos;
 
-    // TODO: add in simd
+    if (cf->qs == QNONE || cf->qs == QCMDSUB) {
+      size_t end = sscndelim(cf->word + s, cf->len - s, gvar.ifsv, gvar.ifsvlen);
+      if (end >= cf->len - s) {
+        append_wf(&chead, &ctail, cf->word + s, cf->len - s, cf->qs);
+        ttl += cf->len - s;
+        cf = cf->next;
+        fpos = 0;
+        continue;
+      }
+    }
     while (fpos < cf->len) {
       int insect = (cf->qs == QNONE || cf->qs == QCMDSUB);
       char c = cf->word[fpos];

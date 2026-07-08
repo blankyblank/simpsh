@@ -66,7 +66,6 @@ static void shexec(char ** restrict, char ** restrict, redir *)
 static int shfexec(char ** restrict, const cmd_tree * restrict,
                    char ** restrict, redir *);
 
-
 static inline int
 restore_fd(fdlist *sfd, size_t sfdc)
 {
@@ -344,7 +343,7 @@ shexec(char **restrict args, char **restrict env, redir *r)
 {
   char *fpath;
   if (!(fpath = getpath(args[0]))) {
-    fprintf(stderr, "%s: %s: command not found\n", shargv0, args[0]);
+    fprintf(stderr, "%s: %s: command not found\n", SHARGV0, args[0]);
     _exit(127);
   }
 
@@ -367,7 +366,7 @@ shfexec(char ** restrict argv, const cmd_tree * restrict n,
   /* get full command path */
   fullpath = getpath(argv[0]);
   if (!fullpath) {
-    fprintf(stderr, "%s: %s: command not found\n", shargv0,
+    fprintf(stderr, "%s: %s: command not found\n", SHARGV0,
             argv[0]); /*NOLINT*/
     return 1;
   }
@@ -428,21 +427,21 @@ run_for(const cmd_tree *n)
   stmark f;
   char **wrdv;
 
-  loopdepth++;
+  LOOPDEPTH++;
   status = 0;
   wrdc = 0;
   if (CFOR(n).words) {
     wrdv = expand_argv(CFOR(n).words, &wrdc);
   } else {
-    wrdc = shargc;
+    wrdc = SHARGC;
     wrdv = st_alloc((wrdc + 1) * sizeof(char *));
     for (size_t i = 0; i < wrdc; i++)
-      wrdv[i] = st_strdup(shargv[i]);
+      wrdv[i] = st_strdup(SHARGV[i]);
     wrdv[wrdc] = NULL;
   }
 
   for (size_t i = 0; wrdv[i]; i++) {
-    if (retnow)
+    if (RETNOW)
       break;
     if (intsig) {
       intsig = 0;
@@ -452,16 +451,16 @@ run_for(const cmd_tree *n)
     setvar(CFOR(n).name->word, wrdv[i], 0);
     status = run_commands(n->right, 0);
     stack_restore(f);
-    if (loopbreak)
-      if (--loopbreak >= 0)
+    if (gstate.loopbreak)
+      if (--gstate.loopbreak >= 0)
         break;
-    if (loopcontinue) {
-      if (--loopcontinue > 0)
+    if (gstate.loopcontinue) {
+      if (--gstate.loopcontinue > 0)
         break;
       continue;
     }
   }
-  loopdepth--;
+  LOOPDEPTH--;
   return status;
 }
 
@@ -471,10 +470,10 @@ run_while(const cmd_tree *n)
   int status, cond;
   stmark w;
 
-  loopdepth++;
+  LOOPDEPTH++;
   status = 0;
   for (;;) {
-    if (retnow)
+    if (RETNOW)
       break;
     if (intsig) {
       intsig = 0;
@@ -486,16 +485,16 @@ run_while(const cmd_tree *n)
       break;
     status = run_commands(n->right, 0);
     stack_restore(w);
-    if (loopbreak)
-      if (--loopbreak >= 0)
+    if (gstate.loopbreak)
+      if (--gstate.loopbreak >= 0)
         break;
-    if (loopcontinue) {
-      if (--loopcontinue > 0)
+    if (gstate.loopcontinue) {
+      if (--gstate.loopcontinue > 0)
         break;
       continue;
     }
   }
-  loopdepth--;
+  LOOPDEPTH--;
   return status;
 }
 
@@ -511,55 +510,50 @@ run_funcdef(const cmd_tree *n)
 static int
 run_func(const cmd_tree *n, char **args)
 {
-  char **oldargv;
-  int oldargc, status, oldalloced;
+  int status;
   tmp_var *loc;
   stmark fmark;
   size_t savedsp;
 
-  loc = localvars;
+  loc = LOCALVARS;
   fmark = stack_mark();
-  savedsp = localcnt;
-  oldargc = shargc;
-  oldargv = shargv;
-  oldalloced = alloc_shargv;
-  shargc = 0;
-  array_len(args, shargc);
-  shargc--;
-  shargv = args + 1;
-  alloc_shargv = 0;
+  savedsp = LOCALCNT;
 
+  pushframe();
+  SHARGC = 0;
+  array_len(args, SHARGC);
+  SHARGC--;
+  SHARGV = args + 1;
+  ALLOCED = RETNOW = gstate.loopbreak = LOOPDEPTH = gstate.loopcontinue = 0;
+  OPTIND = 1;
+  OPTOFF = -1;
 
-  if (func_depth >= MAX_FUNC_DEPTH) {
+  if (gstate.funcdepth >= MAX_FUNC_DEPTH) {
     fprintf(stderr, "function: too many levels of recursion\n");
     status = 1;
     goto done;
   }
-  func_depth++;
-
+  gstate.funcdepth++;
   status = run_commands(n, 0);
-  func_depth--;
-  if (retnow) {
-    retnow = 0;
-    status = retval;
+  gstate.funcdepth--;
+  if (RETNOW) {
+    RETNOW = 0;
+    status = RETVAL;
   }
   goto done;
 
 done:
 
-  while (localcnt > savedsp) {
-    localcnt--;
-    if (loc[localcnt].set)
-      setvar(loc[localcnt].name, loc[localcnt].val, loc[localcnt].oldflags);
+  while (LOCALCNT > savedsp) {
+    LOCALCNT--;
+    if (loc[LOCALCNT].set)
+      setvar(loc[LOCALCNT].name, loc[LOCALCNT].val, loc[LOCALCNT].oldflags);
     else
-      rmvar(loc[localcnt].name);
+      rmvar(loc[LOCALCNT].name);
   }
-
   stack_restore(fmark);
   freeshargv();
-  alloc_shargv = oldalloced;
-  shargv = oldargv;
-  shargc = oldargc;
+  popframe();
   return status;
 }
 
@@ -674,9 +668,9 @@ run_cmdsub(const cmd_tree *restrict n)
       if (close(pipefd[1]) < 0)
         warn("close");
       child_setup_fg(0);
-      lstatus = run_commands(n, _INCHLD);
+      LSTATUS = run_commands(n, _INCHLD);
       fflush(NULL);
-      _exit(lstatus);
+      _exit(LSTATUS);
     default:
       {
         int n;
@@ -717,9 +711,9 @@ run_cmdsub(const cmd_tree *restrict n)
         ret = len;
 
         if (waitpid(pid, &wstatus, 0) > 0)
-          lstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+          LSTATUS = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
         else
-          lstatus = 1;
+          LSTATUS = 1;
       }
   }
 
@@ -737,7 +731,7 @@ run_pipe(const cmd_tree *n)
   int status, lwstatus;
   int l_status, rstatus;
   int pipefd[2], outer;
-  static u8 pipedepth;
+  static int pipedepth;
   int mfl;
   pid_t lpid, rpid;
 
@@ -845,15 +839,16 @@ run_cmd(const cmd_tree *n, int inchld)
   shfunc *f = NULL;
   const builtin *b = NULL;
   size_t i, len;
-  unsigned int vc;
+  size_t vc;
 
   ifl = iflag;
   efl = eflag;
   vars = CVARS(n);
+  gstate.lineno = n->line;
 
   final = expand_argv(CARGS(n), &len);
-  if (nounseterr) {
-    nounseterr = 0;
+  if (gstate.nounseterr) {
+    gstate.nounseterr = 0;
     if (!ifl)
       exit(1);
     return 1;
@@ -974,8 +969,8 @@ run_redir(const cmd_tree *n, int nchld)
   if (restore_fd(sfd, sfdc))
     return 1;
 
-  if (eflag && lstatus != 0 && !iflag && !(n->flags & EFLAG_SAFE))
-    exit(lstatus);
+  if (eflag && LSTATUS != 0 && !iflag && !(n->flags & EFLAG_SAFE))
+    exit(LSTATUS);
   return status;
 }
 
@@ -987,53 +982,53 @@ run_commands(const cmd_tree *n, int nchld)
 {
   if (!n)
     return 0;
-  if (retnow)
-    return lstatus = retval;
+  if (RETNOW)
+    return LSTATUS = RETVAL;
 
   while (n->type == OP && (COPP(n) == TSEMI || COPP(n) == TNL)) {
-    lstatus = run_commands(n->left, 0);
-    if (retnow || loopbreak || loopcontinue || !n->right)
-      return lstatus;
+    LSTATUS = run_commands(n->left, 0);
+    if (RETNOW || gstate.loopbreak || gstate.loopcontinue || !n->right)
+      return LSTATUS;
     n = n->right;
   }
 
   switch (n->type) {
     case CMD:
-      return lstatus = run_cmd(n, nchld);
+      return LSTATUS = run_cmd(n, nchld);
     case SUBSHELL:
-      return lstatus = run_subsh(n, nchld);
+      return LSTATUS = run_subsh(n, nchld);
     case BRACE:
-      return lstatus = run_commands(n->left, nchld);
+      return LSTATUS = run_commands(n->left, nchld);
     case FUNC:
-      return lstatus = run_funcdef(n);
+      return LSTATUS = run_funcdef(n);
     case REDIR:
-      return lstatus = run_redir(n, nchld);
+      return LSTATUS = run_redir(n, nchld);
     case WHILE:
-      return lstatus = run_while(n);
+      return LSTATUS = run_while(n);
     case FOR:
-      return lstatus = run_for(n);
+      return LSTATUS = run_for(n);
     case IF:
-      return lstatus = run_if(n);
+      return LSTATUS = run_if(n);
     case CASE:
-      return lstatus = run_case(n);
+      return LSTATUS = run_case(n);
     case OP:
       if (COPP(n) != TPIPE && COPP(n) != TBKGRND)
-        lstatus = run_commands(n->left, 0);
+        LSTATUS = run_commands(n->left, 0);
       switch (COPP(n)) {
         case TAND:
-          if (lstatus  != 0)
-            return lstatus;
-          return lstatus = run_commands(n->right, nchld);
+          if (LSTATUS  != 0)
+            return LSTATUS;
+          return LSTATUS = run_commands(n->right, nchld);
         case TOR:
-          if (lstatus  == 0)
-            return lstatus;
-          return lstatus = run_commands(n->right, nchld);
+          if (LSTATUS  == 0)
+            return LSTATUS;
+          return LSTATUS = run_commands(n->right, nchld);
         case TPIPE:
-          return lstatus = run_pipe(n);
+          return LSTATUS = run_pipe(n);
         case TBKGRND:
-          return lstatus = run_bg(n);
+          return LSTATUS = run_bg(n);
         case TEOF:
-          return lstatus;
+          return LSTATUS;
         default:
           fprintf(stderr, "Unknown Operator\n"); /*NOLINT*/
           return 1;

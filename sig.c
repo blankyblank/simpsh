@@ -321,7 +321,7 @@ dotrap(void)
 {
   int sstatus;
 
-  sstatus = lstatus;
+  sstatus = LSTATUS;
   fchksig = 0;
   for (size_t i = 0; i < NSIG; i++) {
     if (!chksig[i])
@@ -331,7 +331,7 @@ dotrap(void)
       sh_ccmd(trap[i]);
     }
   }
-  lstatus = sstatus;
+  LSTATUS = sstatus;
 }
 
 void

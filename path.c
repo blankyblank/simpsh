@@ -192,7 +192,7 @@ hashcmd(char **argv)
       puts(chash[i].path);
     return 0;
   } else {
-    char *path, *fpath;
+    const char *path, *fpath;
     if (!(path = getvar(STR("PATH"))))
       path = defpath;
     for (size_t i = 0; i < argc; i++) {

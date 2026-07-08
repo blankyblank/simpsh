@@ -22,6 +22,6 @@ extern void init_history(void);
 
 #define sh_ccmd(s) setinputstrn(s, strlen(s)); simpsh_run(); popinput();
 #define sh_stdin() setinputf(STDIN_FILENO, NULL, 0); simpsh_run(); popinput();
-#define sh_script(i) setinputf(i, NULL, 0); simpsh_run(); popinput();
+#define sh_script(i, n) setinputf(i, n, 0); simpsh_run(); popinput();
 
 #endif /* SIMP_H */
