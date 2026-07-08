@@ -22,6 +22,17 @@ else
   exit 1
 fi
 
+msg_run 'variable path expansion test: echo $HOME/.config; echo $foo | ../simpsh'
+out=$(echo 'echo $HOME/.config' | ../simpsh )
+
+if  [ "$out" = "$HOME/.config" ]; then
+  test_pass  "out" "matches" "bar"
+else
+  test_fail  "out" "expected" "bar"
+  exit 1
+fi
+
+
 # NOTE: need to add these tests
 # "$@" with set -- a "" b
 # "$*" with IFS=:
