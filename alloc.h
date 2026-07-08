@@ -3,6 +3,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
+#include <sys/mman.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -107,6 +108,7 @@ static inline void *
 salloc(size_t n)
 {
   int i;
+  size_t sz;
   slclass *c;
   slab *s;
   void *p;
@@ -120,11 +122,14 @@ if (stacksl) {
   }
   if (n + sizeof(slab *) >= PAGE_SIZE) {
   large:
-    if (posix_memalign(&p, PAGE_SIZE, align_mem(n) + sizeof(slab *)))
+    sz = align_mem(n) + sizeof(slab *) + sizeof(size_t);
+    sz = (sz + PAGE_SIZE- 1) & ~(size_t)(PAGE_SIZE -1);
+    p = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (p == MAP_FAILED)
       return NULL;
-    *(slab **)p = LARGEMAGIC;
-    memset((char *)p + sizeof(slab *), 0, align_mem(n));
-    return (char *)p + sizeof(slab *);
+    *(size_t *)p = sz;
+    *(void **)((char *)p + sizeof(size_t)) = LARGEMAGIC;
+    return (char *)p + sizeof(slab *) + sizeof(size_t);
   }
   getclass(n + sizeof(slab *), i);
 
@@ -174,7 +179,8 @@ slfree(void *p)
 
   magic = *(void **)((char *)p - sizeof(slab *));
   if (magic == LARGEMAGIC) {
-    free((char *)p - sizeof(slab *));
+    void *base = (char *)p - sizeof(slab *) - sizeof(size_t);
+    munmap(base, *(size_t *)base);
     return;
   }
 
