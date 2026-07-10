@@ -22,7 +22,6 @@
 #include "var.h"
 
 char histfile[PATH_MAX];
-int builtin_tab[BUILTIN_BUCKETS];
 const char shname[] = "simpsh";
 const char shusg[43] = "[-abCefhiImnosvVx] [-o longopt] [-c 'cmd']";
 const char defpathn[80] = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
@@ -120,7 +119,6 @@ main(int argc, char **argv)
   setlocale(LC_ALL, "");
   init_stack();
   init_env();
-  init_builtins();
   init_input();
   init_sig();
   if (mflag) {

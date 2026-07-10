@@ -57,84 +57,114 @@ static int umaskcmd(char **);
 static int classify_cmd(char *, int, int);
 static char *pwdpath(char *);
 
-/* the array of builtin commands */
-const builtin builtins[] = {
-  { ".",        &dotcmd      },
-  { "[",        &testcmd     },
-  { ":",        &truecmd     },
-  { "alias",    &aliascmd    },
-  { "bg",       &bgcmd       },
-  { "break",    &breakcmd    },
-  { "cd",       &cdcmd       },
-  { "command",  &commandcmd  },
-  { "continue", &continuecmd },
-  { "echo",     &echocmd     },
-  { "eval",     &evalcmd     },
-  { "exec",     &execcmd     },
-  { "exit",     &exitcmd     },
-  { "export",   &exportcmd   },
-  { "false",    &falsecmd    },
-  { "fg",       &fgcmd       },
-  { "getopts",  &getoptscmd  },
-  { "hash",     &hashcmd     },
-  { "help",     &helpcmd     },
-  { "jobs",     &jobscmd     },
-  { "kill",     &killcmd     },
-  { "local",    &localcmd    },
-  { "pwd",      &pwdcmd      },
-  { "read",     &readcmd     },
-  { "readonly", &readonlycmd },
-  { "return",   &returncmd   },
-  { "set",      &setcmd      },
-  { "shift",    &shiftcmd    },
-  { "test",     &testcmd     },
-  { "times",    &timescmd    },
-  { "trap",     &trapcmd     },
-  { "true",     &truecmd     },
-  { "type",     &typecmd     },
-  { "ulimit",   &ulimitcmd   },
-  { "umask",    &umaskcmd    },
-  { "unalias",  &unaliascmd  },
-  { "unset",    &unsetcmd    },
-  { "wait",     &waitcmd     },
-};
+#define TOTAL_KEYWORDS 38
+#define MIN_WORD_LENGTH 1
+#define MAX_WORD_LENGTH 8
+#define MIN_HASH_VALUE 1
+#define MAX_HASH_VALUE 76
 
-static const char *keywd[] = {
-  "if",
-  "then",
-  "else",
-  "elif",
-  "fi",
-  "case",
-  "esac",
-  "for",
-  "while",
-  "until",
-  "do",
-  "done",
-  "in",
-  NULL,
-};
-
-#define nbuiltins() (sizeof(builtins) / sizeof(builtin))
-
-/**  initialize builtin hash table  */
-void
-init_builtins(void)
+static inline unsigned int
+builtinhash(register const char *str, register size_t len)
 {
-  size_t i, n;
-  size_t idx;
-
-  n = nbuiltins();
-  for (i = 0; i < BUILTIN_BUCKETS; i++)
-    builtin_tab[i] = -1;
-
-  for (i = 0; i < n; i++) {
-    idx = hash(builtins[i].name, BUILTIN_BUCKETS);
-    while (builtin_tab[idx] >= 0)
-      idx = (idx + 1) % BUILTIN_BUCKETS;
-    builtin_tab[idx] = i;
+  static unsigned char asso_values[] = {
+    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
+    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
+    77, 77, 77, 77, 77, 77, 77, 77, 10, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
+    77, 5,  77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
+    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 0,  77, 77, 77,
+    77, 77, 5,  25, 5,  0,  15, 15, 15, 30, 10, 40, 40, 20, 30, 5,  77, 55, 77,
+    30, 10, 0,  0,  77, 5,  77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
+    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
+    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
+    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
+    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
+    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
+    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
+    77, 77, 77, 77, 77, 77, 77, 77, 77
+  };
+  register unsigned int hval = len;
+  switch (hval) {
+    default:
+      hval += asso_values[(unsigned char)str[2]];
+    /*FALLTHROUGH*/
+    case 2:
+    case 1:
+      hval += asso_values[(unsigned char)str[0]];
+      break;
   }
+  return hval;
+}
+
+/* find builtin using perfect hash */
+const builtin *
+find_builtin(const char *str, size_t len)
+{
+  /* the array of builtin commands */
+  static builtin wordlist[] = {
+    { 0 },
+    { "[", testcmd, 0 },
+    { 0 }, { 0 },
+    { "true", truecmd, 0 },
+    { 0 },
+    { ":", truecmd, SBLTN },
+    { "cd", cdcmd, 0 },
+    { 0 },
+    { "trap", trapcmd, SBLTN },
+    { "umask", umaskcmd, 0 },
+    { ".", dotcmd, SBLTN },
+    { "unalias", unaliascmd, 0 },
+    { "set", setcmd, SBLTN },
+    { "test", testcmd, 0 },
+    { "unset", unsetcmd, SBLTN },
+    { "ulimit", ulimitcmd, 0 },
+    { "fg", fgcmd, 0 },
+    { "continue", continuecmd, SBLTN },
+    { "wait", waitcmd, 0 },
+    { "alias", aliascmd, 0 },
+    { 0 },
+    { "getopts", getoptscmd, 0 },
+    { 0 },
+    { "eval", evalcmd, SBLTN },
+    { "shift", shiftcmd, SBLTN },
+    { 0 },
+    { "bg", bgcmd, 0 },
+    { 0 },
+    { "exit", exitcmd, SBLTN },
+    { "local", localcmd, 0 },
+    { 0 }, { 0 }, { 0 },
+    { "exec", execcmd, SBLTN },
+    { "times", timescmd, SBLTN },
+    { "return", returncmd, SBLTN },
+    { 0 }, { 0 },
+    { "read", readcmd, 0 },
+    { "false", falsecmd, 0 },
+    { 0 },
+    { "command", commandcmd, 0 },
+    { "readonly", readonlycmd, SBLTN },
+    { "hash", hashcmd, 0 },
+    { "break", breakcmd, SBLTN },
+    { 0 }, { 0 }, { 0 },
+    { "echo", echocmd, 0 },
+    { 0 }, { 0 }, { 0 }, { 0 },
+    { "help", helpcmd, 0 },
+    { 0 }, { 0 }, { 0 },
+    { "pwd", pwdcmd, 0 },
+    { "type", typecmd, 0 },
+    { 0 }, { 0 }, { 0 }, { 0 },
+    { "kill", killcmd, 0 },
+    { 0 }, { 0 }, { 0 }, { 0 },
+    { "jobs", jobscmd, 0 },
+    { 0 }, { 0 }, { 0 }, { 0 }, { 0 }, { 0 },
+    { "export", exportcmd, SBLTN }
+  };
+  if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH) {
+    unsigned int key = builtinhash(str, len);
+    if (key <= MAX_HASH_VALUE) {
+      const char *s = wordlist[key].name;
+      if (s && *str == *s && strlen(s) == len && !memcmp(str + 1, s + 1, len - 1)) return &wordlist[key];
+    }
+  }
+  return (builtin *)0;
 }
 
 /* convert char to int, doing extra checks, and handling error messages */
@@ -158,11 +188,12 @@ bltin_atoi(char *s, char *b, char *msg)
 static inline int
 iskeywd(const char *str)
 {
-  for (int i = 0; keywd[i]; i++) {
-    if (strcmp(str, keywd[i]) == 0) {
-      return 1;
-    }
-  }
+  int h;
+  size_t len;
+  len = strlen(str);
+  h = kwhash(str, len);
+  if (kw[h].word && kw[h].len == len && memcmp(kw[h].word, str, len) == 0)
+    return 1;
   return 0;
 }
 
@@ -831,7 +862,7 @@ rend:
 
     if (!cleft) {
       for (size_t j = i; argv[j]; j++)
-        setvar(argv[j], "", 0);
+        setvar(argv[j], 0, 0);
       break;
     }
     if (!argv[i + 1]) {
@@ -1256,4 +1287,5 @@ umaskcmd(char **argv)
   umask((~mask) & 0777);
   return 0;
 }
+
 /* NOLINTEND(readability-magic-numbers) */
