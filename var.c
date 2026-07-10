@@ -32,12 +32,10 @@ static const char ps1vn[16] = "PS1=$ ";
 static const char ps2vn[16] = "PS2=> ";
 static const char ps4vn[16] = "PS4=+ ";
 
-
 /* shell variables */
 static shvar var_tab_init[VAR_BUCKETS_INIT];
 static pid_t shpid;
 static pid_t shppid;
-
 GVAR gvar = {
   .vartab = var_tab_init,
   .vartab_size = VAR_BUCKETS_INIT,
@@ -46,6 +44,8 @@ GVAR gvar = {
 static char **env_cache;
 static u8 env_dirty = 1;
 static void ifsupdt(const char *);
+static int cmpvar(const void *, const void *);
+
 
 void
 ifsupdt(const char *ifs)
@@ -101,6 +101,72 @@ resize_var_tab(void)
   memset(VARCACHE, 0, sizeof(VARCACHE));
 }
 
+static int
+cmpvar(const void *va, const void *vb)
+{
+  const shvar *j, *k;
+  const char *a, *b;
+  j = *(const shvar **)va;
+  k = *(const shvar **)vb;
+  a = j->var;
+  b = k->var;
+  while (*a && *a != '=' && *b && *b != '=') {
+    if (*a != *b)
+      return (unsigned char)*a - (unsigned char)*b;
+    ++a;
+    ++b;
+  }
+  if (*a == '\0' || *a == '=') {
+    if (*b == '\0' || *b == '=')
+      return 0;
+    return -1;
+  }
+  return 1;
+}
+
+void
+printvars(const char *prfx, shvar_flags mask)
+{
+  shvar **enva;
+  shvar *v;
+  size_t c, f;
+
+  c = 0;
+  for (size_t i = 0; i < VARTAB_SIZE; i++) {
+    v = &VARTAB[i];
+    if (!v->var || v->var == TOMBSTONE)
+      continue;
+    if (mask && !(v->flags & mask))
+      continue;
+    c++;
+  }
+  if (c == 0)
+    return;
+
+  enva = st_alloc((c + 1) * sizeof(shvar *));
+  f = 0;
+  for (size_t i = 0; i < VARTAB_SIZE; i++) {
+    v = &VARTAB[i];
+    if (!v->var || v->var == TOMBSTONE)
+      continue;
+    if (mask && !(v->flags & mask))
+      continue;
+    enva[f++] = v;
+  }
+  enva[f] = NULL;
+  qsort(enva, f, sizeof(char *), cmpvar);
+
+  for (size_t i = 0; i < f; i++) {
+    char *n, *v;
+    st_read_assn(enva[i]->var, &n, &v);
+    if (mask && enva[i]->flags & VUNSET)
+      printf("%s %s\n", prfx, n);
+    else
+      printf("%s %s=%s\n", prfx, n, quotestrn(v));
+  }
+  return;
+}
+
 /** find variable by name */
 __attribute__((hot)) shvar *
 findvar_n(const char *restrict name, size_t nlen)
@@ -132,6 +198,7 @@ findvar_n(const char *restrict name, size_t nlen)
     if (!v->var)
       return NULL;
     if (v->var != TOMBSTONE && v->nlen == nlen && smemcmp(v->var, name, nlen)) {
+      VARCACHE[ci] = v;
       return v;
     }
     if (++v >= end)
@@ -489,37 +556,39 @@ exportcmd(char **argv)
   size_t argc = 0;
   array_len(argv, argc);
 
-  if (argc > 1) {
-    for (size_t i = 1; i < argc; i++) {
-      char *eq;
-      char *name, *val;
-      shvar *v;
-
-      eq = strchrnul_(argv[i], '=');
-      if (*eq == '\0') {
-        if (eq == argv[i]) {
-          shwarn_arg(argv[0], argv[1], "not a valid identifier");
-          return 1;
-        }
-        if ((v = findvar(argv[i]))) {
-          v->flags |= VEXPRT;
-          env_dirty = 1;
-        } else {
-          setvar(argv[i], NULL, VEXPRT);
-        }
-      } else {
-        if (eq == argv[i]) {
-          shwarn_arg(argv[0], argv[1], "not a valid identifier");
-          return 1;
-        }
-        read_assn(argv[i], &name, &val);
-        setvar(name, val, VEXPRT);
-        slfree(name);
-        slfree(val);
-      }
-    }
+  if (argc < 2) {
+    printvars("export", VEXPRT);
+    return 0;
   }
 
+  for (size_t i = 1; i < argc; i++) {
+    char *eq;
+    char *name, *val;
+    shvar *v;
+
+    eq = strchrnul_(argv[i], '=');
+    if (*eq == '\0') {
+      if (eq == argv[i]) {
+        shwarn_arg(argv[0], argv[1], "not a valid identifier");
+        return 1;
+      }
+      if ((v = findvar(argv[i]))) {
+        v->flags |= VEXPRT;
+      } else {
+        setvar(argv[i], NULL, VEXPRT | VUNSET);
+      }
+    } else {
+      if (eq == argv[i]) {
+        shwarn_arg(argv[0], argv[1], "not a valid identifier");
+        return 1;
+      }
+      read_assn(argv[i], &name, &val);
+      setvar(name, val,  VEXPRT);
+      slfree(name);
+      slfree(val);
+    }
+  }
+  env_dirty = 1;
   return 0;
 }
 
@@ -533,20 +602,27 @@ localcmd(char **argv)
     fprintf(stderr, "simpsh: local: can only be used in a function\n"); /*NOLINT*/
     return 1;
   }
-  if (argc > 1) {
-    for (size_t i = 1; i < argc; i++) {
-      char *name, *val;
 
-      st_read_assn(argv[i], &name, &val);
-      LOCALVARS[LOCALCNT++] = grabvar(name);
-      if (LOCALCNT >= LOCAL_MAX)
-        err(1, "local variables exceeded max");
-      if (val) {
-        setvar(name, val, 0);
-      } else {
-        val = LOCALVARS[LOCALCNT - 1].val ? LOCALVARS[LOCALCNT - 1].val : "";
-        setvar(name, val, 0);
-      }
+  if (argc == 1) {
+    for (size_t i = 0; i < LOCALCNT; i++) {
+      char *val = getvar(LOCALVARS[i].name);
+      printf("local %s=%s\n", LOCALVARS[i].name, quotestrn(val ? val : ""));
+    }
+    return 0;
+  }
+
+  for (size_t i = 1; i < argc; i++) {
+    char *name, *val;
+
+    st_read_assn(argv[i], &name, &val);
+    LOCALVARS[LOCALCNT++] = grabvar(name);
+    if (LOCALCNT >= LOCAL_MAX)
+      err(1, "local variables exceeded max");
+    if (val) {
+      setvar(name, val, 0);
+    } else {
+      val = LOCALVARS[LOCALCNT - 1].val ? LOCALVARS[LOCALCNT - 1].val : "";
+      setvar(name, val, 0);
     }
   }
   return 0;
@@ -558,28 +634,31 @@ readonlycmd(char **argv)
   size_t i, argc = 0;
   array_len(argv, argc);
 
-  if (argc > 1) {
-    for (i = 1; i < argc; i++) {
-      char *eq;
-      char *name, *val;
-      shvar *v;
-
-      eq = strchrnul_(argv[i], '=');
-      if (*eq == '\0') {
-        v = findvar(argv[i]);
-        if (v)
-          v->flags |= VREADONLY;
-        else
-          setvar(argv[i], NULL, VEXPRT);
-      } else {
-        read_assn(argv[i], &name, &val);
-        setvar(name, val, VREADONLY);
-        slfree(name);
-        slfree(val);
-      }
-    }
+  if (argc < 2) {
+    printvars("readonly", VREADONLY);
+    return 0;
   }
 
+  for (i = 1; i < argc; i++) {
+    char *eq;
+    char *name, *val;
+    shvar *v;
+
+    eq = strchrnul_(argv[i], '=');
+    if (*eq == '\0') {
+      v = findvar(argv[i]);
+      if (v)
+        v->flags |= VREADONLY;
+      else
+        setvar(argv[i], NULL, VREADONLY | VUNSET);
+    } else {
+      read_assn(argv[i], &name, &val);
+      setvar(name, val, VREADONLY);
+      slfree(name);
+      slfree(val);
+    }
+  }
+  env_dirty = 1;
   return 0;
 }
 

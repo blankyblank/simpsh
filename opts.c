@@ -55,8 +55,6 @@ const char shoptch[OPTC] = {
 };
 
 static int setopts(char *, int, char *);
-static int cmpname(const void *, const void *);
-
 
 #ifndef MUSL
 void
@@ -180,26 +178,6 @@ freeshargv(void)
   ALLOCED = 0;
 }
 
-static int
-cmpname(const void *va, const void *vb)
-{
-  const char *a, *b;
-  a = *(const char **)va;
-  b = *(const char **)vb;
-  while (*a && *a != '=' && *b && *b != '=') {
-    if (*a != *b)
-      return (unsigned char)*a - (unsigned char)*b;
-    ++a;
-    ++b;
-  }
-  if (*a == '\0' || *a == '=') {
-    if (*b == '\0' || *b == '=')
-      return 0;
-    return -1;
-  }
-  return 1;
-}
-
 int
 setcmd(char **argv)
 {
@@ -207,35 +185,7 @@ setcmd(char **argv)
   array_len(argv, argc);
 
   if (argc < 2) {
-    char **enva;
-    shvar *v;
-    size_t c, f;
-
-    c = 0;
-    for (size_t i = 0; i < VARTAB_SIZE; i++) {
-      v = &VARTAB[i];
-      if (!v->var || v->var == TOMBSTONE)
-        continue;
-      c++;
-    }
-    if (c == 0)
-      return 0;
-    enva = st_alloc((c + 1) * sizeof(char *));
-    f = 0;
-    for (size_t i = 0; i < VARTAB_SIZE; i++) {
-      v = &VARTAB[i];
-      if (!v->var || v->var == TOMBSTONE)
-        continue;
-      enva[f++] = v->var;
-    }
-    enva[c] = NULL;
-    qsort(enva, c, sizeof(char *), cmpname);
-
-    for (size_t i = 0; i < c; i++) {
-      char *n, *v;
-      st_read_assn(enva[i], &n, &v);
-      printf("%s=%s\n", n, quotestrn(v));
-    }
+    printvars("", 0);
     return 0;
   }
   char *argv0, **pos;

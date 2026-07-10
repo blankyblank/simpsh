@@ -84,6 +84,7 @@ extern void setvar(const char * restrict, const char * restrict, shvar_flags);
 extern tmp_var grabvar(char *);
 extern shvar *findvar_n(const char *restrict, size_t);
 extern void rmvar(const char *);
+extern void printvars(const char *,shvar_flags);
 
 /* builtins */
 extern int exportcmd(char **);
