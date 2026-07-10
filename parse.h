@@ -14,14 +14,9 @@ struct redir {
   redir *heredoc_next;
 };
 
-typedef struct cmd_tree cmd_tree;
 typedef struct clause clause;
-struct clause {
-  wf **ptrn;
-  cmd_tree *body;
-  clause *next;
-};
 
+typedef struct cmd_tree cmd_tree;
 /* AST node for commands */
 struct cmd_tree {
   cmd_tree *left;
@@ -42,13 +37,19 @@ struct cmd_tree {
   int line;
   union {
     struct { wf **args; size_t vc; wf **sh_vars; } cmd;
-    struct { token op_t; } op;
+    struct { token op_t; cmd_tree **stgs; size_t nstg; } op;
     struct { redir *redirs;} redir;
     struct { wf *name; } func;
     struct { cmd_tree *else_; } if_;
     struct { wf *word; clause *clauses;} case_;
     struct { wf *name; wf **words; } for_;
   } t;
+};
+
+struct clause {
+  wf **ptrn;
+  cmd_tree *body;
+  clause *next;
 };
 
 enum {
@@ -62,6 +63,8 @@ enum {
 #define CVARS(n) ((n)->t.cmd.sh_vars)
 #define CVARC(n) ((n)->t.cmd.vc)
 #define COPP(n) ((n)->t.op.op_t)
+#define CPIPE(n) ((n)->t.op.stgs)
+#define CPIPEC(n) ((n)->t.op.nstg)
 #define CREDR(n) ((n)->t.redir.redirs)
 #define CFUNC(n) ((n)->t.func.name)
 #define CCASE(n) ((n)->t.case_)

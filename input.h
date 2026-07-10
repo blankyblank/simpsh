@@ -15,7 +15,7 @@ struct strpush {
     char *saved_nchar;
     size_t saved_nleft;
     int saved_unget;
-    unsigned char saved_ungetbuf[4];
+    unsigned char saved_ungetbuf[2];
     int alias;
 };
 
@@ -67,8 +67,6 @@ shgetchar(void)
     return (unsigned char)in->ungetbuf[shinpt->unget];
   }
   if (in->nleft > 0) {
-    if (*in->nchar == '\n')
-      in->linenum++;
     in->nleft--;
     return (unsigned char)*in->nchar++;
   }

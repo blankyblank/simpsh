@@ -561,35 +561,33 @@ parse_simple_cmd(size_t neg)
       case TWORD:
         {
           sh_tok n;
-          int adj = 0;
-          if (t.cmd->flags & WFALLNUM) {
-            char c = shgetchar();
-            if (c != SHEOF && (c == '<' || c == '>')) {
-              adj = 1;
-              if (c != SHEOF)
-                shungetc(c);
-            } else {
-              if (c != SHEOF)
-                shungetc(c);
-            }
-          }
           n = tokenize();
-          if (n.type == TREDIR && (t.cmd->flags & WFALLNUM) && adj) {
-            sh_tok name = tokenize();
-            if (name.type != TWORD)
-              return syntxerr(curline, "missing filename for", t.type);
-            redir *r;
-            r = st_alloc(sizeof(redir));
-            r->type = n.sub;
-            r->name = name.cmd;
-            r->next = NULL;
-            *tail = r;
-            tail = &r->next;
-            fd = 0;
-            for (size_t i = 0; i < t.cmd->len; i++)
-              fd = fd * 10 + (t.cmd->word[i] - '0');
-            r->fd = fd;
-            continue;
+          if (n.type == TREDIR) {
+            int allnum = 1;
+            for (wf *p = t.cmd; p; p = p->next)
+              for (size_t i = 0; i < p->len; i++)
+                if (p->word[i] < '0' || p->word[i] > '9') {
+                  allnum = 0;
+                  goto numchkdone;
+                }
+numchkdone:
+            if (allnum) {
+              sh_tok name = tokenize();
+              if (name.type != TWORD)
+                return syntxerr(curline, "missing filename for", t.type);
+              redir *r;
+              r = st_alloc(sizeof(redir));
+              r->type = n.sub;
+              r->name = name.cmd;
+              r->next = NULL;
+              *tail = r;
+              tail = &r->next;
+              fd = 0;
+              for (size_t i = 0; i < t.cmd->len; i++)
+                fd = fd * 10 + (t.cmd->word[i] - '0');
+              r->fd = fd;
+              continue;
+            }
           }
           last_tok = n;
           if (t.cmd->flags & WFCMDSUB)
@@ -728,20 +726,34 @@ parse_cmd(void)
         return NULL;
     }
 
+    cmd_tree *stages[256];
+    size_t n = 0;
+    stages[n++] = l;
     /* parse_pipe */
     for (;;) {
       t = tokenize();
-      if (t.type == TPIPE) {
-        chkwd |= CHKALIAS | CHKNL | CHKKWD;
-        r = parse_simple_cmd(0);
-        if (!r)
-          return NULL;
-        l = newoppnode(t.type, l, r);
-      } else {
+      if (t.type != TPIPE) {
         last_tok = t;
         break;
       }
+      chkwd |= CHKALIAS | CHKNL | CHKKWD;
+      r = parse_simple_cmd(0);
+      if (!r)
+        return NULL;
+      stages[n++] = r;
     }
+    if (n > 1) {
+    l = st_alloc(sizeof(cmd_tree));
+    l->type = OP;
+    COPP(l) = TPIPE;
+    l->flags = 0;
+    l->line = shinpt->linenum;
+    cmd_tree **list = st_alloc(n * sizeof(cmd_tree *));
+    memcpy(list, stages, n * sizeof(cmd_tree *));
+    CPIPE(l) = list;
+    CPIPEC(l) = n;
+    }
+
     if (neg & 1)
       l->flags |= NEG;
 

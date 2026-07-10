@@ -70,13 +70,13 @@ typedef struct {
 typedef struct slab slab;
 struct slab {
   int magic;
-  int nalloc;  /* outstanding allocations */
-  unsigned char ci;      /* class index */
-  slab *next;  /* list for free lookup (linked list) */
-  size_t stsz; /* slot size */
-  void *flist; /* free list */
-  void *p;     /* current position pointer in slot */
-  void *end;   /* beginning of guard page */
+  int nalloc;       /* outstanding allocations */
+  unsigned char ci; /* class index */
+  slab *next;       /* list for free lookup (linked list) */
+  size_t stsz;      /* slot size */
+  void *flist;      /* free list */
+  void *p;          /* current position pointer in slot */
+  void *end;        /* beginning of guard page */
 };
 
 typedef struct {

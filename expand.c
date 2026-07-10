@@ -405,7 +405,7 @@ expand_argv(wf **args, size_t *restrict t)
     if (!w->next && w->qs == QNONE &&
         sscndelim(w->word, w->len, "$`\\~*?[", 7) >= w->len) {
       chk_cap(fargc, cap, argv, char *);
-      argv[fargc++] = st_strndup(w->word, w->len);
+      argv[fargc++] = w->word;
       *t += w->len;
       continue;
     }
@@ -879,6 +879,7 @@ splitword(wf *f, size_t * restrict tlen)
         fpos = 0;
         continue;
       }
+      fpos = s + end;
     }
     while (fpos < cf->len) {
       int insect = (cf->qs == QNONE || cf->qs == QCMDSUB);

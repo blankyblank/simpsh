@@ -728,100 +728,105 @@ cleanup:
 static int
 run_pipe(const cmd_tree *n)
 {
-  int status, lwstatus;
-  int l_status, rstatus;
-  int pipefd[2], outer;
-  static int pipedepth;
+  cmd_tree **stgs;
+  size_t nstg;
+  int status;
+  int pipefd[2], prevr;
   int mfl;
-  pid_t lpid, rpid;
+  pid_t pids[256];
 
-  pipedepth++;
-  outer = (pipedepth == 1);
+  prevr = -1;
+  stgs = CPIPE(n);
+  nstg = CPIPEC(n);
   mfl = (int)mflag;
 
-  if (pipe(pipefd) < 0)
-    err(1, "pipe");
-  lpid = fork();
-  switch (lpid) {
-    case -1:
-      CLOSEFD(pipefd[0]);
-      CLOSEFD(pipefd[1]);
-      err(1, "fork");
-    case 0:
-      child_setup_fg(0);
-      CLOSEFD(pipefd[0]);
-      DUPFD(pipefd[1], STDOUT_FILENO);
-      CLOSEFD(pipefd[1]);
-      int _st = run_commands(n->left, _INCHLD);
-      fflush(NULL);
-      _exit(_st);
-    default:
-      if (mfl)
-        setpgid(lpid, lpid);
-      break;
+  for (size_t i = 0; i < nstg; i++) {
+    if (i < nstg - 1 && pipe(pipefd) < 0) {
+      err(1, "pipe");
+    }
+    pids[i] = fork();
+    switch (pids[i]) {
+      case -1:
+        err(1, "fork");
+      case 0:
+        child_setup_fg(i > 0 ? pids[0] : 0);
+        if (prevr >= 0)
+          DUPFD(prevr, STDIN_FILENO);
+        if (i < nstg - 1) {
+          CLOSEFD(pipefd[0]);
+          DUPFD(pipefd[1], STDOUT_FILENO);
+          CLOSEFD(pipefd[1]);
+        }
+        if (prevr >= 0)
+          CLOSEFD(prevr);
+        int _st = run_commands(stgs[i], _INCHLD);
+        fflush(NULL);
+        _exit(_st);
+      default:
+        if (mfl && i == 0)
+          setpgid(pids[i], pids[i]);
+        else if (mfl)
+          setpgid(pids[i], pids[0]);
+        if (prevr >= 0)
+          CLOSEFD(prevr);
+        if (i < nstg - 1) {
+          CLOSEFD(pipefd[1]);
+          prevr = pipefd[0];
+        } else {
+          prevr = -1;
+        }
+        break;
+    }
   }
+  if (prevr >= 0)
+    CLOSEFD(prevr);
 
-  rpid = fork();
-  switch (rpid) {
-    case -1:
-      CLOSEFD(pipefd[1]);
-      kill(lpid, SIGTERM);
-      waitpid(lpid, NULL, 0);
-      err(1, "fork");
-    case 0:
-      child_setup_fg(lpid);
-      CLOSEFD(pipefd[1]);
-      DUPFD(pipefd[0], STDIN_FILENO);
-      CLOSEFD(pipefd[0]);
-      int _st = run_commands(n->right, _INCHLD);
-      fflush(NULL);
-      _exit(_st);
-    default:
-      if (mfl)
-        setpgid(rpid, lpid);
-      break;
-  }
-
-  CLOSEFD(pipefd[0]);
-  CLOSEFD(pipefd[1]);
-
-  if (mfl && outer && getpid() == sh_pgid) {
+  if (mfl && getpid() == sh_pgid) {
     job *j;
-    j = newjob(lpid, bg_cmd(n));
-    j->nlive = 2;
-    j->status_pid = rpid;
+    j = newjob(pids[0], bg_cmd(n));
+    j->nlive = nstg;
+    j->status_pid = pids[nstg - 1];
     j->flags |= JFG;
-    startjob(lpid);
+    startjob(pids[0]);
     status = fgwait(j);
   } else {
     int wstatus;
+    int pstatus = 0;
+    int rstatus = 0;
+
     if (!mfl) {
-      waitpid(rpid, &wstatus, 0);
-      waitpid(lpid, &lwstatus, 0);
-      rstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
-      l_status = WIFEXITED(lwstatus) ? WEXITSTATUS(lwstatus) : 1;
-      status = pipeflag ? (rstatus ? rstatus : l_status) : rstatus;
+      for (size_t i = 0; i < nstg; i++) {
+        waitpid(pids[i], &wstatus, 0);
+        if (i == nstg - 1)
+          rstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+        else if (WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != 0)
+          pstatus = WEXITSTATUS(wstatus);
+      }
     } else {
       for (;;) {
-        if (waitpid(rpid, &wstatus, WNOHANG) > 0)
+        if (waitpid(pids[nstg - 1], &wstatus, WNOHANG) > 0)
           break;
         runeventloop(&el, -1);
         if (intsig) {
           intsig = 0;
-          kill(rpid, SIGINT);
-          kill(lpid, SIGINT);
+          for (size_t i = 0; i < nstg; i++)
+            kill(pids[i], SIGINT);
         }
       }
-      waitpid(lpid, &lwstatus, 0);
+      for (size_t i = 0; i < nstg - 1; i++) {
+        int ws, s;
+        waitpid(pids[i], &ws, 0);
+        s = WIFEXITED(ws) ? WEXITSTATUS(ws) : 1;
+        if (s != 0)
+          pstatus = s;
+      }
       rstatus = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
-      l_status = WIFEXITED(lwstatus) ? WEXITSTATUS(lwstatus) : 1;
-      status = pipeflag ? (rstatus ? rstatus : l_status) : rstatus;
     }
+    status = pipeflag ? (rstatus ? rstatus : pstatus) : rstatus;
   }
 
   if (CNEG(n))
     status = !status;
-  pipedepth--;
   if (eflag && status != 0 && !iflag && !(n->flags & EFLAG_SAFE))
     exit(status);
   return status;
@@ -881,8 +886,34 @@ run_cmd(const cmd_tree *n, int inchld)
       return apply_redir(predir);
     return 0;
   }
-
-  if ((f = findfunc(final[0])) || (b = findbuiltin(*final))) {
+  if ((b = findbuiltin(*final)) && (b->flags & SBLTN)) {
+    fdlist sfd[FD_MAX];
+    size_t sfdc = 0;
+    if (predir) {
+      fflush(stdout);
+      if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
+        return 1;
+    }
+    if (vars && vars[0]) {
+      for (vc = 0, i = 0; vars[i]; i++) {
+        char *name, *val;
+        st_read_assn(xpnd(vars[i]), &name, &val);
+        vc++;
+        setvar(name, val, 0);
+      }
+    }
+    if ((status = builtin_launch(b, final)) > 0) {
+      if (!iflag)
+        exit(1);
+    }
+    if (predir) {
+      if (!(b && b->fn == &execcmd && !final[1])) {
+        fflush(NULL);
+        restore_fd(sfd, sfdc);
+      }
+    }
+  }
+  if ((f = findfunc(final[0])) || b) {
     fdlist sfd[FD_MAX];
     size_t sfdc = 0;
     if (predir) {
@@ -973,8 +1004,6 @@ run_redir(const cmd_tree *n, int nchld)
     exit(LSTATUS);
   return status;
 }
-
-
 
 /**  run command tree  */
 __attribute__((hot)) int
