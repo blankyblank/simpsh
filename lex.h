@@ -80,8 +80,7 @@ typedef enum {
 typedef enum {
   WFSINGLE = 1 << 0,
   WFDOUBLE = 1 << 1,
-  WFALLNUM = 1 << 2,
-  WFCMDSUB = 1 << 3,
+  WFCMDSUB = 1 << 2,
 } wf_flags;
 
 /**
@@ -107,14 +106,22 @@ typedef struct {
   int sub;
 } sh_tok;
 
+struct kw {
+  const char *word;
+  u8 len;
+  token tok;
+};
+
 extern wf *wf_chunk;
 extern unsigned int wf_chunk_left;
 extern int alias_depth;
 extern int notclosed;
 extern sh_tok last_tok;
 extern int chkwd;
+extern const struct kw kw[32];
 
 #define WF_CHUNK_SIZE 4
+#define kwhash(s, n) (((u8)(s)[0] * 1 + (u8)(s)[(n)-1] * 2 + (n) * 22) & 31)
 #define SHTOK(t) ((sh_tok){ .type = t, .sub = 0 })
 #define SHREDIR(s) ((sh_tok){ .type = TREDIR, .sub = (s) })
 #define SHWORD(w) ((sh_tok) { .type = TWORD, .cmd = w, .sub = 0 })
