@@ -410,7 +410,143 @@ i64
 arith_eval(const char *expr, size_t len)
 {
   i64 res;
+  const char *p = expr;
+  size_t n = len, skip;
 
+  skip = sskipspace(p, n);
+  p += skip;
+  n -= skip;
+  if (n > 0) {
+    i64 lval, rval;
+    size_t wlen;
+    int op = 0;
+
+    /* left operand */
+    if (isdigit_(p[0])) {
+      lval = 0;
+      while (n > 0 && isdigit_(p[0])) {
+        lval = lval * 10 + (p[0] - '0');
+        p++;
+        n--;
+      }
+    } else if (isalpha_(p[0]) || p[0] == '_') {
+      wlen = sscnword(p, n);
+      shvar *v = findvar_n(p, wlen);
+      p += wlen;
+      n -= wlen;
+      if (!v || atoll_(shvar_val(v), &lval) < 0)
+        goto fallback;
+    } else {
+      goto fallback;
+    }
+
+    skip = sskipspace(p, n);
+    p += skip;
+    n -= skip;
+
+    /* operator */
+    if (n == 0)
+      goto fallback;
+    if (p[0] == '+') {
+      op = '+';
+      p++;
+      n--;
+    } else if (p[0] == '-') {
+      op = '-';
+      p++;
+      n--;
+    } else if (p[0] == '*') {
+      op = '*';
+      p++;
+      n--;
+    } else if (p[0] == '/') {
+      op = '/';
+      p++;
+      n--;
+    } else if (p[0] == '%') {
+      op = '%';
+      p++;
+      n--;
+    } else if (p[0] == '<' && n > 1 && p[1] == '<') {
+      op = '<';
+      p += 2;
+      n -= 2;
+    } else if (p[0] == '>' && n > 1 && p[1] == '>') {
+      op = '>';
+      p += 2;
+      n -= 2;
+    } else if (p[0] == '&') {
+      op = '&';
+      p++;
+      n--;
+    } else if (p[0] == '^') {
+      op = '^';
+      p++;
+      n--;
+    } else if (p[0] == '|') {
+      op = '|';
+      p++;
+      n--;
+    } else
+      goto fallback;
+
+    skip = sskipspace(p, n);
+    p += skip;
+    n -= skip;
+
+    /* right operand */
+    if (isdigit_(p[0])) {
+      rval = 0;
+      while (n > 0 && isdigit_(p[0])) {
+        rval = rval * 10 + (p[0] - '0');
+        p++;
+        n--;
+      }
+    } else if (isalpha_(p[0]) || p[0] == '_') {
+      wlen = sscnword(p, n);
+      shvar *v = findvar_n(p, wlen);
+      p += wlen;
+      n -= wlen;
+      if (!v || atoll_(shvar_val(v), &rval) < 0)
+        goto fallback;
+    } else {
+      goto fallback;
+    }
+
+    skip = sskipspace(p, n);
+    p += skip;
+    n -= skip;
+    if (n == 0) {
+      switch (op) {
+        case '+':
+          return lval + rval;
+        case '-':
+          return lval - rval;
+        case '*':
+          return lval * rval;
+        case '/':
+          if (rval == 0)
+            goto fallback;
+          return lval / rval;
+        case '%':
+          if (rval == 0)
+            goto fallback;
+          return lval % rval;
+        case '<':
+          return lval << (rval & 63);
+        case '>':
+          return lval >> (rval & 63);
+        case '&':
+          return lval & rval;
+        case '^':
+          return lval ^ rval;
+        case '|':
+          return lval | rval;
+      }
+    }
+  }
+
+fallback:
   ap = expr;
   alen = len;
   next_tok();
