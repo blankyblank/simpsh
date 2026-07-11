@@ -40,6 +40,7 @@ static int cdcmd(char **);
 static int commandcmd(char **);
 static int continuecmd(char **);
 static int dotcmd(char **);
+static int catcmd(char **);
 static int echocmd(char **);
 static int evalcmd(char **);
 static int exitcmd(char **);
@@ -61,26 +62,26 @@ static char *pwdpath(char *);
 #define MIN_WORD_LENGTH 1
 #define MAX_WORD_LENGTH 8
 #define MIN_HASH_VALUE 1
-#define MAX_HASH_VALUE 76
+#define MAX_HASH_VALUE 71
 
 static inline unsigned int
 builtinhash(register const char *str, register size_t len)
 {
   static unsigned char asso_values[] = {
-    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
-    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
-    77, 77, 77, 77, 77, 77, 77, 77, 10, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
-    77, 5,  77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
-    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 0,  77, 77, 77,
-    77, 77, 5,  25, 5,  0,  15, 15, 15, 30, 10, 40, 40, 20, 30, 5,  77, 55, 77,
-    30, 10, 0,  0,  77, 5,  77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
-    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
-    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
-    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
-    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
-    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
-    77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77,
-    77, 77, 77, 77, 77, 77, 77, 77, 77
+    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+    72, 72, 72, 72, 72, 72, 72, 72, 10, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+    72, 5,  72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 0,  72, 72, 72,
+    72, 72, 5,  20, 0,  0,  15, 15, 20, 30, 10, 45, 35, 25, 0,  0,  72, 50, 72,
+    30, 10, 0,  0,  72, 5,  72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+    72, 72, 72, 72, 72, 72, 72, 72, 72
   };
   register unsigned int hval = len;
   switch (hval) {
@@ -101,61 +102,61 @@ find_builtin(const char *str, size_t len)
 {
   /* the array of builtin commands */
   static builtin wordlist[] = {
-    { 0 },
-    { "[", testcmd, 0 },
-    { 0 }, { 0 },
-    { "true", truecmd, 0 },
-    { 0 },
-    { ":", truecmd, SBLTN },
-    { "cd", cdcmd, 0 },
-    { 0 },
-    { "trap", trapcmd, SBLTN },
-    { "umask", umaskcmd, 0 },
-    { ".", dotcmd, SBLTN },
-    { "unalias", unaliascmd, 0 },
-    { "set", setcmd, SBLTN },
-    { "test", testcmd, 0 },
-    { "unset", unsetcmd, SBLTN },
-    { "ulimit", ulimitcmd, 0 },
-    { "fg", fgcmd, 0 },
-    { "continue", continuecmd, SBLTN },
-    { "wait", waitcmd, 0 },
-    { "alias", aliascmd, 0 },
-    { 0 },
-    { "getopts", getoptscmd, 0 },
-    { 0 },
-    { "eval", evalcmd, SBLTN },
-    { "shift", shiftcmd, SBLTN },
-    { 0 },
-    { "bg", bgcmd, 0 },
-    { 0 },
-    { "exit", exitcmd, SBLTN },
-    { "local", localcmd, 0 },
-    { 0 }, { 0 }, { 0 },
-    { "exec", execcmd, SBLTN },
-    { "times", timescmd, SBLTN },
-    { "return", returncmd, SBLTN },
-    { 0 }, { 0 },
-    { "read", readcmd, 0 },
-    { "false", falsecmd, 0 },
-    { 0 },
-    { "command", commandcmd, 0 },
-    { "readonly", readonlycmd, SBLTN },
-    { "hash", hashcmd, 0 },
-    { "break", breakcmd, SBLTN },
-    { 0 }, { 0 }, { 0 },
-    { "echo", echocmd, 0 },
-    { 0 }, { 0 }, { 0 }, { 0 },
-    { "help", helpcmd, 0 },
-    { 0 }, { 0 }, { 0 },
-    { "pwd", pwdcmd, 0 },
-    { "type", typecmd, 0 },
-    { 0 }, { 0 }, { 0 }, { 0 },
-    { "kill", killcmd, 0 },
-    { 0 }, { 0 }, { 0 }, { 0 },
-    { "jobs", jobscmd, 0 },
-    { 0 }, { 0 }, { 0 }, { 0 }, { 0 }, { 0 },
-    { "export", exportcmd, SBLTN }
+      {0},
+      {"[", testcmd, 0},
+      {"cd", cdcmd, 0},
+      {"cat", catcmd, 0},
+      {"true", truecmd, 0},
+      {"times", timescmd, SBLTN},
+      {":", truecmd, SBLTN},
+      {"command", commandcmd, 0},
+      {"continue", continuecmd, SBLTN},
+      {"trap", trapcmd, SBLTN},
+      {"umask", umaskcmd, 0},
+      {".", dotcmd, SBLTN},
+      {"unalias", unaliascmd, 0},
+      {"set", setcmd, SBLTN},
+      {"test", testcmd, 0},
+      {"unset", unsetcmd, SBLTN},
+      {"ulimit", ulimitcmd, 0},
+      {"fg", fgcmd, 0},
+      {0},
+      {"wait", waitcmd, 0},
+      {"alias", aliascmd, 0},
+      {0},
+      {"bg", bgcmd, 0},
+      {0},
+      {"eval", evalcmd, SBLTN},
+      {"shift", shiftcmd, SBLTN},
+      {0},
+      {"getopts", getoptscmd, 0},
+      {0},
+      {"exit", exitcmd, SBLTN},
+      {"local", localcmd, 0},
+      {0}, {0}, {0},
+      {"exec", execcmd, SBLTN},
+      {0},
+      {"return", returncmd, SBLTN},
+      {0}, {0},
+      {"read", readcmd, 0},
+      {"break", breakcmd, SBLTN},
+      {0}, {0},
+      {"readonly", readonlycmd, SBLTN},
+      {"hash", hashcmd, 0},
+      {"false", falsecmd, 0},
+      {0}, {0}, {0},
+      {"echo", echocmd, 0},
+      {0}, {0}, {0},
+      {"pwd", pwdcmd, 0},
+      {"type", typecmd, 0},
+      {0}, {0}, {0}, {0},
+      {"help", helpcmd, 0},
+      {0}, {0}, {0}, {0},
+      {"kill", killcmd, 0},
+      {0}, {0}, {0}, {0},
+      {"jobs", jobscmd, 0},
+      {0},
+      {"export", exportcmd, SBLTN}
   };
   if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH) {
     unsigned int key = builtinhash(str, len);
@@ -350,6 +351,47 @@ breakcmd(char **argv)
   if (n > LOOPDEPTH)
     n = LOOPDEPTH;
   gstate.loopbreak = n;
+  return 0;
+}
+
+int
+catcmd(char **argv)
+{
+  const unsigned MAX_LENGTH = 256;
+  int  argc = 0, i = 1;
+  FILE *f = NULL;
+  array_len(argv, argc);
+  char buf[MAX_LENGTH];
+
+
+  if (argc == 1) {
+    while (fgets(buf, MAX_LENGTH, stdin))
+      fputs(buf, stdout);
+    if (ferror(stdin)) {
+      fprintf(stderr, "cat: Bad file descriptor\n");
+      return 1;
+    }
+    return 0;
+  }
+
+  while (i < argc) {
+    if (access(argv[i], R_OK) == 0) {
+      f = fopen(argv[i], "r");
+    } else {
+      printf("%s: Error: could not access file\n", argv[i]);
+      return 1;
+    }
+    if (!f) {
+      printf("Error: could not access file");
+      return 0;
+    }
+    if (f) {
+      while (fgets(buf, MAX_LENGTH, f))
+        fputs(buf, stdout);
+      fclose(f);
+    }
+    i++;
+  }
   return 0;
 }
 
