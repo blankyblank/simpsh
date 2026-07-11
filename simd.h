@@ -299,5 +299,63 @@ memchr_(const char *buf, size_t len, char c)
 
 #endif /* __SSE2__ */
 
+// #ifdef __SSE2__
+// static inline size_t
+// sscnmetachar(const char *buf, size_t len)
+// {
+//   sike_t i = 0;
+//   if (len < 16) {
+//     sint v_space = _mm_set1_epi8(' '), v_tab = _mm_set1_epi8('\t');
+//     sint v_nl = _mm_set1_epi8('\n'), v_hash = _mm_set1_epi8('#');
+//     sint v_squo = _mm_set1_epi8('\''), v_dquo = _mm_set1_epi8('"');
+//     sint v_bsl = _mm_set1_epi8('\\'), v_doll = _mm_set1_epi8('$');
+//     sint v_amp = _mm_set1_epi8('&'), v_pipe = _mm_set1_epi8('|');
+//     sint v_semi = _mm_set1_epi8(';'), v_lp = _mm_set1_epi8('(');
+//     sint v_rp = _mm_set1_epi8(')'), v_lb = _mm_set1_epi8('{');
+//     sint v_rb = _mm_set1_epi8('}'), v_lt = _mm_set1_epi8('<');
+//     sint v_gt = _mm_set1_epi8('>'), v_bt = _mm_set1_epi8('`');
+//     for (; i + 16 <= len; i += 16) {
+//       sint v = _mm_loadu_si128((const sint *)(buf + i));
+//       sint m = _mm_setzero_si128();
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_space));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_tab));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_nl));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_hash));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_squo));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_dquo));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_bsl));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_doll));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_amp));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_pipe));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_semi));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_lp));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_rp));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_lb));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_rb));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_lt));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_gt));
+//       m = _mm_or_si128(m, _mm_cmpeq_epi8(v, v_bt));
+//       int mask = _mm_movemask_epi8(m);
+//       if (mask)
+//         return i + __builtin_ctz(mask);
+//     }
+//   }
+//   for (; i < len; i++)
+//     if (nchars[(unsigned char)buf[i]] != C_WORD)
+//       return i;
+//   return len;
+// }
+// #else
+// static inline size_t
+// sscnmetachar(const char *buf, size_t len)
+// {
+//   size_t i = 0;
+//   while (i < len && nchars[(unsigned char)buf[i]] == C_WORD)
+//     i++;
+//   return i;
+// }
+// #endif
+
+
 #endif /* SIMD_H */
 

@@ -197,11 +197,13 @@ void
 child_setup_fg(pid_t pgid)
 {
   cleartraps();
-  signal(SIGINT, SIG_DFL);
-  signal(SIGQUIT, SIG_DFL);
-  signal(SIGTSTP, SIG_DFL);
-  signal(SIGTTIN, SIG_DFL);
-  signal(SIGTTOU, SIG_DFL);
+  if (mflag) {
+    signal(SIGINT, SIG_DFL);
+    signal(SIGQUIT, SIG_DFL);
+    signal(SIGTSTP, SIG_DFL);
+    signal(SIGTTIN, SIG_DFL);
+    signal(SIGTTOU, SIG_DFL);
+   }
   if (mflag)
     if (setpgid(0, pgid) < 0)
       warn("simpsh: setpgid");

@@ -253,23 +253,25 @@ trapsig(int n)
   chksig[n] = 1;
   fchksig = n;
   if (trap[n]) {
-    if (n == SIGCHLD)
+    if (n == SIGCHLD && mflag)
       if (write(selfpipe[1], "\1", 1) < 0)
         return;
-    if (n == SIGINT)
+    if (n == SIGINT && mflag)
       if (write(intpipe[1], "\1", 1) < 0)
         return;
     return;
   } else {
     switch (n) {
       case SIGCHLD:
-        if (write(selfpipe[1], "\1", 1) < 0)
-          return;
+        if (mflag)
+          if (write(selfpipe[1], "\1", 1) < 0)
+            return;
         ndnotify = 1;
         break;
       case SIGINT:
-        if (write(intpipe[1], "\1", 1) < 0)
-          return;
+        if (mflag)
+          if (write(intpipe[1], "\1", 1) < 0)
+            return;
         intsig = 1;
         break;
       case SIGTERM:

@@ -2,7 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
-#include <limits.h>
+#include <linux/limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -243,11 +243,14 @@ simpsh_run(void)
     last_tok = SHTOK(TNONE);
     if (fchksig)
       dotrap();
-    runeventloop(&el, 0);
-    killjob();
-    if (ndnotify) {
-      ndnotify = 0;
-      jobnotify();
+    if (iflag || mflag)
+      runeventloop(&el, 0);
+    if (mflag) {
+      killjob();
+      if (ndnotify) {
+        ndnotify = 0;
+        jobnotify();
+      }
     }
     if (intsig)
       intsig = 0;

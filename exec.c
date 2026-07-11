@@ -912,6 +912,7 @@ run_cmd(const cmd_tree *n, int inchld)
         restore_fd(sfd, sfdc);
       }
     }
+    return status;
   }
   if ((f = findfunc(final[0])) || b) {
     fdlist sfd[FD_MAX];
