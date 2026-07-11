@@ -2,17 +2,26 @@
 
 include config.mk
 
+ifneq ($(filter debug valgrind sanitize,$(BUILD)),)
+	DEBUGFLAGS := -D_FORTIFY_SOURCE=3 -fstack-protector-strong -g3 -fno-omit-frame-pointer
+	CFLAGS += $(if $(filter gcc,$(CC)),-ggdb -fvar-tracking-assignments -fno-analyzer-state-merge)
+	CFLAGS += $(if $(filter clang,$(CC)),-glldb -fstandalone-debug)
+endif
+
 ifeq ($(BUILD),release)
-	CFLAGS += -march=native -O2 -flto=auto
+	CFLAGS += -march=native -O2 -flto
+	# CFLAGS += -march=native -O3 -ffast-math -flto
+	CFLAGS += $(if $(filter gcc,$(CC)), -Wno-stringop-overflow -flto=auto)
+	CFLAGS += $(if $(filter clang,$(CC)),-flto=full)
 else ifeq ($(BUILD),debug)
 	CFLAGS += -Og $(DEBUGFLAGS)
 else ifeq ($(BUILD),valgrind)
 	CC := gcc
 	CFLAGS += -Og $(DEBUGFLAGS) -DDEBUG -DENABLE_VALGRIND
 else ifeq ($(BUILD),profile)
-	CFLAGS += -O2 -g3 -fvar-tracking-assignments -fno-analyzer-state-merge $(PROFFLAGS)
-	CFLAGS += $(if $(filter clang,$(CC)),-pg)
-	LDFLAGS += $(if $(filter clang,$(CC)),-pg)
+	CFLAGS += -O2 -g3 $(PROFFLAGS)
+	CFLAGS += $(if $(filter gcc,$(CC)),-fvar-tracking-assignments -fno-analyzer-state-merge -pg)
+	LDFLAGS += $(if $(filter gcc,$(CC)),-pg)
 	CFLAGS += $(if $(filter clang,$(CC)),-fprofile-instr-generate -fcoverage-mapping)
 	LDFLAGS += $(if $(filter clang,$(CC)),-fprofile-instr-generate)
 else ifeq ($(BUILD),sanitize)
@@ -32,12 +41,6 @@ endif
 ifdef GCOV
 	CFLAGS += --coverage -fno-lto
 	LDFLAGS += --coverage
-endif
-
-ifneq ($(filter debug valgrind sanitize,$(BUILD)),)
-	DEBUGFLAGS := -D_FORTIFY_SOURCE=3 -fstack-protector-strong -g3 -fno-omit-frame-pointer
-	CFLAGS += $(if $(filter gcc,$(CC)),-ggdb -fvar-tracking-assignments -fno-analyzer-state-merge)
-	CFLAGS += $(if $(filter clang,$(CC)),-glldb -fstandalone-debug)
 endif
 
 # Link type
@@ -83,4 +86,4 @@ examine:
 test:
 	cd tests && ./runtests.sh
 bench:
-	hyperfine --warmup 4 './simpsh tests/bench.sh'
+	hyperfine --warmup 4 './simpsh profiling/bench.sh'
