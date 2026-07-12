@@ -4,7 +4,6 @@ tmp*.md
 obj/*.o
 tests/scripting-test
 *sh-st
-AGENTS.md
 project*.md
 doc
 bak
@@ -20,10 +19,7 @@ profiling
 .cache/
 .ccls-cache
 *.json
-simsh.geany
 .zed
-.gdb_history
-.dir-locals.el
 GPATH
 GTAGS
 GRTAGS
