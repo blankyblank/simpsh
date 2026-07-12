@@ -132,19 +132,6 @@ strchrnul_(const char *s, int c)
   return (char *)s;
 }
 
-/**  strndup using memcpy, and slmalloc  */
-static inline char *
-strndup_(const char *restrict s, size_t n)
-{
-  char *dup;
-  if ((dup = salloc(n + 1))) {
-    nmemcpy(dup, s, n);
-  }
-  return dup;
-}
-
-#define strdup_(s) (strndup_((s), strlen(s)))
-
 /** strcat using memcpy */
 static inline char *
 strcat_(char *restrict dest, const char *restrict src)

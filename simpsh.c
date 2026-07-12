@@ -18,6 +18,7 @@
 #include "error.h"
 #include "exec.h"
 #include "expand.h"
+#include "history.h"
 #include "input.h"
 #include "job.h"
 #include "lex.h"
@@ -33,16 +34,11 @@ static int read_cmd(char ** restrict, size_t * restrict);
 static shinput *init_interactive(void);
 
 #ifdef LIBEDIT
-  #define DIRPERMS \
-    (S_IRWXU | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH)
 static EditLine *edl;
-static History *hist;
 static int ps1mode;
 
-static int pmkdir(char *);
 static int input_notify(EditLine *, wchar_t *);
 static char *prompt_fn(EditLine *);
-void init_history(void);
 #else
 static char *nxtline;
 
@@ -267,7 +263,6 @@ sh_interactive(void)
   int r;
 
 #ifdef LIBEDIT
-  HistEvent ev;
   edl = el_init(SHARGV0, stdin, stdout, stderr);
   el_set(edl, EL_EDITOR, "vi");
   el_set(edl, EL_SIGNAL, 1);
@@ -275,11 +270,10 @@ sh_interactive(void)
   el_set(edl, EL_PROMPT, prompt_fn);
   el_set(edl, EL_ADDFN, "sh-complete", "Shell Completion", _el_fn_sh_complete);
   el_set(edl, EL_BIND, "^I", "sh-complete", NULL);
-  hist = history_init();
-  el_set(edl, EL_HIST, history, hist);
-  init_history();
+  static int hcookie;
+  el_set(edl, EL_HIST, hist_cb, &hcookie);
 #endif
-
+  init_history();
   inpt = init_interactive();
 
   for (;;) {
@@ -314,12 +308,10 @@ sh_interactive(void)
       stack_restore(mark);
       return 1;
     }
-
+    hist_add(lines);
+    hist_save();
     feed_input(inpt, lines, llen);
     simpsh_run();
-#ifdef LIBEDIT
-    history(hist, &ev, H_SAVE, histfile);
-#endif
     stack_restore(mark);
   }
   ttyrestore();
@@ -486,7 +478,6 @@ lineread(int ps1)
   int count;
   char *s;
   const char *line;
-  HistEvent ev;
 
 again:
   ps1mode = ps1;
@@ -508,45 +499,9 @@ again:
   s = st_alloc(count + 1);
   memcpy(s, line, count);
   s[count] = '\0';
-  history(hist, &ev, H_ENTER, s);
   return s;
 }
 
-/** initialize history */
-void
-init_history(void)
-{
-  char buf[PATH_MAX];
-  HistEvent ev;
-  snprintf(histfile, PATH_MAX, "%s/.local/state/simpsh/simpsh_history", gvar.home);
-  history(hist, &ev, H_SETSIZE, HISTORY_SIZE);
-  if (access(histfile, W_OK) < 0) {
-    static const char *histdir = ".local/state/simpsh";
-    snprintf(buf, PATH_MAX, "%s/%s", gvar.home, histdir);
-    if (!pmkdir(buf))
-      return;
-  }
-  history(hist, &ev, H_LOAD, histfile);
-}
-
-/**  created directories and their parents if they don't exist  */
-static int
-pmkdir(char *path)
-{
-  char *dir;
-
-  dir = strchr(path + 1, '/');
-  while (dir) {
-    *dir = 0;
-    if (access(path, F_OK) < 0 && mkdir(path, DIRPERMS) < 0)
-      return 0;
-    *dir = '/';
-    dir = strchr(dir + 1, '/');
-  }
-  if (mkdir(path, DIRPERMS) < 0)
-    return 0;
-  return 1;
-}
 #else
 
 static void

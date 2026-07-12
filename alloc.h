@@ -15,16 +15,17 @@
 /* so far 8000 for minstack_s seems pretty good for performance, but it seems
  * large which can have it's own drawbacks test more sized */
 #define align_mem(n) (((n) + 15) & ~(size_t)15)
-#define MINSTACK_S align_mem(8192)
-#define PAGE_SIZE 4096
-#define MEMMAGIC 0x534C4142
-#define LARGEMAGIC ((void *)(uintptr_t)0x4C52474C)   /* "LARG" */
-#define SLCLASSN 10
-#define STACK_CLS 9
-#define MINSLAB align_mem(4096)
+#define MINSTACK_S   align_mem(8192)
+#define PAGE_SIZE    4096
+#define MEMMAGIC     0x534C4142
+#define LARGEMAGIC   ((void *)(uintptr_t)0x4C52474C) /* "LARG" */
+#define SLCLASSN     10
+#define STACK_CLS    9
+#define MINSLAB      align_mem(4096)
 #define stack_mark() ((stmark) { current, stnext, stleft })
 #define st_strdup(s) (st_strndup(s, strlen(s))) /** stack allocated strdup */
 #define st_putc(c) (void)(stleft == 0 ? grow_stack(1) : (void *)0), *stnext++ = (c), stleft--
+#define strdup_(s) (strndup_((s), strlen(s)))
 
 #define streallocar(ar, sz, used, t) \
   do { \
@@ -198,6 +199,37 @@ slfree(void *p)
   *(void **)p = s->flist;
   s->flist = p;
   s->nalloc--;
+}
+
+/**  strndup using memcpy, and slmalloc  */
+static inline char *
+strndup_(const char *restrict s, size_t n)
+{
+  char *dup;
+  if ((dup = salloc(n + 1))) {
+    memcpy(dup, s, n);
+    dup[n] = '\0';
+  }
+  return dup;
+}
+
+static inline void*
+srealloc(void *p, size_t s)
+{
+  if (s && !p) {
+    p = salloc(s);
+    return p;
+  } else if (p && !s) {
+    slfree(p);
+    return NULL;
+  } else {
+    char *t = strdup_((char *)p);
+    slfree(p);
+    p = salloc(s);
+    p = strdup_(p);
+    slfree(t);
+    return p;
+  }
 }
 
 static inline void

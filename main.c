@@ -1,7 +1,6 @@
 /* simpsh - a simple posix shell */
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
-#include <alloca.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <locale.h>
@@ -21,7 +20,6 @@
 #include "simpsh.h"
 #include "var.h"
 
-char histfile[PATH_MAX];
 const char shname[] = "simpsh";
 const char shusg[43] = "[-abCefhiImnosvVx] [-o longopt] [-c 'cmd']";
 const char defpathn[80] = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";

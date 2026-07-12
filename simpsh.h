@@ -16,10 +16,6 @@ extern void simpsh_run(void);
 extern int sh_interactive(void);
 extern void init_rc(int);
 
-#ifdef READLINE
-extern void init_history(void);
-#endif /* ifdef READLINE */
-
 #define sh_ccmd(s) setinputstrn(s, strlen(s)); simpsh_run(); popinput();
 #define sh_stdin() setinputf(STDIN_FILENO, NULL, 0); simpsh_run(); popinput();
 #define sh_script(i, n) setinputf(i, n, 0); simpsh_run(); popinput();

@@ -40,7 +40,6 @@ typedef int64_t i64;
 typedef u_int64_t u64;
 
 #define MAX_ENV      500
-#define HISTORY_SIZE 1000
 #define OPTC 19
 #define SHOPTC 16 /* short option count */
 #define defpath      "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -92,7 +91,6 @@ extern GSTATE gstate;
 extern const char shname[];
 extern const char shusg[43];
 extern char **environ;
-extern char histfile[PATH_MAX];
 
 #define LSTATUS     (gstate.l_status)
 #define RETVAL      (gstate.ret_val)
