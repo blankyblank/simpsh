@@ -36,22 +36,24 @@ static void restoreterm(void) { tcsetattr(tty_fd, TCSADRAIN, &sh_termios); }
 void
 init_sig(void)
 {
-  if (pipe(selfpipe) == 0) {
-    fcntl(selfpipe[0], F_SETFD, FD_CLOEXEC);
-    fcntl(selfpipe[0], F_SETFL, fcntl(selfpipe[0], F_GETFL) | O_NONBLOCK);
-    fcntl(selfpipe[1], F_SETFD, FD_CLOEXEC);
-    fcntl(selfpipe[1], F_SETFL, fcntl(selfpipe[1], F_GETFL) | O_NONBLOCK);
-  }
-  if (pipe(intpipe) == 0) {
-    fcntl(intpipe[0], F_SETFD, FD_CLOEXEC);
-    fcntl(intpipe[0], F_SETFL, fcntl(intpipe[0], F_GETFL) | O_NONBLOCK);
-    fcntl(intpipe[1], F_SETFD, FD_CLOEXEC);
-    fcntl(intpipe[1], F_SETFL, fcntl(intpipe[1], F_GETFL) | O_NONBLOCK);
-  }
+  if (mflag) {
+    if (pipe(selfpipe) == 0) {
+      fcntl(selfpipe[0], F_SETFD, FD_CLOEXEC);
+      fcntl(selfpipe[0], F_SETFL, fcntl(selfpipe[0], F_GETFL) | O_NONBLOCK);
+      fcntl(selfpipe[1], F_SETFD, FD_CLOEXEC);
+      fcntl(selfpipe[1], F_SETFL, fcntl(selfpipe[1], F_GETFL) | O_NONBLOCK);
+    }
+    if (pipe(intpipe) == 0) {
+      fcntl(intpipe[0], F_SETFD, FD_CLOEXEC);
+      fcntl(intpipe[0], F_SETFL, fcntl(intpipe[0], F_GETFL) | O_NONBLOCK);
+      fcntl(intpipe[1], F_SETFD, FD_CLOEXEC);
+      fcntl(intpipe[1], F_SETFL, fcntl(intpipe[1], F_GETFL) | O_NONBLOCK);
+    }
 
-  init_eventloop(&el);
-  addeventloop(&el, selfpipe[0], POLLIN, chld_cb, NULL);
-  addeventloop(&el, intpipe[0], POLLIN, int_cb, NULL);
+    init_eventloop(&el);
+    addeventloop(&el, selfpipe[0], POLLIN, chld_cb, NULL);
+    addeventloop(&el, intpipe[0], POLLIN, int_cb, NULL);
+  }
   init_traps();
 }
 
@@ -140,7 +142,7 @@ runeventloop(eventloop *el, int cont)
 static char signum[NSIG][8];
 static char *trap[NSIG];                /* trap command strings */
 static unsigned char sigmode[NSIG];     /* S_DFL, S_CATCH, S_IGN, S_HARD_IGN */
-
+static const int sigprobe[] = { SIGCHLD, SIGINT, SIGHUP, SIGTERM, SIGQUIT };
 static void setsignal(int);
 
 int
@@ -186,15 +188,13 @@ init_traps(void)
 #ifdef SIGSTKFLT
   signame[SIGSTKFLT] = "STKFLT";
 #endif
-  
-  for (size_t s = 1; s < NSIG; s++) {
-  struct sigaction old;
+
+  for (size_t i = 1; i < arsz(sigprobe, sigprobe[0]); i++) {
+    int s = sigprobe[i];
+    struct sigaction old;
     if (sigaction(s, NULL, &old) < 0)
       continue;
-    if (old.sa_handler == SIG_IGN)
-      sigmode[s] = S_HIGN;
-    else 
-      sigmode[s] = S_DFL;
+    sigmode[s] = (old.sa_handler == SIG_IGN) ? S_HIGN : S_DFL;
   }
   setsignal(SIGCHLD);
   if (iflag) {
@@ -212,6 +212,14 @@ setsignal(int n)
   int set;
   struct sigaction sa;
 
+  // XXX: check if this is right spot for guard
+  if (!sigmode[n]) {
+    struct sigaction old;
+    sigmode[n] = (sigaction(n, NULL, &old) == 0 && old.sa_handler == SIG_IGN)
+                 ? S_HIGN : S_DFL;
+    if (sigmode[n] == S_HIGN)
+      return;
+  }
   if (sigmode[n] == S_HIGN)
     return;
   if (!trap[n]) {

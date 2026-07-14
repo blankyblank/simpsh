@@ -38,7 +38,7 @@ pushstring(char *s, size_t len, int alias)
   sp->saved_nchar = shinpt->nchar;
   sp->saved_nleft = shinpt->nleft;
   sp->saved_unget = shinpt->unget;
-  memcpy(sp->saved_ungetbuf, shinpt->ungetbuf, 4);
+  memcpy(sp->saved_ungetbuf, shinpt->ungetbuf, 2);
   sp->alias = alias;
   shinpt->nchar = s;
   shinpt->nleft = len;
@@ -56,7 +56,7 @@ popstring(void)
   shinpt->nchar = sp->saved_nchar;
   shinpt->nleft = sp->saved_nleft;
   shinpt->unget = sp->saved_unget;
-  memcpy(shinpt->ungetbuf, sp->saved_ungetbuf, 4);
+  memcpy(shinpt->ungetbuf, sp->saved_ungetbuf, 2);
   shinpt->strpush = sp->prev;
   if (sp->alias)
     alias_depth--;
@@ -79,12 +79,37 @@ shgetline(char *buf, size_t sz)
 }
 
 int
-shungetc(int c)
+charfill(void)
 {
-  if (shinpt->unget < 4) {
-    return shinpt->ungetbuf[shinpt->unget++] = c;
+  shinput *in = shinpt;
+  if (in->strpush) {
+    popstring();
+    return (unsigned char)shgetchar();
   }
-  return SHEOF;
+
+  if (in->fd < 0 && in->b.mapsize)
+    return SHEOF;
+
+  if (in->fd >= 0 && in->b.lleft > 0) {
+    size_t nl;
+    nl = memchr_(in->nchar, in->b.lleft, '\n');
+    if (nl < in->b.lleft) {
+      in->nleft = nl + 1, in->b.lleft -= in->nleft;
+    } else {
+      in->nleft = in->b.lleft, in->b.lleft = 0;
+    }
+    in->nleft--;
+    if (*in->nchar == '\n')
+      in->linenum++;
+    return (unsigned char)*in->nchar++;
+  }
+
+  if (shreadbuf() == 0)
+    return SHEOF;
+  in->nleft--;
+  if (*in->nchar == '\n')
+    in->linenum++;
+  return (unsigned char)*in->nchar++;
 }
 
 void

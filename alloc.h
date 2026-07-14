@@ -11,6 +11,16 @@
   #include <valgrind/cachegrind.h>
   #include <valgrind/memcheck.h>
 #endif /* ifdef ENABLE_VALGRIND */
+#if defined(__has_attribute)
+#  if __has_attribute(no_sanitize)
+#    define NO_UBSAN __attribute__((no_sanitize("unsigned-integer-overflow")))
+#  endif
+#endif
+#ifndef NO_UBSAN
+#  define NO_UBSAN
+#endif
+#define doexpect(x)	__builtin_expect(!!(x),1)
+#define dontexpect(x)	__builtin_expect(!!(x),0)
 
 /* so far 8000 for minstack_s seems pretty good for performance, but it seems
  * large which can have it's own drawbacks test more sized */
@@ -24,7 +34,8 @@
 #define MINSLAB      align_mem(4096)
 #define stack_mark() ((stmark) { current, stnext, stleft })
 #define st_strdup(s) (st_strndup(s, strlen(s))) /** stack allocated strdup */
-#define st_putc(c) (void)(stleft == 0 ? grow_stack(1) : (void *)0), *stnext++ = (c), stleft--
+#define stcheck(n) ((void)(stleft == 0 ? grow_stack(n) : (void *)0))
+#define st_putc(c)  (*(unsigned char *)stnext++ = (c), stleft--)
 #define strdup_(s) (strndup_((s), strlen(s)))
 
 #define streallocar(ar, sz, used, t) \
@@ -222,6 +233,8 @@ srealloc(void *p, size_t s)
   } else if (p && !s) {
     slfree(p);
     return NULL;
+  } else if (!p && !s) {
+    return NULL;
   } else {
     char *t = strdup_((char *)p);
     slfree(p);
@@ -232,17 +245,19 @@ srealloc(void *p, size_t s)
   }
 }
 
-static inline void
-*slcalloc(size_t n, size_t size) {
-    void *p;
-    size_t total = n * size;
-    if ((p = salloc(total))) {
-            memset(p, 0, total);
-    }
-    return p;
+static inline void *
+slcalloc(size_t n, size_t size)
+{
+  void *p;
+  size_t total = n * size;
+  if ((p = salloc(total))) {
+    memset(p, 0, total);
+  }
+  return p;
 }
 
 /**  allocate new stack block  */
+NO_UBSAN
 __attribute__((always_inline))
 static inline  void *
 st_alloc(size_t dsize)

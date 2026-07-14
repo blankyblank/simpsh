@@ -61,6 +61,7 @@ typedef enum {
   TIN,
   TDO,
   TDONE,
+  TCONT,
 } token;
 
 typedef enum {

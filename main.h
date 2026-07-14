@@ -16,18 +16,20 @@
 #include <unistd.h>
 
 enum {
-  FLAG_c = 1 << 0,
-  FLAG_i = 1 << 1,
-  FLAG_N = 1 << 2,
-  FLAG_L = 1 << 3,
-  FLAG_P = 1 << 4,
-  FLAG_l = 1 << 5,
-  FLAG_p = 1 << 6,
-  FLAG_V = 1 << 7,
-  FLAG_v = 1 << 8,
-  FLAG_r = 1 << 9,
-  FLAG_s = 1 << 10,
-  LOGIN = 1 << 11,
+  FLAG_L = 1 << 0,
+  FLAG_N = 1 << 1,
+  FLAG_P = 1 << 2,
+  FLAG_V = 1 << 3,
+  FLAG_c = 1 << 4,
+  FLAG_e = 1 << 5,
+  FLAG_i = 1 << 6,
+  FLAG_l = 1 << 7,
+  FLAG_n = 1 << 8,
+  FLAG_p = 1 << 9,
+  FLAG_r = 1 << 10,
+  FLAG_s = 1 << 11,
+  FLAG_v = 1 << 12,
+  LOGIN = 1 << 13,
 };
 
 typedef int8_t i8;

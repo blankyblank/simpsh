@@ -114,6 +114,11 @@ static int ctx_depth;
 static tokmode ctx_stack[CTX_MAX] = { M_NORMAL };
 
 static wf *get_wf(int);
+static sh_tok tokword(wf *, int*);
+static void tokws(void);
+static sh_tok toklt(void);
+static sh_tok toknl(void);
+static sh_tok tokgt(void);
 static void lexsquote(void);
 static void lexdquote(void);
 static int lexbslash(int);
@@ -165,7 +170,7 @@ eatbnl(void)
 {
   char c, n;
 
-  while ((c = shgetchar()) == '\\') {
+  while ((c = (char)shgetchar()) == '\\') {
     if ((n = shgetchar()) == '\n') {
       shinpt->linenum++;
       continue;
@@ -216,7 +221,7 @@ get_wf(int c)
       if (stleft < 32)
         grow_stack(32);
       while (nchars[(unsigned char)c] == C_WORD) {
-        *stnext++ = c, stleft--;
+        *(unsigned char *)stnext++ = c, stleft--;
         wflen++;
         c = eatbnl();
         if (c == SHEOF)
@@ -266,6 +271,7 @@ get_wf(int c)
             if (lexvnum(n) == SHEOF)
               goto done;
           } else {
+            stcheck(32);
             st_putc(c);
             wflen++;
             shungetc(n);
@@ -299,7 +305,7 @@ get_wf(int c)
       case C_COMMENT:
         if (c == '\n')
           shinpt->linenum++;
-        st_putc(c);
+        stcheck(32), st_putc(c);
         wflen++;
         break;
     }
@@ -329,8 +335,6 @@ tokenize(void)
 {
   sh_tok t;
   int wd, c, n;
-  char *word;
-  alias *a;
   wf *f;
 
   if (last_tok.type != TNONE) {
@@ -344,39 +348,15 @@ tokenize(void)
   while ((c = shgetchar()) != SHEOF) {
     switch (NCHR(c)) {
       case C_SPACE:
-        {
-          const char *buf;
-          size_t avail = shpeek(&buf);
-          if (avail >= 16) {
-            size_t skip = sskipspace(buf, avail);
-            if (skip > 0)
-              shadvance(skip);
-          }
-        }
+        tokws();
         continue;
       case C_COMMENT:
         skipcomment();
         continue;
-
       case C_NL:
         if (wd & CHKNL)
           continue;
-        {
-          const char *buf;
-          size_t avail;
-          while ((avail = shpeek(&buf)) > 0) {
-            size_t skip;
-            skip = sskipnl(buf, avail);
-            if (skip > 0)
-              shadvance(skip);
-            if (skip < avail)
-              break;
-          }
-        }
-        c = shgetchar();
-        if (c != '\n' && c != SHEOF)
-          shungetc(c);
-        return SHTOK(TNL);
+        return toknl();
       case C_AMP:
         n = eatbnl();
         if (n == '&')
@@ -406,32 +386,10 @@ tokenize(void)
         return SHTOK(TLB);
       case C_RB:
         return SHTOK(TRB);
-
       case C_LT:
-        n = eatbnl();
-        if (n == '<') {
-          if ((n = eatbnl()) == '-')
-            return SHREDIR(RDHERE_D);
-          shungetc(n);
-          return SHREDIR(RDHERE);
-        }
-        if (n == '&')
-          return SHREDIR(RDDUPI);
-        if (n == '>')
-          return SHREDIR(RDRW);
-        shungetc(n);
-        return SHREDIR(RDIN);
+        return toklt();
       case C_GT:
-        n = eatbnl();
-        if (n == '>')
-          return SHREDIR(RDAPP);
-        if (n == '&')
-          return SHREDIR(RDDUPO);
-        if (n == '|')
-          return SHREDIR(RDCLOB);
-        shungetc(n);
-        return SHREDIR(RDOUT);
-
+        return tokgt();
       case C_BSLASH:
         if ((n = shgetchar()) == '\n') {
           shinpt->linenum++;
@@ -444,40 +402,117 @@ tokenize(void)
         f = get_wf(c);
         if (!f)
           return SHTOK(TEOF);
+        sh_tok t = tokword(f, &wd);
+        if (t.type == TCONT)
+          continue;
+        return t;
 
         /* AHEAD OF TIME SCAN */
-        f->flags = 0;
-        if (f->qs == QNONE && !f->next)
-          f->flags |= WFSINGLE;
-        for (wf *p = f; p; p = p->next) {
-          if (p->qs != QNONE)
-            f->flags |= WFDOUBLE;
-          if (p->qs == QCMDSUB || p->qs == QCMDSUB_DQ)
-            f->flags |= WFCMDSUB;
-        }
-        if (wd & CHKKWD && (f->flags & WFSINGLE)) {
-          int h = kwhash(f->word, f->len);
-          if (kw[h].word && kw[h].len == f->len &&
-              memcmp(kw[h].word, f->word, f->len) == 0)
-            return (sh_tok){ .type =  kw[h].tok, .cmd = (f) };
-        }
-        if ((wd & CHKALIAS) && (f->flags & WFSINGLE)) {
-          word = join_wf(f);
-          a = findalias(word);
-          if (a) {
-            if (alias_depth >= MAX_ALIAS_DEPTH) {
-              fprintf(stderr, "alias: too many levels of recursion\n");
-              return SHTOK(TEOF);
-            }
-            pushstring(a->value, strlen(a->value), 1);
-            wd &= ~CHKALIAS;
-            continue;
-          }
-        }
-        return SHWORD(f);
     }
   }
   return SHTOK(TEOF);
+}
+
+static sh_tok
+tokword(wf *f, int *wd)
+{
+  char *word;
+  alias *a;
+  f->flags = 0;
+  if (f->qs == QNONE && !f->next)
+    f->flags |= WFSINGLE;
+  for (wf *p = f; p; p = p->next) {
+    if (p->qs != QNONE)
+      f->flags |= WFDOUBLE;
+    if (p->qs == QCMDSUB || p->qs == QCMDSUB_DQ)
+      f->flags |= WFCMDSUB;
+  }
+  if (*wd & CHKKWD && (f->flags & WFSINGLE)) {
+    int h = kwhash(f->word, f->len);
+    if (kw[h].word && kw[h].len == f->len &&
+        memcmp(kw[h].word, f->word, f->len) == 0)
+      return (sh_tok) { .type = kw[h].tok, .cmd = (f) };
+  }
+  if ((*wd & CHKALIAS) && (f->flags & WFSINGLE)) {
+    word = join_wf(f);
+    a = findalias(word);
+    if (a) {
+      if (alias_depth >= MAX_ALIAS_DEPTH) {
+        fprintf(stderr, "alias: too many levels of recursion\n");
+        return SHTOK(TEOF);
+      }
+      pushstring(a->value, strlen(a->value), 1);
+      *wd &= ~CHKALIAS;
+      return SHTOK(TCONT);
+    }
+  }
+  return SHWORD(f);
+}
+
+static void
+tokws(void)
+{
+  const char *buf;
+  size_t avail = shpeek(&buf);
+  if (avail >= 16) {
+    size_t skip = sskipspace(buf, avail);
+    if (skip > 0)
+      shadvance(skip);
+  }
+}
+
+static sh_tok
+toknl(void)
+{
+  int c;
+  const char *buf;
+  size_t avail;
+  while ((avail = shpeek(&buf)) > 0) {
+    size_t skip;
+    skip = sskipnl(buf, avail);
+    if (skip > 0)
+      shadvance(skip);
+    if (skip < avail)
+      break;
+  }
+  c = shgetchar();
+  if (c != '\n' && c != SHEOF)
+    shungetc(c);
+  return SHTOK(TNL);
+}
+
+static sh_tok
+toklt(void)
+{
+  int n;
+  n = eatbnl();
+  if (n == '<') {
+    if ((n = eatbnl()) == '-')
+      return SHREDIR(RDHERE_D);
+    shungetc(n);
+    return SHREDIR(RDHERE);
+  }
+  if (n == '&')
+    return SHREDIR(RDDUPI);
+  if (n == '>')
+    return SHREDIR(RDRW);
+  shungetc(n);
+  return SHREDIR(RDIN);
+}
+
+static sh_tok
+tokgt(void)
+{
+  int n;
+  n = eatbnl();
+  if (n == '>')
+    return SHREDIR(RDAPP);
+  if (n == '&')
+    return SHREDIR(RDDUPO);
+  if (n == '|')
+    return SHREDIR(RDCLOB);
+  shungetc(n);
+  return SHREDIR(RDOUT);
 }
 
 static int
@@ -493,10 +528,10 @@ lexbslash(int c)
     return SHEOF;
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
   if (cctx == M_DQUOTE && n != '$' && n != '"' && n != '\\' && n != '`') {
-    st_putc(c);
+    stcheck(32), st_putc(c);
     wflen++;
   }
-  st_putc(n);
+  stcheck(32), st_putc(n);
   wflen++;
   w = grab_str(wflen);
   append_wf(&head, &tail, w, wflen, QSINGLE);
@@ -516,6 +551,7 @@ lexcmdsub(void)
   cmdlen = 0;
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
 
+  stcheck(32);
   for (int ch = shgetchar();; ch = shgetchar()) {
     if (ch == SHEOF) {
       notclosed = 1;
@@ -676,6 +712,7 @@ lexvbrace(void)
   int c;
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
   size_t nlen = 0;
+  stcheck(32);
   for (int ch = shgetchar();; ch = shgetchar()) {
     if (ch == SHEOF) {
       notclosed = 1;
@@ -700,7 +737,7 @@ lexvar(int c)
 {
   char *w;
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
-  st_putc(c);
+  stcheck(32), st_putc(c);
   size_t nlen = 1;
   for (;;) {
     int ch = eatbnl();
@@ -724,7 +761,7 @@ lexvspecial(int c)
 {
   char *w;
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
-  st_putc(c);
+  stcheck(32), st_putc(c);
   w = grab_str(1);
   append_wf(&head, &tail, w, 1, cctx == M_DQUOTE ? QVAR_DQ : QVAR);
   if ((c = eatbnl()) == SHEOF)
@@ -738,7 +775,7 @@ lexvnum(int c)
 {
   char *w;
   flushword((cctx == M_DQUOTE) ? QBRACE_DQ : QBRACE);
-  st_putc(c);
+  stcheck(32), st_putc(c);
   size_t nlen = 1;
   for (;;) {
     int ch = eatbnl();
@@ -789,6 +826,7 @@ lexbtick(void)
   cstate = 0;
   cmdlen = 0;
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
+  stcheck(32);
   for (int ch = shgetchar();; ch = shgetchar()) {
     if (ch == SHEOF) {
       notclosed = 1;

@@ -116,8 +116,12 @@ chkpath(const char *restrict path, const char *restrict name, int mode, unsigned
       }
     }
 
-    // BUG: stack overflow find way to resturcture to continue
-    //
+    if (complen + 1 + flen >= PATH_MAX) {
+      if (!*e)
+        break;
+      s = e + 1;
+      continue;
+    }
     end = mempcpy_(buf, comp, complen);
     *end++ = '/';
     memcpy(end, name, flen + 1);

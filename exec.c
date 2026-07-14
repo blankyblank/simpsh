@@ -54,6 +54,7 @@ static int save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
 static pid_t forkrun(int);
 static int run_if(const cmd_tree *);
+static int run_case(const cmd_tree *);
 static int run_while(const cmd_tree *);
 static int run_for(const cmd_tree *);
 static int run_func(const cmd_tree *restrict, char **restrict);
@@ -69,13 +70,13 @@ static int shfexec(char ** restrict, const cmd_tree * restrict,
 static inline int
 restore_fd(fdlist *sfd, size_t sfdc)
 {
-  for (size_t i = sfdc; i-- > 0;) {
+  for (ssize_t i = sfdc; i-- > 0;) {
     if (dup2(sfd[i].saved, sfd[i].orig) < 0) {
       perror("dup2");
       return 1;
     }
   }
-  for (size_t i = sfdc; i-- > 0;) {
+  for (ssize_t i = sfdc; i-- > 0;) {
     if (close(sfd[i].saved) < 0) {
       perror("close");
       return 1;
@@ -207,6 +208,48 @@ save_fd(redir *r, fdlist *sfd, size_t * restrict sfdc)
   return 0;
 }
 
+static inline int
+run_funcdef(const cmd_tree *n)
+{
+  char *name;
+  name = st_strndup(CFUNC(n)->word, CFUNC(n)->len);
+  setfunc(name, n->left);
+  return 0;
+}
+
+static inline int
+run_redir(const cmd_tree *n, int nchld)
+{
+  fdlist sfd[FD_MAX];
+  size_t sfdc;
+  int status;
+  redir *r;
+
+  r = CREDR(n);
+
+  if (n->left->type == CMD || n->left->type == SUBSHELL) {
+    redir *prev = predir;
+    predir = r;
+    status = run_commands(n->left, nchld);
+    predir = prev;
+    return status;
+  }
+
+  sfdc = 0;
+  if ((save_fd(CREDR(n), sfd, &sfdc)))
+    return 1;
+  if (apply_redir(r))
+    return 1;
+  status = run_commands(n->left, nchld);
+  fflush(NULL);
+  if (restore_fd(sfd, sfdc))
+    return 1;
+
+  if (eflag && LSTATUS != 0 && !iflag && !(n->flags & EFLAG_SAFE))
+    exit(LSTATUS);
+  return status;
+}
+
 int
 execcmd(char **argv)
 {
@@ -300,26 +343,6 @@ forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
   }
 }
 
-static pid_t
-forkrun(int bg)
-{
-  pid_t pid;
-
-  switch (pid = fork()) {
-    case -1:
-      perror("fork");
-      return -1;
-    case 0:
-      if (bg)
-        child_setup_bg();
-      else
-        child_setup_fg(0);
-      return pid;
-    default:
-      return pid;
-  }
-}
-
 static char *
 bg_cmd(const cmd_tree *n)
 {
@@ -371,6 +394,230 @@ shfexec(char ** restrict argv, const cmd_tree * restrict n,
     return 1;
   }
   return forkexec(fullpath, argv, env, bg_cmd(n), r);
+}
+
+/**  run command tree  */
+__attribute__((hot)) int
+run_commands(const cmd_tree *n, int nchld)
+{
+  if (!n)
+    return 0;
+  if (RETNOW)
+    return LSTATUS = RETVAL;
+
+  while (n->type == OP && (COPP(n) == TSEMI || COPP(n) == TNL)) {
+    LSTATUS = run_commands(n->left, 0);
+    if (RETNOW || gstate.loopbreak || gstate.loopcontinue || !n->right)
+      return LSTATUS;
+    n = n->right;
+  }
+
+  switch (n->type) {
+    case CMD:
+      return LSTATUS = run_cmd(n, nchld);
+    case SUBSHELL:
+      return LSTATUS = run_subsh(n, nchld);
+    case BRACE:
+      return LSTATUS = run_commands(n->left, nchld);
+    case FUNC:
+      return LSTATUS = run_funcdef(n);
+    case REDIR:
+      return LSTATUS = run_redir(n, nchld);
+    case WHILE:
+      return LSTATUS = run_while(n);
+    case FOR:
+      return LSTATUS = run_for(n);
+    case IF:
+      return LSTATUS = run_if(n);
+    case CASE:
+      return LSTATUS = run_case(n);
+    case OP:
+      if (COPP(n) != TPIPE && COPP(n) != TBKGRND)
+        LSTATUS = run_commands(n->left, 0);
+      switch (COPP(n)) {
+        case TAND:
+          if (LSTATUS  != 0)
+            return LSTATUS;
+          return LSTATUS = run_commands(n->right, nchld);
+        case TOR:
+          if (LSTATUS  == 0)
+            return LSTATUS;
+          return LSTATUS = run_commands(n->right, nchld);
+        case TPIPE:
+          return LSTATUS = run_pipe(n);
+        case TBKGRND:
+          return LSTATUS = run_bg(n);
+        case TEOF:
+          return LSTATUS;
+        default:
+          fprintf(stderr, "Unknown Operator\n"); /*NOLINT*/
+          return 1;
+      }
+    default:
+      return 1;
+  }
+  return 0;
+}
+
+__attribute__((hot)) static int
+run_cmd(const cmd_tree *n, int inchld)
+{
+  int status;
+  char ifl, efl;
+  char **final = NULL;
+  char **env = NULL;
+  wf **vars;
+  shvar *v;
+  shfunc *f = NULL;
+  const builtin *b = NULL;
+  size_t i, len;
+  size_t vc;
+
+  ifl = iflag;
+  efl = eflag;
+  vars = CVARS(n);
+  gstate.lineno = n->line;
+
+  final = expand_argv(CARGS(n), &len);
+  if (gstate.nounseterr) {
+    gstate.nounseterr = 0;
+    if (!ifl)
+      exit(1);
+    return 1;
+  }
+
+  if (xflag) {
+    char *xline, *ps4;
+    ps4 = getvar(STR("PS4"));
+    xline = join_strn(final, &len);
+    printf("%s %s\n", ps4, xline);
+  }
+
+  if (!final || !final[0]) {
+    if (vars && vars[0]) { /*  if no command only name=value  */
+      for (i = 0; vars[i]; i++) {
+        char *name, *val /*, *evar*/;
+        shvar_flags flags;
+        char *evar;
+        evar = xpnd(vars[i]);
+        st_read_assn(evar, &name, &val);
+        v = findvar(name);
+        if (v)
+          flags = v->flags;
+        else
+          flags = 0;
+        setvar(name, val, flags);
+      }
+    }
+    if (predir)
+      return apply_redir(predir);
+    return 0;
+  }
+  if ((b = findbuiltin(*final)) && (b->flags & SBLTN)) {
+    fdlist sfd[FD_MAX];
+    size_t sfdc = 0;
+    if (predir) {
+      fflush(stdout);
+      if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
+        return 1;
+    }
+    if (vars && vars[0]) {
+      for (vc = 0, i = 0; vars[i]; i++) {
+        char *name, *val;
+        st_read_assn(xpnd(vars[i]), &name, &val);
+        vc++;
+        setvar(name, val, 0);
+      }
+    }
+    if ((status = builtin_launch(b, final)) > 0) {
+      if (!iflag)
+        exit(1);
+    }
+    if (predir) {
+      if (!(b && b->fn == &execcmd && !final[1])) {
+        fflush(NULL);
+        restore_fd(sfd, sfdc);
+      }
+    }
+    return status;
+  }
+  if ((f = findfunc(final[0])) || b) {
+    fdlist sfd[FD_MAX];
+    size_t sfdc = 0;
+    if (predir) {
+      fflush(stdout);
+      if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
+        return 1;
+    }
+    if (vars && vars[0]) {
+      static tmp_var tmp[MAX_TMP_VARS];
+      for (vc = 0, i = 0; vars[i]; i++) {
+        char *name, *val;
+        st_read_assn(xpnd(vars[i]), &name, &val);
+        tmp[i] = grabvar(name);
+        vc++;
+        setvar(name, val, 0);
+      }
+      status = f ? run_func(f->body, final) : builtin_launch(b, final);
+      poptmpvars(tmp, vc);
+    } else {
+      status = f ? run_func(f->body, final) : builtin_launch(b, final);
+      if (predir) {
+        if (!(b && b->fn == &execcmd && !final[1])) {
+          fflush(NULL);
+          restore_fd(sfd, sfdc);
+        }
+      }
+    }
+
+  } else { /* if this is a external command */
+    char **evars;
+    if ((vc = CVARC(n))) {
+      evars = st_alloc((vc + 1) * sizeof(char *));
+      for (i = 0; i < vc; i++) {
+        evars[i] = xpnd(vars[i]);
+        evars[vc] = NULL;
+      }
+    } else {
+      evars = NULL;
+    }
+    env = build_env(evars);
+    if (!env) {
+      perror("no environment found");
+      return 1;
+    }
+    if (inchld & _INCHLD)
+      shexec(final, env, predir);
+    else
+      status = shfexec(final, n, env, predir);
+    if (evars)
+      slfree(env);
+  }
+  if (CNEG(n))
+    status = !status;
+  if (efl && status != 0 && !ifl && !(n->flags & EFLAG_SAFE) && !CNEG(n))
+    exit(status);
+  return status;
+}
+
+static pid_t
+forkrun(int bg)
+{
+  pid_t pid;
+
+  switch (pid = fork()) {
+    case -1:
+      perror("fork");
+      return -1;
+    case 0:
+      if (bg)
+        child_setup_bg();
+      else
+        child_setup_fg(0);
+      return pid;
+    default:
+      return pid;
+  }
 }
 
 static int
@@ -496,15 +743,6 @@ run_while(const cmd_tree *n)
   }
   LOOPDEPTH--;
   return status;
-}
-
-static inline int
-run_funcdef(const cmd_tree *n)
-{
-  char *name;
-  name = st_strndup(CFUNC(n)->word, CFUNC(n)->len);
-  setfunc(name, n->left);
-  return 0;
 }
 
 static int
@@ -740,6 +978,8 @@ run_pipe(const cmd_tree *n)
   nstg = CPIPEC(n);
   mfl = (int)mflag;
 
+  if (!nstg)
+    return 0;
   for (size_t i = 0; i < nstg; i++) {
     if (i < nstg - 1 && pipe(pipefd) < 0) {
       err(1, "pipe");
@@ -830,241 +1070,4 @@ run_pipe(const cmd_tree *n)
   if (eflag && status != 0 && !iflag && !(n->flags & EFLAG_SAFE))
     exit(status);
   return status;
-}
-
-__attribute__((hot)) static int
-run_cmd(const cmd_tree *n, int inchld)
-{
-  int status;
-  char ifl, efl;
-  char **final = NULL;
-  char **env = NULL;
-  wf **vars;
-  shvar *v;
-  shfunc *f = NULL;
-  const builtin *b = NULL;
-  size_t i, len;
-  size_t vc;
-
-  ifl = iflag;
-  efl = eflag;
-  vars = CVARS(n);
-  gstate.lineno = n->line;
-
-  final = expand_argv(CARGS(n), &len);
-  if (gstate.nounseterr) {
-    gstate.nounseterr = 0;
-    if (!ifl)
-      exit(1);
-    return 1;
-  }
-
-  if (xflag) {
-    char *xline, *ps4;
-    ps4 = getvar(STR("PS4"));
-    xline = join_strn(final, &len);
-    printf("%s %s\n", ps4, xline);
-  }
-
-  if (!final || !final[0]) {
-    if (vars && vars[0]) { /*  if no command only name=value  */
-      for (i = 0; vars[i]; i++) {
-        char *name, *val /*, *evar*/;
-        shvar_flags flags;
-        char *evar;
-        evar = xpnd(vars[i]);
-        st_read_assn(evar, &name, &val);
-        v = findvar(name);
-        if (v)
-          flags = v->flags;
-        else
-          flags = 0;
-        setvar(name, val, flags);
-      }
-    }
-    if (predir)
-      return apply_redir(predir);
-    return 0;
-  }
-  if ((b = findbuiltin(*final)) && (b->flags & SBLTN)) {
-    fdlist sfd[FD_MAX];
-    size_t sfdc = 0;
-    if (predir) {
-      fflush(stdout);
-      if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
-        return 1;
-    }
-    if (vars && vars[0]) {
-      for (vc = 0, i = 0; vars[i]; i++) {
-        char *name, *val;
-        st_read_assn(xpnd(vars[i]), &name, &val);
-        vc++;
-        setvar(name, val, 0);
-      }
-    }
-    if ((status = builtin_launch(b, final)) > 0) {
-      if (!iflag)
-        exit(1);
-    }
-    if (predir) {
-      if (!(b && b->fn == &execcmd && !final[1])) {
-        fflush(NULL);
-        restore_fd(sfd, sfdc);
-      }
-    }
-    return status;
-  }
-  if ((f = findfunc(final[0])) || b) {
-    fdlist sfd[FD_MAX];
-    size_t sfdc = 0;
-    if (predir) {
-      fflush(stdout);
-      if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
-        return 1;
-    }
-    if (vars && vars[0]) {
-      static tmp_var tmp[MAX_TMP_VARS];
-      for (vc = 0, i = 0; vars[i]; i++) {
-        char *name, *val;
-        st_read_assn(xpnd(vars[i]), &name, &val);
-        tmp[i] = grabvar(name);
-        vc++;
-        setvar(name, val, 0);
-      }
-      status = f ? run_func(f->body, final) : builtin_launch(b, final);
-      poptmpvars(tmp, vc);
-    } else {
-      status = f ? run_func(f->body, final) : builtin_launch(b, final);
-      if (predir) {
-        if (!(b && b->fn == &execcmd && !final[1])) {
-          fflush(NULL);
-          restore_fd(sfd, sfdc);
-        }
-      }
-    }
-
-  } else { /* if this is a external command */
-    char **evars;
-    if ((vc = CVARC(n))) {
-      evars = st_alloc((vc + 1) * sizeof(char *));
-      for (i = 0; i < vc; i++) {
-        evars[i] = xpnd(vars[i]);
-        evars[vc] = NULL;
-      }
-    } else {
-      evars = NULL;
-    }
-    env = build_env(evars);
-    if (!env) {
-      perror("no environment found");
-      return 1;
-    }
-    if (inchld & _INCHLD)
-      shexec(final, env, predir);
-    else
-      status = shfexec(final, n, env, predir);
-    if (evars)
-      slfree(env);
-  }
-  if (CNEG(n))
-    status = !status;
-  if (efl && status != 0 && !ifl && !(n->flags & EFLAG_SAFE) && !CNEG(n))
-    exit(status);
-  return status;
-}
-
-static inline int
-run_redir(const cmd_tree *n, int nchld)
-{
-  fdlist sfd[FD_MAX];
-  size_t sfdc;
-  int status;
-  redir *r;
-
-  r = CREDR(n);
-
-  if (n->left->type == CMD || n->left->type == SUBSHELL) {
-    redir *prev = predir;
-    predir = r;
-    status = run_commands(n->left, nchld);
-    predir = prev;
-    return status;
-  }
-
-  sfdc = 0;
-  if ((save_fd(CREDR(n), sfd, &sfdc)))
-    return 1;
-  if (apply_redir(r))
-    return 1;
-  status = run_commands(n->left, nchld);
-  fflush(NULL);
-  if (restore_fd(sfd, sfdc))
-    return 1;
-
-  if (eflag && LSTATUS != 0 && !iflag && !(n->flags & EFLAG_SAFE))
-    exit(LSTATUS);
-  return status;
-}
-
-/**  run command tree  */
-__attribute__((hot)) int
-run_commands(const cmd_tree *n, int nchld)
-{
-  if (!n)
-    return 0;
-  if (RETNOW)
-    return LSTATUS = RETVAL;
-
-  while (n->type == OP && (COPP(n) == TSEMI || COPP(n) == TNL)) {
-    LSTATUS = run_commands(n->left, 0);
-    if (RETNOW || gstate.loopbreak || gstate.loopcontinue || !n->right)
-      return LSTATUS;
-    n = n->right;
-  }
-
-  switch (n->type) {
-    case CMD:
-      return LSTATUS = run_cmd(n, nchld);
-    case SUBSHELL:
-      return LSTATUS = run_subsh(n, nchld);
-    case BRACE:
-      return LSTATUS = run_commands(n->left, nchld);
-    case FUNC:
-      return LSTATUS = run_funcdef(n);
-    case REDIR:
-      return LSTATUS = run_redir(n, nchld);
-    case WHILE:
-      return LSTATUS = run_while(n);
-    case FOR:
-      return LSTATUS = run_for(n);
-    case IF:
-      return LSTATUS = run_if(n);
-    case CASE:
-      return LSTATUS = run_case(n);
-    case OP:
-      if (COPP(n) != TPIPE && COPP(n) != TBKGRND)
-        LSTATUS = run_commands(n->left, 0);
-      switch (COPP(n)) {
-        case TAND:
-          if (LSTATUS  != 0)
-            return LSTATUS;
-          return LSTATUS = run_commands(n->right, nchld);
-        case TOR:
-          if (LSTATUS  == 0)
-            return LSTATUS;
-          return LSTATUS = run_commands(n->right, nchld);
-        case TPIPE:
-          return LSTATUS = run_pipe(n);
-        case TBKGRND:
-          return LSTATUS = run_bg(n);
-        case TEOF:
-          return LSTATUS;
-        default:
-          fprintf(stderr, "Unknown Operator\n"); /*NOLINT*/
-          return 1;
-      }
-    default:
-      return 1;
-  }
-  return 0;
 }

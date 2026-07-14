@@ -22,6 +22,7 @@
 #include "env.h"
 #include "exec.h"
 #include "error.h"
+#include "history.h"
 #include "input.h"
 #include "job.h"
 #include "main.h"
@@ -58,114 +59,76 @@ static int umaskcmd(char **);
 static int classify_cmd(char *, int, int);
 static char *pwdpath(char *);
 
-#define TOTAL_KEYWORDS 38
+#define TOTAL_KEYWORDS 40
 #define MIN_WORD_LENGTH 1
 #define MAX_WORD_LENGTH 8
 #define MIN_HASH_VALUE 1
-#define MAX_HASH_VALUE 71
+#define MAX_HASH_VALUE 69
 
-static inline unsigned int
-builtinhash(register const char *str, register size_t len)
-{
-  static unsigned char asso_values[] = {
-    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-    72, 72, 72, 72, 72, 72, 72, 72, 10, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-    72, 5,  72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 0,  72, 72, 72,
-    72, 72, 5,  20, 0,  0,  15, 15, 20, 30, 10, 45, 35, 25, 0,  0,  72, 50, 72,
-    30, 10, 0,  0,  72, 5,  72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-    72, 72, 72, 72, 72, 72, 72, 72, 72
-  };
-  register unsigned int hval = len;
-  switch (hval) {
-    default:
-      hval += asso_values[(unsigned char)str[2]];
-    /*FALLTHROUGH*/
-    case 2:
-    case 1:
-      hval += asso_values[(unsigned char)str[0]];
-      break;
-  }
-  return hval;
-}
 
-/* find builtin using perfect hash */
-const builtin *
-find_builtin(const char *str, size_t len)
+/* the array of builtin commands */
+const builtin builtins[] = {
+  { ".",        &dotcmd,      0     },
+  { "[",        &testcmd,     0     },
+  { ":",        &truecmd,     0     },
+  { "alias",    &aliascmd,    0     },
+  { "bg",       &bgcmd,       0     },
+  { "break",    &breakcmd,    SBLTN },
+  { "cat",      &catcmd,      0     },
+  { "cd",       &cdcmd,       0     },
+  { "command",  &commandcmd,  0     },
+  { "continue", &continuecmd, SBLTN },
+  { "echo",     &echocmd,     0     },
+  { "eval",     &evalcmd,     SBLTN },
+  { "exec",     &execcmd,     SBLTN },
+  { "exit",     &exitcmd,     SBLTN },
+  { "export",   &exportcmd,   SBLTN },
+  { "false",    &falsecmd,    0     },
+  { "fc",       &fccmd,       0     },
+  { "fg",       &fgcmd,       0     },
+  { "getopts",  &getoptscmd,  0     },
+  { "hash",     &hashcmd,     0     },
+  { "help",     &helpcmd,     0     },
+  { "jobs",     &jobscmd,     0     },
+  { "kill",     &killcmd,     0     },
+  { "local",    &localcmd,    0     },
+  { "pwd",      &pwdcmd,      0     },
+  { "read",     &readcmd,     0     },
+  { "readonly", &readonlycmd, SBLTN },
+  { "return",   &returncmd,   SBLTN },
+  { "set",      &setcmd,      SBLTN },
+  { "shift",    &shiftcmd,    SBLTN },
+  { "test",     &testcmd,     0     },
+  { "times",    &timescmd,    SBLTN },
+  { "trap",     &trapcmd,     SBLTN },
+  { "true",     &truecmd,     SBLTN },
+  { "type",     &typecmd,     0     },
+  { "ulimit",   &ulimitcmd,   0     },
+  { "umask",    &umaskcmd,    0     },
+  { "unalias",  &unaliascmd,  0     },
+  { "unset",    &unsetcmd,    SBLTN },
+  { "wait",     &waitcmd,     0     },
+};
+
+#define nbuiltins() (sizeof(builtins) / sizeof(builtin))
+
+/**  initialize builtin hash table  */
+void
+init_builtins(void)
 {
-  /* the array of builtin commands */
-  static builtin wordlist[] = {
-      {0},
-      {"[", testcmd, 0},
-      {"cd", cdcmd, 0},
-      {"cat", catcmd, 0},
-      {"true", truecmd, 0},
-      {"times", timescmd, SBLTN},
-      {":", truecmd, SBLTN},
-      {"command", commandcmd, 0},
-      {"continue", continuecmd, SBLTN},
-      {"trap", trapcmd, SBLTN},
-      {"umask", umaskcmd, 0},
-      {".", dotcmd, SBLTN},
-      {"unalias", unaliascmd, 0},
-      {"set", setcmd, SBLTN},
-      {"test", testcmd, 0},
-      {"unset", unsetcmd, SBLTN},
-      {"ulimit", ulimitcmd, 0},
-      {"fg", fgcmd, 0},
-      {0},
-      {"wait", waitcmd, 0},
-      {"alias", aliascmd, 0},
-      {0},
-      {"bg", bgcmd, 0},
-      {0},
-      {"eval", evalcmd, SBLTN},
-      {"shift", shiftcmd, SBLTN},
-      {0},
-      {"getopts", getoptscmd, 0},
-      {0},
-      {"exit", exitcmd, SBLTN},
-      {"local", localcmd, 0},
-      {0}, {0}, {0},
-      {"exec", execcmd, SBLTN},
-      {0},
-      {"return", returncmd, SBLTN},
-      {0}, {0},
-      {"read", readcmd, 0},
-      {"break", breakcmd, SBLTN},
-      {0}, {0},
-      {"readonly", readonlycmd, SBLTN},
-      {"hash", hashcmd, 0},
-      {"false", falsecmd, 0},
-      {0}, {0}, {0},
-      {"echo", echocmd, 0},
-      {0}, {0}, {0},
-      {"pwd", pwdcmd, 0},
-      {"type", typecmd, 0},
-      {0}, {0}, {0}, {0},
-      {"help", helpcmd, 0},
-      {0}, {0}, {0}, {0},
-      {"kill", killcmd, 0},
-      {0}, {0}, {0}, {0},
-      {"jobs", jobscmd, 0},
-      {0},
-      {"export", exportcmd, SBLTN}
-  };
-  if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH) {
-    unsigned int key = builtinhash(str, len);
-    if (key <= MAX_HASH_VALUE) {
-      const char *s = wordlist[key].name;
-      if (s && *str == *s && strlen(s) == len && !memcmp(str + 1, s + 1, len - 1)) return &wordlist[key];
-    }
+  size_t i, n;
+  size_t idx;
+
+  n = nbuiltins();
+  for (i = 0; i < BUILTIN_BUCKETS; i++)
+    builtin_tab[i] = -1;
+
+  for (i = 0; i < n; i++) {
+    idx = hash(builtins[i].name, BUILTIN_BUCKETS);
+    while (builtin_tab[idx] >= 0)
+      idx = (idx + 1) % BUILTIN_BUCKETS;
+    builtin_tab[idx] = i;
   }
-  return (builtin *)0;
 }
 
 /* convert char to int, doing extra checks, and handling error messages */
@@ -680,7 +643,7 @@ echocmd(char *argv[])
   if (fcntl(STDOUT_FILENO, F_GETFD) < 0) {
     sherr(1, argv0, "could not write to stdout");
   }
-  for (size_t i = 0; i < argc; i++) {
+  for (size_t i = 0; argv[i]; i++) {
     if (fputs(argv[i], stdout) == EOF) {
       sherr(1, argv0, "could not write to stdout");
     }
@@ -817,7 +780,8 @@ readcmd(char **argv)
       break;
     case 'p':
       flag |= pfl;
-      prompt = EARGF(no_opt(argv0, ARGC()));
+      if (!(prompt = EARGF(no_opt(argv0, ARGC()))))
+        return 1;
       break;
     default:
       bad_opt(argv0, ARGC());
@@ -842,6 +806,7 @@ readcmd(char **argv)
     fputs(prompt, stderr);
     fflush(stderr);
   }
+  stcheck(32);
   while ((c = shgetchar())) {
     switch (c) {
       case SHEOF:

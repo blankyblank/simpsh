@@ -104,399 +104,126 @@ is_posparam(const char *var, size_t var_l)
   return 1;
 }
 
-char *
-homedir(char *user)
+static wf **
+splitword(wf *f, size_t * restrict tlen)
 {
-  char e[PATH_MAX];
-  FILE *pw;
-  size_t i;
+  enum {
+    M_IMMUNE,
+    M_IFSWS,
+    M_IFSN,
+    M_NORMAL
+  };
+  wf **fargv;
+  wf *chead, *ctail, *cf;
+  size_t fpos, cap, fargc, ttl = 0;
 
-  if (!user)
-    return NULL;
-  if (!(pw = fopen("/etc/passwd", "r")))
-    return NULL;
-  while (fgets(e, PATH_MAX, pw)) {
-    char *s, *end;
-    size_t ulen;
+  if (tlen)
+    *tlen = 0;
 
-    if (e[0] == '#' || e[0] == '\n')
-      continue;
-    s = e;
-    end = strchr(s, ':');
-    if (!end) 
-      continue;
-    ulen = end - s;
-    if (strncmp(s, user, ulen) == 0 && s[ulen] == ':') {
-      s += ulen + 1;
-      for (i = 0; i < 4; i++) {
-        s = strchr(s, ':');
-        if (!end)
-          break;
-        s++;
+  if (gvar.ifsnull || !f) {
+    fargv = st_alloc(2 * sizeof(wf *));
+    fargv[0] = f;
+    fargv[1] = NULL;
+    return fargv;
+  }
+
+  cap = 16;
+  fargv = st_alloc(cap * sizeof(wf *));
+  fargc = 0;
+  chead = NULL;
+  ctail = NULL;
+  cf = f;
+  fpos = 0;
+  // field = NULL;
+
+  while (cf) {
+    size_t s = fpos;
+
+    if (cf->qs == QNONE || cf->qs == QCMDSUB) {
+      size_t end = sscndelim(cf->word + s, cf->len - s, gvar.ifsv, gvar.ifsvlen);
+      if (end >= cf->len - s) {
+        append_wf(&chead, &ctail, cf->word + s, cf->len - s, cf->qs);
+        ttl += cf->len - s;
+        cf = cf->next;
+        fpos = 0;
+        continue;
       }
-      if (i != 4)
-        continue;
-      end = strchr(s, ':');
-      if (end)
-        *end = '\0';
-      if (!*s)
-        continue;
-      fclose(pw);
-      return st_strdup(s);
-    } 
-  }
-  fclose(pw);
-  return NULL;
-}
-
-char *
-exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
-{
-  size_t i = 0, vlen, end, tlen = 0;
-  char buf[32], *val;
-
-  while (i < slen) {
-    size_t s = i;
-    while (i < slen && str[i] != '$')
-      i++;
-    if (i > s)
-      st_write(str + s, i - s, tlen);
-    if (i >= slen)
-      break;
-    vlen = 0;
-    val = NULL;
-    switch (str[i + 1]) {
-      case '$':
-        val = gvar.pid_s;
-        vlen = strlen(val);
-        end = i + 2;
-        break;
-      case '?':
-        {
-          char _buf[16];
-          vlen = lltoa(LSTATUS, _buf);
-          val = _buf;
-          end = i + 2;
-        }
-        break;
-      case '!':
-        val = gvar.bgpid_s;
-        vlen = strlen(val);
-        end = i + 2;
-        break;
-      case '#':
-        vlen = lltoa(SHARGC, buf);
-        val = buf;
-        end = i + 2;
-        break;
-      case '-':
-        val = vardash(&vlen);
-        end = i + 2;
-        break;
-      case '{':
-        {
-          size_t j, vtl;
-          shvar *v;
-          j = i + 2;
-          while (j < slen && str[j] != '}')
-            j++;
-          if (j < slen) {
-            vtl = j - (i + 2);
-            if (vtl > 0) {
-              v = findvar_n(str + i + 2, vtl);
-              if (v) {
-                val = shvar_val(v);
-                vlen = vallen(v);
-              }
-            }
-            end = j + 1;
-          } else {
-            end = i + 1;
-          }
-          break;
-        }
-      default:
-        if (isalnum_(str[i + 1]) || str[i + 1] == '_') {
-          size_t j = i + 1;
-          shvar *v;
-          while (j < slen && (isalnum_(str[j]) || str[j] == '_'))
-            j++;
-          v = findvar_n(str + i + 1, j - (i + 1));
-          if (v) {
-            val = shvar_val(v);
-            vlen = vallen(v);
-          }
-          end = j;
-        } else {
-          end = i + 1;
-        }
+      fpos = s + end;
     }
-    if (val)
-      st_write(val, vlen, tlen);
-    i = end;
-  }
-  *outlen = tlen;
-  return grab_str(tlen);
-}
+    while (fpos < cf->len) {
+      int insect = (cf->qs == QNONE || cf->qs == QCMDSUB);
+      char c = cf->word[fpos];
+      int mode;
 
-char *
-exp_tilde(char *restrict word, size_t s, size_t *restrict e, size_t *restrict olen)
-{
-  char *hm, strt;
-  size_t end;
+      if (!insect)
+        mode = M_IMMUNE;
+      else if (is_ws(c))
+        mode = M_IFSWS;
+      else if (ifschar[(unsigned char)c])
+        mode = M_IFSN;
+      else
+        mode = M_NORMAL;
 
-  hm = gvar.home;
-  if (word[s] != '~')
-    return NULL;
-  if (s == 0 && (word[s + 1] == '\0' || word[s + 1] == '/')) {
-    if (!hm)
-      return NULL;
-    *e = s + 1;
-    *olen = gvar.homelen;
-    return st_strdup(hm);
-  } else {
-    end = s + 1;
-    while (word[end] && word[end] != '/')
-      end++;
-    strt = word[end];
-    word[end] = '\0';
-    hm = homedir(word + s + 1);
-    word[end] = strt;
-    if (hm) {
-      *e = end;
-      *olen = gvar.homelen;
-      return hm;
-    }
-  }
-  return NULL;
-}
-
-/** take in ps1 char * to do variable expansion for prompt */
-char *
-expand_ps1(char *p)
-{
-  size_t i, varlen, cbrace, flen;
-  char *s, *val = NULL;
-  static char f[4096], vcpy[256];
-
-  if (!p)
-    return NULL;
-
-  flen = 0;
-  i = 0;
-  while (p[i]) {
-    if (p[i] == '$') {
-      if (p[i + 1] == '$' || p[i + 1] == '?') {
-        varlen = 2;
-        vcpy[0] = p[i];
-        vcpy[1] = p[i + 1];
-        vcpy[2] = '\0';
-      } else if (p[i + 1] == '{') {
-        cbrace = i + 2;
-        while (p[cbrace] && p[cbrace] != '}')
-          cbrace++;
-        if (!p[cbrace]) {
-          f[flen++] = p[i++];
+      switch (mode) {
+        case M_IMMUNE:
+          fpos++;
           continue;
-        }
-        varlen = cbrace - (i + 2);
-        vcpy[0] = '$';
-        memcpy(vcpy + 1, p + i + 2, varlen);
-        vcpy[varlen + 1] = '\0';
-        varlen = cbrace - i + 1;
-      } else if (isalnum_(p[i + 1])) {
-        varlen = i + 1;
-        while (isalnum_(p[varlen]))
-          varlen++;
-        varlen -= i;
-        memcpy(vcpy, p + i, varlen);
-        vcpy[varlen] = '\0';
-      } else {
-        if (p[i + 1] == ' ' || p[i + 1] == '\t' || p[i + 1] == '\0') {
-          f[flen++] = LSTATUS == 0 ? '$' : 'X';
-          i++;
+        case M_IFSWS:
+          if (fpos > s) {
+            append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
+            ttl += fpos - s;
+          }
+          if (chead) {
+            chk_cap(fargc, cap, fargv, wf *);
+            append_wf(&chead, &ctail, NULL, 0, QNONE);
+            fargv[fargc++] = chead;
+            chead = NULL;
+            ctail = NULL;
+          }
+          fpos++;
+          s = fpos;
           continue;
-        }
-        f[flen++] = p[i++];
-        continue;
-      }
-
-      size_t vlen = 0;
-      if (vcpy[0] == '$' && vcpy[1]) {
-        switch (vcpy[1]) {
-          case '$':
-            val = varpid();
-            vlen = strlen(val);
-            break;
-          case '?':
-            val = varstatus(&vlen);
-            break;
-          case '!':
-            val = varbgpid();
-            vlen = strlen(val);
-            break;
-          case '-':
-            val = vardash(&vlen);
-            break;
-          case '#':
-            {
-              char buf[16];
-              vlen = lltoa(SHARGC, buf);
-              val = buf;
-              break;
-            }
-          default:
-            if (isdigit_(vcpy[1])) {
-              int n = atoi(vcpy + 1);
-              val = get_posparam(n);
-              vlen = val ? strlen(val) : 0;
-            } else {
-              shvar *v = findvar_n(vcpy + 1, strlen(vcpy + 1));
-              if (v) {
-                val = shvar_val(v);
-                vlen = vallen(v);
-              }
-            }
-        }
-      }
-
-      if (val) {
-        for (s = val; *s; s++) {
-          if (flen >= sizeof(f) - 1) {
-            nts(f, sizeof(f) - 1);
-            goto done;
+        case M_IFSN:
+          if (fpos > s) {
+            append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
+            ttl += fpos - s;
           }
-          f[flen++] = *s;
-        }
+          append_wf(&chead, &ctail, NULL, 0, QNONE);
+          chk_cap(fargc, cap, fargv, wf *);
+          fargv[fargc++] = chead;
+          chead = NULL;
+          ctail = NULL;
+          fpos++;
+          s = fpos;
+          continue;
+        case M_NORMAL:
+          fpos++;
+          continue;
+        default:
+          break;
       }
-      i += varlen;
-    } else {
-      if (flen >= sizeof(f) - 1) {
-        nts(f, sizeof(f) - 1);
-        goto done;
-      }
-      f[flen++] = p[i++];
     }
+    if (cf->qs != QNONE && cf->qs != QCMDSUB) {
+      append_wf(&chead, &ctail, cf->word, cf->len, cf->qs);
+      ttl += cf->len;
+    } else if (fpos > s) {
+      append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
+      ttl += fpos - s;
+    }
+    cf = cf->next;
+    fpos = 0;
   }
-  f[flen] = '\0';
-done:
-  s = st_alloc(flen + 1);
-  memcpy(s, f, flen + 1);
-  return s;
-}
 
-/** expand argument vector */
-char **
-expand_argv(wf **args, size_t *restrict t)
-{
-  size_t i, elen, tlen;
-  char **argv;
-  size_t cap = 64;
-  size_t fargc = 0;
-  size_t argc = 0;
-  *t = 0;
-  wf **fargv = NULL;
-
-  while (args[argc])
-    argc++;
-  argv = (char **)st_alloc(cap * sizeof(char *));
-  for (i = 0; i < argc; i++) {
-    wf *w = args[i];
-    if (!w->next && w->qs == QNONE &&
-        sscndelim(w->word, w->len, "$`\\~*?[", 7) >= w->len) {
-      chk_cap(fargc, cap, argv, char *);
-      argv[fargc++] = w->word;
-      *t += w->len;
-      continue;
-    }
-    if (SHARGC && w->len == 1 && (w->word[0] == '@' || w->word[0] == '*') &&
-        (w->qs & (QVAR | QVAR_DQ | QBRACE | QBRACE_DQ))) {
-      if (w->word[0] == '@' && (w->qs & (QVAR_DQ | QBRACE_DQ))) {
-        for (int j = 1; j <= SHARGC; j++) {
-          chk_cap(fargc, cap, argv, char *);
-          argv[fargc++] = st_strdup(get_posparam(j));
-        }
-        continue;
-      }
-      shvar *ifs;
-      int ifsc = 0;
-      if ((ifs = findvar_n(STR("IFS"), 3))) {
-        if (ifs->var)
-          ifsc = (int)*shvar_val(ifs);
-      } else {
-        ifsc = ' ';
-      }
-      size_t pos = 0, tlen = 0, lenarr[SHARGC + 1];
-      for (int j = 1; j <= SHARGC; j++) {
-        char *p = get_posparam(j);
-        tlen += lenarr[j] = p ? strlen(p) : 0;
-        if (j < SHARGC && ifsc)
-          tlen++;
-      }
-      char *buf = st_alloc(tlen + 1);
-      for (int j = 1; j <= SHARGC; j++) {
-        char *p = get_posparam(j);
-        if (p) {
-          memcpy(buf + pos, p, lenarr[j]);
-          pos += lenarr[j];
-        }
-        if (j < SHARGC && ifsc)
-          buf[pos++] = ifsc;
-      }
-      buf[pos] = '\0';
-      chk_cap(fargc, cap, argv, char *);
-      if (w->qs & (QVAR | QBRACE)) {
-        argv[fargc++] = st_strndup(buf, tlen);
-        continue;
-      }
-      wf *pw = st_alloc(sizeof(wf));
-      pw->qs = QNONE;
-      pw->word = st_strndup(buf, tlen);
-      pw->len = tlen;
-      pw->flags = 0;
-      pw->next = NULL;
-      fargv = splitword(pw, &tlen);
-      *t += tlen;
-      goto glob;
-    }
-
-    wf *expanded;
-    if (!(expanded = exp_word(args[i], &elen)))
-      return NULL;
-    fargv = splitword(expanded, &tlen);
-    *t += tlen;
-  glob:
-    for (int j = 0; fargv[j]; j++) {
-      if (!fflag) {
-        int glob = 0;
-        for (wf *f = fargv[j]; f; f = f->next)
-          if (f->qs == QNONE && f->word &&
-              !(f->word[0] == '[' && f->word[1] == '\0') &&
-              ismetachar(f->word, f->len)) {
-            glob = 1;
-            break;
-          }
-        if (glob) {
-          char *flat = join_wf(fargv[j]);
-          char **match = NULL;
-          int mc = globexpand(flat, &match);
-          if (mc > 0) {
-            for (int k = 0; k < mc; k++) {
-              chk_cap(fargc, cap, argv, char *);
-              argv[fargc++] = match[k];
-            }
-          } else
-            argv[fargc++] = flat;
-        } else {
-          chk_cap(fargc, cap, argv, char *);
-          argv[fargc++] = join_wf(fargv[j]);
-        }
-      } else
-        argv[fargc++] = join_wf(fargv[j]);
-    }
+  if (chead) {
+    append_wf(&chead, &ctail, NULL, 0, QNONE);
+    chk_cap(fargc, cap, fargv, wf *);
+    fargv[fargc++] = chead;
   }
-  argv[fargc] = NULL;
-  return argv;
+
+  if (tlen)
+    *tlen = ttl;
+  fargv[fargc] = NULL;
+  return fargv;
 }
 
 /** expand word with variable substitution */
@@ -835,124 +562,402 @@ append:
   return head;
 }
 
-static wf **
-splitword(wf *f, size_t * restrict tlen)
+/** expand argument vector */
+char **
+expand_argv(wf **args, size_t *restrict t)
 {
-  enum {
-    M_IMMUNE,
-    M_IFSWS,
-    M_IFSN,
-    M_NORMAL
-  };
-  wf **fargv;
-  wf *chead, *ctail, *cf;
-  size_t fpos, cap, fargc, ttl = 0;
+  size_t i, elen, tlen;
+  char **argv;
+  size_t cap = 64;
+  size_t fargc = 0;
+  size_t argc = 0;
+  *t = 0;
+  wf **fargv = NULL;
 
-  if (tlen)
-    *tlen = 0;
-
-  if (gvar.ifsnull || !f) {
-    fargv = st_alloc(2 * sizeof(wf *));
-    fargv[0] = f;
-    fargv[1] = NULL;
-    return fargv;
-  }
-
-  cap = 16;
-  fargv = st_alloc(cap * sizeof(wf *));
-  fargc = 0;
-  chead = NULL;
-  ctail = NULL;
-  cf = f;
-  fpos = 0;
-  // field = NULL;
-
-  while (cf) {
-    size_t s = fpos;
-
-    if (cf->qs == QNONE || cf->qs == QCMDSUB) {
-      size_t end = sscndelim(cf->word + s, cf->len - s, gvar.ifsv, gvar.ifsvlen);
-      if (end >= cf->len - s) {
-        append_wf(&chead, &ctail, cf->word + s, cf->len - s, cf->qs);
-        ttl += cf->len - s;
-        cf = cf->next;
-        fpos = 0;
+  while (args[argc])
+    argc++;
+  argv = (char **)st_alloc(cap * sizeof(char *));
+  for (i = 0; i < argc; i++) {
+    wf *w = args[i];
+    if (!w->next && w->qs == QNONE &&
+        sscndelim(w->word, w->len, "$`\\~*?[", 7) >= w->len) {
+      chk_cap(fargc, cap, argv, char *);
+      argv[fargc++] = w->word;
+      *t += w->len;
+      continue;
+    }
+    if (SHARGC && w->len == 1 && (w->word[0] == '@' || w->word[0] == '*') &&
+        (w->qs & (QVAR | QVAR_DQ | QBRACE | QBRACE_DQ))) {
+      if (w->word[0] == '@' && (w->qs & (QVAR_DQ | QBRACE_DQ))) {
+        for (int j = 1; j <= SHARGC; j++) {
+          chk_cap(fargc, cap, argv, char *);
+          argv[fargc++] = st_strdup(get_posparam(j));
+        }
         continue;
       }
-      fpos = s + end;
-    }
-    while (fpos < cf->len) {
-      int insect = (cf->qs == QNONE || cf->qs == QCMDSUB);
-      char c = cf->word[fpos];
-      int mode;
-
-      if (!insect)
-        mode = M_IMMUNE;
-      else if (is_ws(c))
-        mode = M_IFSWS;
-      else if (ifschar[(unsigned char)c])
-        mode = M_IFSN;
-      else
-        mode = M_NORMAL;
-
-      switch (mode) {
-        case M_IMMUNE:
-          fpos++;
-          continue;
-        case M_IFSWS:
-          if (fpos > s) {
-            append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
-            ttl += fpos - s;
-          }
-          if (chead) {
-            chk_cap(fargc, cap, fargv, wf *);
-            append_wf(&chead, &ctail, NULL, 0, QNONE);
-            fargv[fargc++] = chead;
-            chead = NULL;
-            ctail = NULL;
-          }
-          fpos++;
-          s = fpos;
-          continue;
-        case M_IFSN:
-          if (fpos > s) {
-            append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
-            ttl += fpos - s;
-          }
-          append_wf(&chead, &ctail, NULL, 0, QNONE);
-          chk_cap(fargc, cap, fargv, wf *);
-          fargv[fargc++] = chead;
-          chead = NULL;
-          ctail = NULL;
-          fpos++;
-          s = fpos;
-          continue;
-        case M_NORMAL:
-          fpos++;
-          continue;
-        default:
-          break;
+      shvar *ifs;
+      int ifsc = 0;
+      if ((ifs = findvar_n(STR("IFS"), 3))) {
+        if (ifs->var)
+          ifsc = (int)*shvar_val(ifs);
+      } else {
+        ifsc = ' ';
       }
+      size_t pos = 0, tlen = 0;
+      size_t lenarr[SHARGC + 1];
+      memset(lenarr, 0, sizeof(lenarr));
+      for (int j = 1; j <= SHARGC; j++) {
+        char *p = get_posparam(j);
+        tlen += lenarr[j] = p ? strlen(p) : 0;
+        if (j < SHARGC && ifsc)
+          tlen++;
+      }
+      char *buf = st_alloc(tlen + 1);
+      for (int j = 1; j <= SHARGC; j++) {
+        char *p = get_posparam(j);
+        if (p) {
+          memcpy(buf + pos, p, lenarr[j]); // XXX: says 3rd call can be uninitialized, how with if (p) guard??
+          pos += lenarr[j];
+        }
+        if (j < SHARGC && ifsc)
+          buf[pos++] = ifsc;
+      }
+      buf[pos] = '\0';
+      chk_cap(fargc, cap, argv, char *);
+      if (w->qs & (QVAR | QBRACE)) {
+        argv[fargc++] = st_strndup(buf, tlen);
+        continue;
+      }
+      wf *pw = st_alloc(sizeof(wf));
+      pw->qs = QNONE;
+      pw->word = st_strndup(buf, tlen);
+      pw->len = tlen;
+      pw->flags = 0;
+      pw->next = NULL;
+      fargv = splitword(pw, &tlen);
+      *t += tlen;
+      goto glob;
     }
-    if (cf->qs != QNONE && cf->qs != QCMDSUB) {
-      append_wf(&chead, &ctail, cf->word, cf->len, cf->qs);
-      ttl += cf->len;
-    } else if (fpos > s) {
-      append_wf(&chead, &ctail, cf->word + s, fpos - s, cf->qs);
-      ttl += fpos - s;
+
+    wf *expanded;
+    if (!(expanded = exp_word(args[i], &elen)))
+      return NULL;
+    fargv = splitword(expanded, &tlen);
+    *t += tlen;
+  glob:
+    for (int j = 0; fargv[j]; j++) {
+      if (!fflag) {
+        int glob = 0;
+        for (wf *f = fargv[j]; f; f = f->next)
+          if (f->qs == QNONE && f->word &&
+              !(f->word[0] == '[' && f->word[1] == '\0') &&
+              ismetachar(f->word, f->len)) {
+            glob = 1;
+            break;
+          }
+        if (glob) {
+          char *flat = join_wf(fargv[j]);
+          char **match = NULL;
+          int mc = globexpand(flat, &match);
+          if (mc > 0) {
+            for (int k = 0; k < mc; k++) {
+              chk_cap(fargc, cap, argv, char *);
+              argv[fargc++] = match[k];
+            }
+          } else
+            argv[fargc++] = flat;
+        } else {
+          chk_cap(fargc, cap, argv, char *);
+          argv[fargc++] = join_wf(fargv[j]);
+        }
+      } else
+        argv[fargc++] = join_wf(fargv[j]);
     }
-    cf = cf->next;
-    fpos = 0;
   }
-
-  if (chead) {
-    append_wf(&chead, &ctail, NULL, 0, QNONE);
-    chk_cap(fargc, cap, fargv, wf *);
-    fargv[fargc++] = chead;
-  }
-
-  if (tlen)
-    *tlen = ttl;
-  fargv[fargc] = NULL;
-  return fargv;
+  argv[fargc] = NULL;
+  return argv;
 }
+
+
+
+char *
+homedir(char *user)
+{
+  char e[PATH_MAX];
+  FILE *pw;
+  size_t i;
+
+  if (!user)
+    return NULL;
+  if (!(pw = fopen("/etc/passwd", "r")))
+    return NULL;
+  while (fgets(e, PATH_MAX, pw)) {
+    char *s, *end;
+    size_t ulen;
+
+    if (e[0] == '#' || e[0] == '\n')
+      continue;
+    s = e;
+    end = strchr(s, ':');
+    if (!end) 
+      continue;
+    ulen = end - s;
+    if (strncmp(s, user, ulen) == 0 && s[ulen] == ':') {
+      s += ulen + 1;
+      for (i = 0; i < 4; i++) {
+        s = strchr(s, ':');
+        if (!end)
+          break;
+        s++;
+      }
+      if (i != 4)
+        continue;
+      end = strchr(s, ':');
+      if (end)
+        *end = '\0';
+      if (!*s)
+        continue;
+      fclose(pw);
+      return st_strdup(s);
+    } 
+  }
+  fclose(pw);
+  return NULL;
+}
+
+char *
+exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
+{
+  size_t i = 0, vlen, end, tlen = 0;
+  char buf[32], *val;
+
+  while (i < slen) {
+    size_t s = i;
+    while (i < slen && str[i] != '$')
+      i++;
+    if (i > s)
+      st_write(str + s, i - s, tlen);
+    if (i >= slen)
+      break;
+    vlen = 0;
+    val = NULL;
+    switch (str[i + 1]) {
+      case '$':
+        val = gvar.pid_s;
+        vlen = strlen(val);
+        end = i + 2;
+        break;
+      case '?':
+        {
+          char _buf[16];
+          vlen = lltoa(LSTATUS, _buf);
+          val = _buf;
+          end = i + 2;
+        }
+        break;
+      case '!':
+        val = gvar.bgpid_s;
+        vlen = strlen(val);
+        end = i + 2;
+        break;
+      case '#':
+        vlen = lltoa(SHARGC, buf);
+        val = buf;
+        end = i + 2;
+        break;
+      case '-':
+        val = vardash(&vlen);
+        end = i + 2;
+        break;
+      case '{':
+        {
+          size_t j, vtl;
+          shvar *v;
+          j = i + 2;
+          while (j < slen && str[j] != '}')
+            j++;
+          if (j < slen) {
+            vtl = j - (i + 2);
+            if (vtl > 0) {
+              v = findvar_n(str + i + 2, vtl);
+              if (v) {
+                val = shvar_val(v);
+                vlen = vallen(v);
+              }
+            }
+            end = j + 1;
+          } else {
+            end = i + 1;
+          }
+          break;
+        }
+      default:
+        if (isalnum_(str[i + 1]) || str[i + 1] == '_') {
+          size_t j = i + 1;
+          shvar *v;
+          while (j < slen && (isalnum_(str[j]) || str[j] == '_'))
+            j++;
+          v = findvar_n(str + i + 1, j - (i + 1));
+          if (v) {
+            val = shvar_val(v);
+            vlen = vallen(v);
+          }
+          end = j;
+        } else {
+          end = i + 1;
+        }
+    }
+    if (val)
+      st_write(val, vlen, tlen);
+    i = end;
+  }
+  *outlen = tlen;
+  return grab_str(tlen);
+}
+
+char *
+exp_tilde(char *restrict word, size_t s, size_t *restrict e, size_t *restrict olen)
+{
+  char *hm, strt;
+  size_t end;
+
+  hm = gvar.home;
+  if (word[s] != '~')
+    return NULL;
+  if (s == 0 && (word[s + 1] == '\0' || word[s + 1] == '/')) {
+    if (!hm)
+      return NULL;
+    *e = s + 1;
+    *olen = gvar.homelen;
+    return st_strdup(hm);
+  } else {
+    end = s + 1;
+    while (word[end] && word[end] != '/')
+      end++;
+    strt = word[end];
+    word[end] = '\0';
+    hm = homedir(word + s + 1);
+    word[end] = strt;
+    if (hm) {
+      *e = end;
+      *olen = gvar.homelen;
+      return hm;
+    }
+  }
+  return NULL;
+}
+
+/** take in ps1 char * to do variable expansion for prompt */
+char *
+expand_ps1(char *p)
+{
+  size_t i, varlen, cbrace, flen;
+  char *s, *val = NULL;
+  static char f[4096], vcpy[256];
+
+  if (!p)
+    return NULL;
+
+  flen = 0;
+  i = 0;
+  while (p[i]) {
+    if (p[i] == '$') {
+      if (p[i + 1] == '$' || p[i + 1] == '?') {
+        varlen = 2;
+        vcpy[0] = p[i];
+        vcpy[1] = p[i + 1];
+        vcpy[2] = '\0';
+      } else if (p[i + 1] == '{') {
+        cbrace = i + 2;
+        while (p[cbrace] && p[cbrace] != '}')
+          cbrace++;
+        if (!p[cbrace]) {
+          f[flen++] = p[i++];
+          continue;
+        }
+        varlen = cbrace - (i + 2);
+        vcpy[0] = '$';
+        memcpy(vcpy + 1, p + i + 2, varlen);
+        vcpy[varlen + 1] = '\0';
+        varlen = cbrace - i + 1;
+      } else if (isalnum_(p[i + 1])) {
+        varlen = i + 1;
+        while (isalnum_(p[varlen]))
+          varlen++;
+        varlen -= i;
+        memcpy(vcpy, p + i, varlen);
+        vcpy[varlen] = '\0';
+      } else {
+        if (p[i + 1] == ' ' || p[i + 1] == '\t' || p[i + 1] == '\0') {
+          f[flen++] = LSTATUS == 0 ? '$' : 'X';
+          i++;
+          continue;
+        }
+        f[flen++] = p[i++];
+        continue;
+      }
+
+      size_t vlen = 0;
+      if (vcpy[0] == '$' && vcpy[1]) {
+        switch (vcpy[1]) {
+          case '$':
+            val = varpid();
+            vlen = strlen(val);
+            break;
+          case '?':
+            val = varstatus(&vlen);
+            break;
+          case '!':
+            val = varbgpid();
+            vlen = strlen(val);
+            break;
+          case '-':
+            val = vardash(&vlen);
+            break;
+          case '#':
+            {
+              char buf[16];
+              vlen = lltoa(SHARGC, buf);
+              val = buf;
+              break;
+            }
+          default:
+            if (isdigit_(vcpy[1])) {
+              int n = atoi(vcpy + 1);
+              val = get_posparam(n);
+              vlen = val ? strlen(val) : 0;
+            } else {
+              shvar *v = findvar_n(vcpy + 1, strlen(vcpy + 1));
+              if (v) {
+                val = shvar_val(v);
+                vlen = vallen(v);
+              }
+            }
+        }
+      }
+
+      if (val) {
+        for (s = val; *s; s++) {
+          if (flen >= sizeof(f) - 1) {
+            nts(f, sizeof(f) - 1);
+            goto done;
+          }
+          f[flen++] = *s;
+        }
+      }
+      i += varlen;
+    } else {
+      if (flen >= sizeof(f) - 1) {
+        nts(f, sizeof(f) - 1);
+        goto done;
+      }
+      f[flen++] = p[i++];
+    }
+  }
+  f[flen] = '\0';
+done:
+  s = st_alloc(flen + 1);
+  memcpy(s, f, flen + 1);
+  return s;
+}
+

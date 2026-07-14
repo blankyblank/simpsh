@@ -25,6 +25,7 @@ const char shusg[43] = "[-abCefhiImnosvVx] [-o longopt] [-c 'cmd']";
 const char defpathn[80] = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 GSTATE gstate = { .shparm.opt_ind = 1, .shparm.opt_off = -1 };
 
+int builtin_tab[BUILTIN_BUCKETS];
  /* __attribute__((visibility("default"))) */
 /** shell entry point */
 int
@@ -113,12 +114,21 @@ main(int argc, char **argv)
 
   flags |= ((argv0[0] == '-') || (flags & FLAG_l)) ? LOGIN : 0;
 
+  if (flags & FLAG_i)
+    iflag = mflag = 1;
+  else if ((flags & FLAG_c) || (!sflag && *argv))
+    iflag = mflag = 0;
+  else
+    iflag = mflag = isatty(STDIN_FILENO);
+
   /* all the set up functions for the shell */
-  setlocale(LC_ALL, "");
+  if (iflag)
+    setlocale(LC_ALL, "");
   init_stack();
   init_env();
   init_input();
   init_sig();
+  init_builtins();
   if (mflag) {
     init_pgrp();
     init_job();
@@ -131,9 +141,6 @@ main(int argc, char **argv)
     if (vflag) {
       fputs(argv[0], stderr);
       fputc('\n', stderr);
-    } else if (!(flags & FLAG_i)) {
-      iflag = 0;
-      mflag = 0;
     }
     SHARGV0 = argc > 1 ? argv[1] : argv0;
     SHARGV = argc > 2 ? argv + 2 : NULL;
@@ -141,10 +148,6 @@ main(int argc, char **argv)
     sh_ccmd(argv[0]);
     exittrap(LSTATUS);
   } else if (!sflag && *argv) {
-    if (!(flags & FLAG_i)) {
-      iflag = 0;
-      mflag = 0;
-    }
     if ((fd = open(*argv, O_RDONLY)) < 0) {
       perror("simpsh");
       exittrap(1);

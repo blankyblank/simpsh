@@ -102,7 +102,7 @@ resize_var_tab(void)
 }
 
 static int
-cmpvar(const void *va, const void *vb)
+cmpvar(const void *restrict va, const void *restrict vb)
 {
   const shvar *j, *k;
   const char *a, *b;

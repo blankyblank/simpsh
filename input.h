@@ -26,7 +26,7 @@ struct shinput {
   char *name;       /* current filename */
   size_t nleft;     /* Remaining chars in buf */
   int unget;        /* number to pushback */
-  char ungetbuf[4]; /* Small pushback buffer */
+  char ungetbuf[2]; /* Small pushback buffer */
   char *buf;        /* The raw read buffer */
   shinput *prev;    /* Links to previous input */
   int fd;           /* File descriptor for script file input */
@@ -51,55 +51,34 @@ extern shinput *shinpt;
     shinpt = shinpt->prev; \
   } while (0)
 
-extern int shungetc(int);
 extern size_t shgetline(char *, size_t);
 extern void setinputstrn(char *, int);
 extern void setinputf(int, const char *, int);
 extern void init_input(void);
 static int shreadbuf(void);
+int charfill(void);
 
 static inline int
 shgetchar(void)
 {
   shinput *in = shinpt;
-  if ((in->unget > 0)) {
+  if (doexpect(in->unget > 0)) {
     in->unget--;
     return (unsigned char)in->ungetbuf[shinpt->unget];
   }
-  if (in->nleft > 0) {
+  if (doexpect(in->nleft > 0)) {
     in->nleft--;
     return (unsigned char)*in->nchar++;
   }
-  if (in->strpush) {
-    popstring();
-    return (unsigned char)shgetchar();
-  }
+  return charfill();
+}
 
-  if (in->fd < 0 && in->b.mapsize)
-    return SHEOF;
-
-  if (in->fd >= 0 && in->b.lleft > 0) {
-    size_t nl;
-    nl = memchr_(in->nchar, in->b.lleft, '\n');
-    if (nl < in->b.lleft) {
-      in->nleft = nl + 1, in->b.lleft -= in->nleft;
-    } else {
-      in->nleft = in->b.lleft, in->b.lleft = 0;
-    }
-    in->nleft--;
-    if (*in->nchar == '\n')
-      in->linenum++;
-    return (unsigned char)*in->nchar++;
-
-  }
-
-  if (shreadbuf() == 0)
-    return SHEOF;
-  in->nleft--;
-  if (*in->nchar == '\n')
-    in->linenum++;
-  
-  return (unsigned char)*in->nchar++;
+static inline int
+shungetc(int c)
+{
+  if (shinpt->unget < 2)
+    return shinpt->ungetbuf[shinpt->unget++] = c;
+  return SHEOF;
 }
 
 int

@@ -161,8 +161,7 @@ init_opts(void)
 {
   for (int i = 0; i < OPTC; i++)
     SHOPTS[i] = 0;
-
-  hflag = mflag = iflag = isatty(STDIN_FILENO);
+  hflag = 1;
 }
 
 void
@@ -307,12 +306,14 @@ checkopts(char *optstr, char **argv, char *o, int opterr)
       *o = '?';
       setvar(oargn, (char[2]) { c, '\0' }, 0);
     } else {
+      *o = '?';
       rmvar(oargn);
       if (opterr)
         fprintf(stderr, "idk an error\n");
     }
     if (!*(p + OPTOFF))
       OPTOFF = -1;
+    //XXX: figure out what to write to *o here
     return 0;
   }
 
@@ -374,7 +375,7 @@ getoptscmd(char **argv)
       break;
   }
 
-  char res, buf[16], nb[2];
+  char res = '\0', buf[16], nb[2];
   int status;
 
   if (OPTIND < 1 || OPTIND > argpc + 1)

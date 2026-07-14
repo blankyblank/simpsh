@@ -2,6 +2,7 @@
 /* NOLINT(build/c++11) */
 
 #define _POSIX_C_SOURCE 200809L
+#include <assert.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -35,79 +36,6 @@ static cmd_tree *parse_if(void);
 static cmd_tree *parse_case(void);
 static cmd_tree *parse_simple_cmd(size_t);
 
-/* check if word is name=value */
-static int
-is_assn(wf *cmd)
-{
-  char *eq = memchr(cmd->word, '=', cmd->len);
-  const char *p;
-
-  if (cmd->qs != QNONE)
-    return 0;
-  if (!eq || eq == cmd->word)
-    return 0;
-
-  for (p = cmd->word; p < eq; p++) {
-    if (p == cmd->word) {
-      if (!isalpha_(*p) && *p != '_')
-        return 0;
-    } else {
-      if (!isalnum_(*p) && *p != '_')
-        return 0;
-    }
-  }
-  return 1;
-}
-
-/** get name and value from NAME=value pair */
-static int
-get_assn(wf **args, wf *** restrict sh_vars)
-{
-  int i, j, k, ac;
-  *sh_vars = NULL;
-
-  if (!args)
-    return 0;
-
-  for (i = 0; args[i]; i++)
-    if (!is_assn(args[i]))
-      break;
-
-  ac = i;
-  if (!ac) {
-    *sh_vars = NULL;
-    return ac;
-  }
-  *sh_vars = st_alloc((ac + 1) * sizeof(wf *));
-  if (!*sh_vars)
-    return 0;
-
-  for (j = 0; j < ac; j++)
-    (*sh_vars)[j] = args[j];
-  (*sh_vars)[ac] = NULL;
-
-  for (k = ac; args[k]; k++)
-    args[k - ac] = args[k];
-  args[k - ac] = NULL;
-
-  return ac;
-}
-
-static inline cmd_tree *
-newcmdnode(wf ** restrict args, int flags, wf ** restrict sh_vars, size_t vc)
-{
-  cmd_tree *n = st_alloc(sizeof(cmd_tree));
-  if (!n)
-    return NULL;
-  n->type = CMD;
-  CARGS(n) = args;
-  CVARS(n) = sh_vars;
-  CVARC(n) = vc;
-  n->flags = flags;
-  n->line = shinpt->linenum;
-  return n;
-}
-
 static inline cmd_tree *
 newredirnode(cmd_tree * restrict l, redir * restrict r)
 {
@@ -135,6 +63,21 @@ newoppnode(token opp_t, cmd_tree *l, cmd_tree *r)
   n->left = l;
   n->right = r;
   n->flags = 0;
+  n->line = shinpt->linenum;
+  return n;
+}
+
+static inline cmd_tree *
+newcmdnode(wf ** restrict args, int flags, wf ** restrict sh_vars, size_t vc)
+{
+  cmd_tree *n = st_alloc(sizeof(cmd_tree));
+  if (!n)
+    return NULL;
+  n->type = CMD;
+  CARGS(n) = args;
+  CVARS(n) = sh_vars;
+  CVARC(n) = vc;
+  n->flags = flags;
   n->line = shinpt->linenum;
   return n;
 }
@@ -205,6 +148,199 @@ parse_list(token s)
     }
   }
   return l;
+}
+
+cmd_tree *
+parse_simple_cmd(size_t neg)
+{
+  sh_tok t, close;
+  wf **args, **sh_vars;
+  redir *redirs, **tail;
+  cmd_tree *body, *l;
+
+  size_t vc, wc, cap;
+  int cmdflags;
+
+  gstate.lineno = shinpt->linenum;
+  cap = WFCAP;
+  args = st_alloc(cap * sizeof(wf *));
+  redirs = NULL;
+  tail = &redirs;
+  wc = 0;
+  cmdflags = (neg & 1) ? NEG : 0;
+
+  for (;;) {
+    int fd;
+    t = tokenize();
+    switch (t.type) {
+      case TREDIR:
+        {
+          sh_tok name;
+          redir *r;
+          name = tokenize();
+          if (name.type != TWORD)
+            return syntxerr(curline, "missing filename for", t.type);
+          r = st_alloc(sizeof(redir));
+          if (t.sub == RDHERE || t.sub == RDHERE_D) {
+            r->fd = 0;
+          } else {
+            r->fd = (t.sub == RDIN || t.sub == RDDUPI || t.sub == RDRW) ? 0 : 1;
+          }
+          r->type = t.sub;
+          r->name = name.cmd;
+          r->next = NULL;
+          *tail = r;
+          if (t.sub == RDHERE || t.sub == RDHERE_D) {
+            r->heredoc_next = NULL;
+            *heredoc_tail = r;
+            heredoc_tail = &r->heredoc_next;
+          }
+          tail = &r->next;
+          continue;
+        }
+      case TWORD:
+        {
+          sh_tok n;
+          n = tokenize();
+          assert(t.cmd);
+          if (n.type == TREDIR) {
+            int allnum = 1;
+            for (wf *p = t.cmd; p; p = p->next)
+              for (size_t i = 0; i < p->len; i++)
+                if (p->word[i] < '0' || p->word[i] > '9') {
+                  allnum = 0;
+                  goto numchkdone;
+                }
+numchkdone:
+            if (allnum) {
+              sh_tok name = tokenize();
+              if (name.type != TWORD)
+                return syntxerr(curline, "missing filename for", t.type);
+              redir *r;
+              r = st_alloc(sizeof(redir));
+              r->type = n.sub;
+              r->name = name.cmd;
+              r->next = NULL;
+              *tail = r;
+              tail = &r->next;
+              fd = 0;
+              for (size_t i = 0; i < t.cmd->len; i++)
+                fd = fd * 10 + (t.cmd->word[i] - '0');
+              r->fd = fd;
+              continue;
+            }
+          }
+          last_tok = n;
+          if (t.cmd->flags & WFCMDSUB)
+            cmdflags |= NECMDSUB;
+          if (wc + 1 >= cap) {
+            cap *= 2;
+            streallocar(args, cap, wc, wf *);
+          }
+          args[wc++] = t.cmd;
+          continue;
+        }
+      default:
+        if (t.type == TNOT)
+          return synunexpected(shinpt->linenum, t);
+        last_tok = t;
+        break;
+    }
+    break;
+  }
+
+  args[wc] = NULL;
+  if (!wc && redirs) {
+    l = newcmdnode(NULL, cmdflags, NULL, 0);
+    return newredirnode(l, redirs);
+  }
+  if (!wc && redirs == NULL)
+    return NULL;
+
+  if (wc == 1 && last_tok.type == TLP && redirs == NULL) {
+    last_tok = SHTOK(TNONE);
+    close = tokenize();
+    if (close.type == TRP) {
+      body = parse_func();
+      if (!body)
+        return NULL;
+      /* new shell function node */
+      cmd_tree *n = st_alloc(sizeof(cmd_tree));
+      if (!n)
+        return NULL;
+      n->type = FUNC;
+      CFUNC(n) = args[0];
+      n->left = body;
+      n->line = shinpt->linenum;
+      return n;
+    }
+    last_tok = close;
+    return NULL;
+  }
+
+  vc = get_assn(args, &sh_vars);
+  l = newcmdnode(args, cmdflags, sh_vars, vc);
+  if (redirs)
+    return newredirnode(l, redirs);
+  return l;
+}
+
+/* check if word is name=value */
+static int
+is_assn(wf *cmd)
+{
+  char *eq = memchr(cmd->word, '=', cmd->len);
+  const char *p;
+
+  if (cmd->qs != QNONE)
+    return 0;
+  if (!eq || eq == cmd->word)
+    return 0;
+
+  for (p = cmd->word; p < eq; p++) {
+    if (p == cmd->word) {
+      if (!isalpha_(*p) && *p != '_')
+        return 0;
+    } else {
+      if (!isalnum_(*p) && *p != '_')
+        return 0;
+    }
+  }
+  return 1;
+}
+
+/** get name and value from NAME=value pair */
+static int
+get_assn(wf **args, wf *** restrict sh_vars)
+{
+  int i, j, k, ac;
+  *sh_vars = NULL;
+
+  if (!args)
+    return 0;
+
+  for (i = 0; args[i]; i++)
+    if (!is_assn(args[i]))
+      break;
+
+  ac = i;
+  if (!ac) {
+    *sh_vars = NULL;
+    return ac;
+  }
+  *sh_vars = st_alloc((ac + 1) * sizeof(wf *));
+  if (!*sh_vars)
+    return 0;
+
+  for (j = 0; j < ac; j++)
+    (*sh_vars)[j] = args[j];
+  (*sh_vars)[ac] = NULL;
+
+  for (k = ac; args[k]; k++)
+    args[k - ac] = args[k];
+  args[k - ac] = NULL;
+
+  return ac;
 }
 
 static cmd_tree *
@@ -288,14 +424,14 @@ parse_heredoc(void)
         }
         if (c == '\n')
           break;
-        st_putc(c);
+        stcheck(32), st_putc(c);
       }
       llen = stnext - lpos;
       if (llen == eofvlen && memcmp(lpos, eofv, eofvlen) == 0) {
         stunalloc(lpos);
         break;
       }
-      st_putc('\n');
+      stcheck(32), st_putc('\n');
     }
 
 done:
@@ -508,140 +644,6 @@ parse_if(void)
   n->flags = 0;
   n->line = shinpt->linenum;
   return n;
-}
-
-cmd_tree *
-parse_simple_cmd(size_t neg)
-{
-  sh_tok t, close;
-  wf **args, **sh_vars;
-  redir *redirs, **tail;
-  cmd_tree *body, *l;
-
-  size_t vc, wc, cap;
-  int cmdflags;
-
-  gstate.lineno = shinpt->linenum;
-  cap = WFCAP;
-  args = st_alloc(cap * sizeof(wf *));
-  redirs = NULL;
-  tail = &redirs;
-  wc = 0;
-  cmdflags = (neg & 1) ? NEG : 0;
-
-  for (;;) {
-    int fd;
-    t = tokenize();
-    switch (t.type) {
-      case TREDIR:
-        {
-          sh_tok name;
-          redir *r;
-          name = tokenize();
-          if (name.type != TWORD)
-            return syntxerr(curline, "missing filename for", t.type);
-          r = st_alloc(sizeof(redir));
-          if (t.sub == RDHERE || t.sub == RDHERE_D) {
-            r->fd = 0;
-          } else {
-            r->fd = (t.sub == RDIN || t.sub == RDDUPI || t.sub == RDRW) ? 0 : 1;
-          }
-          r->type = t.sub;
-          r->name = name.cmd;
-          r->next = NULL;
-          *tail = r;
-          if (t.sub == RDHERE || t.sub == RDHERE_D) {
-            r->heredoc_next = NULL;
-            *heredoc_tail = r;
-            heredoc_tail = &r->heredoc_next;
-          }
-          tail = &r->next;
-          continue;
-        }
-      case TWORD:
-        {
-          sh_tok n;
-          n = tokenize();
-          if (n.type == TREDIR) {
-            int allnum = 1;
-            for (wf *p = t.cmd; p; p = p->next)
-              for (size_t i = 0; i < p->len; i++)
-                if (p->word[i] < '0' || p->word[i] > '9') {
-                  allnum = 0;
-                  goto numchkdone;
-                }
-numchkdone:
-            if (allnum) {
-              sh_tok name = tokenize();
-              if (name.type != TWORD)
-                return syntxerr(curline, "missing filename for", t.type);
-              redir *r;
-              r = st_alloc(sizeof(redir));
-              r->type = n.sub;
-              r->name = name.cmd;
-              r->next = NULL;
-              *tail = r;
-              tail = &r->next;
-              fd = 0;
-              for (size_t i = 0; i < t.cmd->len; i++)
-                fd = fd * 10 + (t.cmd->word[i] - '0');
-              r->fd = fd;
-              continue;
-            }
-          }
-          last_tok = n;
-          if (t.cmd->flags & WFCMDSUB)
-            cmdflags |= NECMDSUB;
-          if (wc + 1 >= cap) {
-            cap *= 2;
-            streallocar(args, cap, wc, wf *);
-          }
-          args[wc++] = t.cmd;
-          continue;
-        }
-      default:
-        if (t.type == TNOT)
-          return synunexpected(shinpt->linenum, t);
-        last_tok = t;
-        break;
-    }
-    break;
-  }
-
-  args[wc] = NULL;
-  if (!wc && redirs) {
-    l = newcmdnode(NULL, cmdflags, NULL, 0);
-    return newredirnode(l, redirs);
-  }
-  if (!wc && redirs == NULL)
-    return NULL;
-
-  if (wc == 1 && last_tok.type == TLP && redirs == NULL) {
-    last_tok = SHTOK(TNONE);
-    close = tokenize();
-    if (close.type == TRP) {
-      body = parse_func();
-      if (!body)
-        return NULL;
-      /* new shell function node */
-      cmd_tree *n = st_alloc(sizeof(cmd_tree));
-      if (!n)
-        return NULL;
-      n->type = FUNC;
-      CFUNC(n) = args[0];
-      n->left = body;
-      n->line = shinpt->linenum;
-      return n;
-    }
-    last_tok = close;
-    return NULL;
-  }
-
-  vc = get_assn(args, &sh_vars);
-  l = newcmdnode(args, cmdflags, sh_vars, vc);
-  if (redirs)
-    return newredirnode(l, redirs);
-  return l;
 }
 
 __attribute__((hot)) cmd_tree *

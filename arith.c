@@ -514,7 +514,6 @@ arith_eval(const char *expr, size_t len)
     }
 
     skip = sskipspace(p, n);
-    p += skip;
     n -= skip;
     if (n == 0) {
       switch (op) {

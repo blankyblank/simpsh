@@ -24,7 +24,6 @@
 #define is_cmd_end(c)    ((c == ' ') | (c == '\t') | (c == '\n'))
 #define nts(s, l)        (s[l] = '\0')
 #define nmemcpy(d, s, l) memcpy((d), (s), (l)), (d)[l] = '\0'
-
 /**  check if char is operator  */
 #define is_operator(c) \
   (c == '&' || c == '|' || c == ';' || c == '(' || c == ')' || c == '{' || \
@@ -239,6 +238,7 @@ st_read_assn(const char *assn, char **restrict name, char **restrict value)
 }
 
 /**  hash string for hash table  */
+NO_UBSAN
 static inline unsigned int
 hash(const char *s, unsigned int buckets)
 {
@@ -253,6 +253,7 @@ hash(const char *s, unsigned int buckets)
 }  // __attribute__((no_sanitize("unsigned-integer-overflow")))
 
 /**  hash string with known length  */
+NO_UBSAN
 static inline unsigned int
 hash_n(const char *s, size_t n, unsigned int buckets)
 {

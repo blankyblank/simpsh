@@ -9,7 +9,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #ifdef LIBEDIT
-  #include <histedit.h>
+  #include <dlfcn.h>
+  #include "histeditshm.h"
 #else
   #include "utils.h"
 #endif /* ifdef LIBEDIT */
@@ -32,18 +33,49 @@ static int need_more(const char *, size_t);
 static int read_cont(char **, size_t *);
 static int read_cmd(char ** restrict, size_t * restrict);
 static shinput *init_interactive(void);
+static char *nxtline;
 
 #ifdef LIBEDIT
+#define DLSYM_FN(h, var, name) *(void **)&(var) = dlsym((h), (name))
 static EditLine *edl;
 static int ps1mode;
+static EditLine *edl;
+static EditLine *(*libedit_el_init)(const char *, FILE *, FILE *, FILE *);
+static int (*libedit_el_set)(EditLine *, int, ...);
+static const char *(*libedit_el_gets)(EditLine *, int *);
+static unsigned char (*libedit_el_sh_complete)(EditLine *, int);
 
 static int input_notify(EditLine *, wchar_t *);
 static char *prompt_fn(EditLine *);
-#else
-static char *nxtline;
+
+  #ifdef STATICLIBEDIT
+  static int
+  load_libedit(void)
+  {
+    libedit_el_init = el_init;
+    libedit_el_set = el_set;
+    libedit_el_gets = el_gets;
+    libedit_el_sh_complete = _el_fn_sh_complete;
+    return 1;
+  }
+  #else
+
+  static int
+  load_libedit(void)
+  {
+    void *h = dlopen("libedit.so.0", RTLD_LAZY | RTLD_LOCAL);
+    if (!h)
+      return 0;
+    DLSYM_FN(h, libedit_el_init, "el_init");
+    DLSYM_FN(h, libedit_el_set, "el_set");
+    DLSYM_FN(h, libedit_el_gets, "el_gets");
+    DLSYM_FN(h, libedit_el_sh_complete, "_el_fn_sh_complete");
+    return libedit_el_init && libedit_el_set && libedit_el_gets;
+  }
+  #endif /* STATICLIBEDIT */
+#endif   /* LIBEDIT */
 
 static void stdin_cb(void *data);
-#endif /* LIBEDIT */
 
 static inline void
 source_file(const char *path)
@@ -263,15 +295,18 @@ sh_interactive(void)
   int r;
 
 #ifdef LIBEDIT
-  edl = el_init(SHARGV0, stdin, stdout, stderr);
-  el_set(edl, EL_EDITOR, "vi");
-  el_set(edl, EL_SIGNAL, 1);
-  el_set(edl, EL_GETCFN, input_notify);
-  el_set(edl, EL_PROMPT, prompt_fn);
-  el_set(edl, EL_ADDFN, "sh-complete", "Shell Completion", _el_fn_sh_complete);
-  el_set(edl, EL_BIND, "^I", "sh-complete", NULL);
-  static int hcookie;
-  el_set(edl, EL_HIST, hist_cb, &hcookie);
+  if (load_libedit()) {
+    edl = libedit_el_init(SHARGV0, stdin, stdout, stderr);
+    libedit_el_set(edl, EL_EDITOR, "vi");
+    libedit_el_set(edl, EL_SIGNAL, 1);
+    libedit_el_set(edl, EL_GETCFN, input_notify);
+    libedit_el_set(edl, EL_PROMPT, prompt_fn);
+    libedit_el_set(
+      edl, EL_ADDFN, "sh-complete", "Shell Completion", libedit_el_sh_complete);
+    libedit_el_set(edl, EL_BIND, "^I", "sh-complete", NULL);
+    static int hcookie;
+    libedit_el_set(edl, EL_HIST, hist_cb, &hcookie);
+  }
 #endif
   init_history();
   inpt = init_interactive();
@@ -319,7 +354,7 @@ sh_interactive(void)
 }
 
 static int
-need_more(const char *lines, size_t lineslen)
+need_more(const char *lines, size_t llen)
 {
   typedef enum {
     NCTX_NORMAL,
@@ -334,9 +369,9 @@ need_more(const char *lines, size_t lineslen)
   int last = 0, prev = 0;
   size_t i;
 
-  for (i = 0; i < lineslen; i++) {
+  for (i = 0; i < llen; i++) {
     int c = (unsigned char)lines[i];
-    int next = (i + 1 < lineslen) ? (unsigned char)lines[i + 1] : 0;
+    int next = (i + 1 < llen) ? (unsigned char)lines[i + 1] : 0;
 
     switch (ctx) {
       case NCTX_NORMAL:
@@ -350,7 +385,7 @@ need_more(const char *lines, size_t lineslen)
           i++;
         if (c == '$' && next == '(') {
           i++;
-          if (i + 1 < lineslen && lines[i + 1] == '(') {
+          if (i + 1 < llen && lines[i + 1] == '(') {
             i++;
             ctx = NCTX_ARITH;
             depth = 0;
@@ -382,7 +417,7 @@ need_more(const char *lines, size_t lineslen)
         } else if (c == '$' && next == '(') {
           i++;
           depth++;
-          if (i + 1 < lineslen && lines[i + 1] == '(') {
+          if (i + 1 < llen && lines[i + 1] == '(') {
             i++;
             depth++;
           }
@@ -401,7 +436,7 @@ need_more(const char *lines, size_t lineslen)
         } else if (c == '$' && next == '(') {
           i++;
           depth++;
-          if (i + 1 < lineslen && lines[i + 1] == '(') {
+          if (i + 1 < llen && lines[i + 1] == '(') {
             i++;
             depth++;
           }
@@ -422,14 +457,125 @@ need_more(const char *lines, size_t lineslen)
     return 1;
   if (last == '&' && prev == '&')
     return 1;
-  if (lineslen >= 2) {
-    i = lineslen - 2;
+  if (llen >= 2) {
+    i = llen - 2;
     while (i > 0 && (lines[i] == ' ' || lines[i] == '\t'))
       i--;
     if (i > 0 && lines[i] == '\\' && lines[i - 1] != '\\')
       return 1;
   }
+  {
+    int kdepth = 0, ksquote = 0, kdquote = 0, boundary = 1;
+    enum {
+      K_IF,
+      K_FOR,
+      K_WHILE,
+      K_UNTIL,
+      K_CASE,
+      K_DO
+    } kstack[16];
+
+    for (size_t k = 0; k < llen; k++) {
+      unsigned char c = lines[k];
+      if (c == '\'' && !kdquote) {
+        ksquote = !ksquote;
+        continue;
+      }
+      if (c == '"' && !ksquote) {
+        kdquote = !kdquote;
+        continue;
+      }
+      if (ksquote || kdquote)
+        continue;
+
+      if (c == '\n' || c == ';' || c == '|') {
+        boundary = 1;
+        continue;
+      }
+      if (c == '&' && k + 1 < llen && lines[k + 1] == '&') {
+        boundary = 1;
+        k++;
+        continue;
+      }
+
+      if (boundary && c != ' ' && c != '\t') {
+        size_t s = k;
+        while (k < llen && lines[k] != ' ' && lines[k] != '\t' &&
+               lines[k] != '\n' && lines[k] != ';' && lines[k] != '|')
+          k++;
+        int wlen = k - s, h = kwhash(lines + s, wlen);
+        if (kw[h].len == wlen && memcmp(kw[h].word, lines + s, wlen) == 0) {
+          switch (kw[h].tok) {
+            case TIF:
+              kstack[kdepth++] = K_IF;
+              break;
+            case TFOR:
+              kstack[kdepth++] = K_FOR;
+              break;
+            case TWHILE:
+              kstack[kdepth++] = K_WHILE;
+              break;
+            case TUNTIL:
+              kstack[kdepth++] = K_UNTIL;
+              break;
+            case TCASE:
+              kstack[kdepth++] = K_CASE;
+              break;
+            case TDO:
+              kstack[kdepth++] = K_DO;
+              break;
+            case TFI:
+              while (kdepth && kstack[kdepth - 1] != K_IF)
+                kdepth--;
+              if (kdepth)
+                kdepth--;
+              break;
+            case TDONE:
+              while (kdepth && kstack[kdepth - 1] != K_FOR &&
+                     kstack[kdepth - 1] != K_WHILE &&
+                     kstack[kdepth - 1] != K_UNTIL &&
+                     kstack[kdepth - 1] != K_DO)
+                kdepth--;
+              if (kdepth)
+                kdepth--;
+              break;
+            case TESAC:
+              while (kdepth && kstack[kdepth - 1] != K_CASE)
+                kdepth--;
+              if (kdepth)
+                kdepth--;
+              break;
+            default:
+              break;
+          }
+        }
+        boundary = 0;
+      }
+    }
+    if (kdepth)
+      return 1;
+  }
+
   return 0;
+}
+
+static void
+stdin_cb(void *data)
+{
+  (void)data;
+  char buf[4096];
+  ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
+  if (n > 0) {
+    char *nl = memchr(buf, '\n', n);
+    if (nl)
+      *nl = '\0';
+    else
+      buf[n] = '\0';
+    nxtline = st_strdup(buf);
+    stopeventloop(&el);
+  } else if (!n) {
+    stopeventloop(&el);
+  }
 }
 
 #ifdef LIBEDIT
@@ -475,13 +621,36 @@ prompt_fn(EditLine *e)
 char *
 lineread(int ps1)
 {
+  if (!edl) {
+    char *prompt;
+    addeventloop(&el, STDIN_FILENO, POLLIN, stdin_cb, NULL);
+    prompt = update_prompt(ps1);
+    fputs(prompt, stdout);
+    fflush(stdout);
+    nxtline = NULL;
+    el.running = 1;
+    while (el.running) {
+      runeventloop(&el, -1);
+      if (intsig) {
+        intsig = 0;
+        putchar('\n');
+        fputs(prompt, stdout);
+        fflush(stdout);
+        nxtline = NULL;
+        el.running = 1;
+        continue;
+      }
+    }
+    rmeventloop(&el, STDIN_FILENO);
+    return nxtline;
+  }
   int count;
   char *s;
   const char *line;
 
 again:
   ps1mode = ps1;
-  line = el_gets(edl, &count);
+  line = libedit_el_gets(edl, &count);
   if (!line) {
     if (!count) {
       putchar('\n');
@@ -503,26 +672,6 @@ again:
 }
 
 #else
-
-static void
-stdin_cb(void *data)
-{
-  (void)data;
-  char buf[4096];
-  ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
-  if (n > 0) {
-    char *nl = memchr(buf, '\n', n);
-    if (nl)
-      *nl = '\0';
-    else
-      buf[n] = '\0';
-    nxtline = st_strdup(buf);
-    stopeventloop(&el);
-  } else if (!n) {
-    stopeventloop(&el);
-  }
-}
-
 /** lineread with no readline, for testing */
 char *
 lineread(int ps1)

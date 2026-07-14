@@ -2,7 +2,7 @@
 #define HISTORY_H
 
 #ifdef LIBEDIT
-  #include <histedit.h>
+  #include "histeditshm.h"
 
   int hist_cb(void *cookie, HistEvent *ev, int op, ...);
 #endif
@@ -21,5 +21,6 @@ void hist_add(const char *);
 void hist_save(void);
 void hist_load(void);
 void hist_cleanup(void);
+int fccmd(char **);
 
 #endif /* HISTORY_H */

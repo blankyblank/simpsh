@@ -56,7 +56,7 @@ for (argv0 = *argv, argv++, argc--;\
 #define ARGNUMF()	(brk_ = 1, estrtonum(argv[0], 0, INT_MAX))
 
 #define EARGF(x)	((argv[0][1] == '\0' && argv[1] == NULL)?\
-				((x), abort(), (char *)0) :\
+				((x), (char *)0) :\
 				(brk_ = 1, (argv[0][1] != '\0')?\
 					(&argv[0][1]) :\
 					(argc--, argv++, argv[0])))
