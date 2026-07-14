@@ -3,18 +3,20 @@
 include config.mk
 
 ifneq ($(filter debug valgrind sanitize,$(BUILD)),)
-	DEBUGFLAGS := -D_FORTIFY_SOURCE=3 -fstack-protector-strong -g3 -fno-omit-frame-pointer
+	DEBUGFLAGS := -g3 -fno-omit-frame-pointer
 	CFLAGS += $(if $(filter gcc,$(CC)),-ggdb -fvar-tracking-assignments -fno-analyzer-state-merge)
 	CFLAGS += $(if $(filter clang,$(CC)),-glldb -fstandalone-debug)
 endif
 
 ifeq ($(BUILD),release)
-	CFLAGS += -march=native -O2 -flto
+	CFLAGS += -march=native
 	# CFLAGS += -march=native -O3 -ffast-math -flto
-	CFLAGS += $(if $(filter gcc,$(CC)), -Wno-stringop-overflow -flto=auto)
-	CFLAGS += $(if $(filter clang,$(CC)),-flto=full)
+	CFLAGS += $(if $(filter gcc,$(CC)),-O2 -Wno-stringop-overflow -flto=auto)
+	CFLAGS += $(if $(filter clang,$(CC)), -flto -O3 -flto=full)
 else ifeq ($(BUILD),debug)
-	CFLAGS += -Og $(DEBUGFLAGS)
+	CFLAGS += $(DEBUGFLAGS)
+	CFLAGS += $(if $(filter gcc,$(CC)),-Og -flto=auto)
+	CFLAGS += $(if $(filter clang,$(CC)), -flto -Og -glldb -fstandalone-debug -flto=full)
 else ifeq ($(BUILD),valgrind)
 	CC := gcc
 	CFLAGS += -Og $(DEBUGFLAGS) -DDEBUG -DENABLE_VALGRIND
