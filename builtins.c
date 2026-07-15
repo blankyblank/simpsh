@@ -22,20 +22,18 @@
 #include "env.h"
 #include "exec.h"
 #include "error.h"
-#include "history.h"
 #include "input.h"
-#include "job.h"
 #include "main.h"
 #include "opts.h"
 #include "path.h"
-#include "sig.h"
 #include "simd.h"
 #include "simpsh.h"
-#include "test.h"
 #include "utils.h"
 #include "var.h"
 
 /* builtins */
+extern int aliascmd(char **);
+extern int bgcmd(char **);
 static int breakcmd(char **);
 static int cdcmd(char **);
 static int commandcmd(char **);
@@ -44,27 +42,38 @@ static int dotcmd(char **);
 static int catcmd(char **);
 static int echocmd(char **);
 static int evalcmd(char **);
+extern int execcmd(char **);
 static int exitcmd(char **);
+extern int exportcmd(char **);
 static int falsecmd(char **);
+extern int fccmd(char **);
+extern int fgcmd(char **);
+extern int getoptscmd(char **);
+extern int hashcmd(char **);
+extern int helpcmd(char **);
+extern int jobscmd(char **);
+extern int killcmd(char **);
+extern int localcmd(char **);
+extern int printfcmd(char **);
 static int pwdcmd(char **);
 static int readcmd(char **);
+extern int readonlycmd(char **);
 static int returncmd(char **);
+extern int setcmd(char **);
 static int shiftcmd(char **);
+extern int testcmd(char **);
 static int timescmd(char **);
+extern int trapcmd(char **);
 static int truecmd(char **);
 static int typecmd(char **);
 static int ulimitcmd(char **);
+extern int unaliascmd(char **);
 static int umaskcmd(char **);
+extern int unsetcmd(char **);
+extern int waitcmd(char **);
 
 static int classify_cmd(char *, int, int);
 static char *pwdpath(char *);
-
-#define TOTAL_KEYWORDS 40
-#define MIN_WORD_LENGTH 1
-#define MAX_WORD_LENGTH 8
-#define MIN_HASH_VALUE 1
-#define MAX_HASH_VALUE 69
-
 
 /* the array of builtin commands */
 const builtin builtins[] = {
@@ -92,6 +101,7 @@ const builtin builtins[] = {
   { "jobs",     &jobscmd,     0     },
   { "kill",     &killcmd,     0     },
   { "local",    &localcmd,    0     },
+  { "printf",   &printfcmd,   0     },
   { "pwd",      &pwdcmd,      0     },
   { "read",     &readcmd,     0     },
   { "readonly", &readonlycmd, SBLTN },
