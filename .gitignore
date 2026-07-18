@@ -15,7 +15,7 @@ tests/script-test.sh
 
 *.svg
 callgrind*
-profiling
+profile
 .cache/
 .ccls-cache
 *.json
@@ -33,3 +33,4 @@ reports
 *.out
 perf.data*
 heaptrack.*
+/parsebench
