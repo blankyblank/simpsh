@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -9,6 +10,7 @@
 #include <unistd.h>
 
 #include "alloc.h"
+#include "main.h"
 #include "lex.h"
 
 /*

@@ -119,7 +119,7 @@ main(int argc, char **argv)
   else if ((flags & FLAG_c) || (!sflag && *argv))
     iflag = mflag = 0;
   else
-    iflag = mflag = isatty(STDIN_FILENO);
+    iflag = mflag = (int)isatty(STDIN_FILENO);
 
   /* all the set up functions for the shell */
   if (iflag)
@@ -149,8 +149,7 @@ main(int argc, char **argv)
     exittrap(LSTATUS);
   } else if (!sflag && *argv) {
     if ((fd = open(*argv, O_RDONLY)) < 0) {
-      perror("simpsh");
-      exittrap(1);
+      exittrap(sherrx(1, "open"));
     }
     SHARGV0 = argv0;
     SHARGV = argv + 1;

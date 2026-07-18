@@ -11,7 +11,7 @@
   #include <valgrind/cachegrind.h>
   #include <valgrind/memcheck.h>
 #endif /* ifdef ENABLE_VALGRIND */
-#if defined(__has_attribute)
+#if defined(__clang__)
 #  if __has_attribute(no_sanitize)
 #    define NO_UBSAN __attribute__((no_sanitize("unsigned-integer-overflow")))
 #  endif
@@ -19,8 +19,6 @@
 #ifndef NO_UBSAN
 #  define NO_UBSAN
 #endif
-#define doexpect(x)	__builtin_expect(!!(x),1)
-#define dontexpect(x)	__builtin_expect(!!(x),0)
 
 /* so far 8000 for minstack_s seems pretty good for performance, but it seems
  * large which can have it's own drawbacks test more sized */

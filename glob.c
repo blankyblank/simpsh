@@ -214,7 +214,7 @@ globexpand(const char *restrict pattern, char ***result)
   }
   (*result)[i] = NULL;
   if (closedir(d) < 0)
-    err(0, "closedir");
+    return sherrx(0, "closedir");
   qsort(*result, i, sizeof(char *), cmp);
   return i;
 }

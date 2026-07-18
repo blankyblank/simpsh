@@ -8,6 +8,7 @@
 
 #include "alloc.h"
 #include "error.h"
+#include "input.h"
 #include "main.h"
 #include "opts.h"
 #include "utils.h"
@@ -309,11 +310,11 @@ checkopts(char *optstr, char **argv, char *o, int opterr)
       *o = '?';
       rmvar(oargn);
       if (opterr)
-        fprintf(stderr, "idk an error\n");
+        fprintf(stderr, "%s: illegal option -- %c\n", shinpt->name, c);
     }
     if (!*(p + OPTOFF))
       OPTOFF = -1;
-    //XXX: figure out what to write to *o here
+    *o = '?';
     return 0;
   }
 
@@ -334,12 +335,11 @@ checkopts(char *optstr, char **argv, char *o, int opterr)
           *o = '?';
           rmvar(oargn);
           if (opterr)
-            fprintf(stderr, "idk need to decide on msg\n");
+            fprintf(stderr, "%s: option requires argument -- %c\n", shinpt->name, c);
         }
         return 0;
       }
     }
-    // OPTIND = opti, OPTOFF = opto;
     *o = c;
     return 0;
   }
@@ -371,11 +371,11 @@ getoptscmd(char **argv)
       argp = SHARGV, argpc = SHARGC;
       break;
     default:
-      argp = argv + 3, argpc = argc - 3; // is array_len needed when i can do argc - 3?
+      argp = argv + 3, argpc = argc - 3;
       break;
   }
 
-  char res = '\0', buf[16], nb[2];
+  char res = '\0', buf[24], nb[2];
   int status;
 
   if (OPTIND < 1 || OPTIND > argpc + 1)
@@ -393,12 +393,3 @@ getoptscmd(char **argv)
 
   return status;
 }
-//
-//
-//
-//
-//
-//
-//
-//
-//

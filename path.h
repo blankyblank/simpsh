@@ -18,6 +18,5 @@ extern void setchash(const char *restrict,const char *restrict);
 extern void rmchash(const char *);
 extern char *chkpath(const char *restrict, const char *restrict, int, unsigned int);
 extern char *getpath(char *);
-extern int hashcmd(char **);
 
 #endif /* PATH_H */

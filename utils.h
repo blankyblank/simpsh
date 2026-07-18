@@ -19,7 +19,7 @@
 #define isalnum_(c)      (isalpha_(c) || ((c) >= '0' && (c) <= '9'))
 #define is_ws(c)         (c == ' ' || c == '\t' || c == '\n')
 #define is_ifs_nws(c, s) (!is_ws(c) && strchr(s, c))
-#define arsz(a, o)       (sizeof(a) / sizeof(o))
+#define arsz(a)          (sizeof(a) / sizeof(a[0]))
 /**  check if char is line end  */
 #define is_cmd_end(c)    ((c == ' ') | (c == '\t') | (c == '\n'))
 #define nts(s, l)        (s[l] = '\0')
@@ -28,6 +28,7 @@
 #define is_operator(c) \
   (c == '&' || c == '|' || c == ';' || c == '(' || c == ')' || c == '{' || \
    c == '}' || c == '<' || c == '>')
+
 
 /* project specific replacements */
 
@@ -65,62 +66,47 @@ atoll_(const char *restrict s, i64 *restrict res)
 static inline size_t
 lltoa(i64 val, char *buf)
 {
-  char *p, *start, *end;
-  i64 uval;
+  char tmp[24], *p;
+  size_t len;
+  unsigned long long uval;
 
-  p = buf;
+  p = tmp + sizeof(tmp) - 1;
+  uval = (val < 0) ? (unsigned long long)(-(1 + val)) + 1 : (unsigned long long)val;
+  *p = '\0';
 
-  if (val < 0) {
-    *p++ = '-';
-    uval = -val;
-  } else {
-    uval = val;
-  }
-  start = p;
   do {
-    *p++ = '0' + (uval % 10);
+    *--p = '0' + (uval % 10);
     uval /= 10;
   } while (uval);
-  end = p - 1;
-  while (start < end) {
-    char tmp;
-    tmp = *start;
-    *start++ = *end;
-    *end-- = tmp;
-  }
-  *p = '\0';
-  return p - buf;
+  if (val < 0)
+    *--p = '-';
+  len = (tmp + sizeof(tmp) - 1) - p;
+  memcpy(buf, p, len + 1);
+  return len;
 }
 
 /* convert int to string  */
 static inline size_t
 itoa(int val, char *buf)
 {
-  char *p, *start, *end;
+
+  char tmp[24], *p;
+  size_t len;
   unsigned int uval;
 
-  p = buf;
+  p = tmp + sizeof(tmp) - 1;
+  uval = (val < 0) ? -(unsigned int)val : (unsigned int)val;
+  *p = '\0';
 
-  if (val < 0) {
-    *p++ = '-';
-    uval = -val;
-  } else {
-    uval = val;
-  }
-  start = p;
   do {
-    *p++ = '0' + (uval % 10);
+    *--p = '0' + (uval % 10);
     uval /= 10;
   } while (uval);
-  end = p - 1;
-  while (start < end) {
-    char tmp;
-    tmp = *start;
-    *start++ = *end;
-    *end-- = tmp;
-  }
-  *p = '\0';
-  return p - buf;
+  if (val < 0)
+    *--p = '-';
+  len = (tmp + sizeof(tmp) - 1) - p;
+  memcpy(buf, p, len + 1);
+  return len;
 }
 /**  replicate strchrnul  */
 static inline char *
@@ -149,6 +135,17 @@ mempcpy_(char *restrict dest, const char *restrict src, size_t n)
 }
 
 /* various small helpers */
+
+static inline int
+hexval(char c)
+{
+  if (c >= '0' && c <= '9')
+    return c - '0';
+  c = c | 1 << 5;
+  if (c >= 'a' && c <= 'f')
+    return c - 'a' + 10;
+  return 0;
+}
 
 /**  get length of char* array  */
 #define array_len(a, c) \

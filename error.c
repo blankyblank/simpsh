@@ -1,7 +1,41 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include <err.h>
 #include "error.h"
 #include "utils.h"
+
+
+/* error (returns doesn't exit) with simpsh: builtin: message: (errno message),
+ * format */
+int
+sherr(int r, const char *str, const char *msg)
+{
+  warn("%s: %s", str, msg);
+  return r;
+}
+
+int
+sherrx(int r, const char *msg)
+{
+  warn("%s\n", msg);
+  return r;
+}
+
+/* warning with simpsh: builtin: message, format */
+int
+shwarn(const char *str, const char *msg)
+{
+  fprintf(stderr, "%s: %s: %s\n", shname, str, msg);
+  return 1;
+}
+
+/* error message with simpsh: builtin: arg: message, format */
+int
+shwarn_arg(char *str, const char *arg, const char *msg)
+{
+  fprintf(stderr, "%s: %s: %s: %s\n", shname, str, arg, msg);
+  return 1;
+}
 
 static const char caseusg[] = "WORD in [PATTERN [| PATTERN]) COMMANDS ;;] ... esac";
 static const char execusg[] = "[redirection] [command [arg]]";
@@ -473,50 +507,51 @@ static const char bracehelp[] =
   "    Returns the exit status of the last command executed.";
 /* clang-format off */
 const builtinhelp helpmsgs[] = {
-  [DOTH] =      { ".",        "filename [arguements]", dothelp           },
-  [LBRACKH] =   { "[",        "arg... ]",            testhelp            },
-  [COLONH] =    { ":",        " ",                    truehelp           },
-  [ALIASH] =    { "alias",    "[name[=value] ... ]",  aliashelp          },
-  [BGH] =       { "bg",       "[job]",                   bghelp          },
-  [BREAKH] =    { "break",    "[n]",                  breakhelp          },
-  [CASEH] =     { "case",     caseusg,                 casehelp          },
-  [CDH] =       { "cd",       "[-LP] dir",               cdhelp          },
-  [COMMANDH] =  { "command",  "(placeholder)",      "(placeholder)"      },
-  [CONTINUEH] = { "continue", "[n]",               continuehelp          },
-  [ECHOH] =     { "echo",     "[-n] arg",              echohelp          },
-  [EVALH] =     { "eval",     "[arg ..]",              "(placeholder)"   },
-  [EXECH] =     { "exec",     execusg,                  exechelp         },
-  [EXITH] =     { "exit",     "[n]",                    exithelp         },
-  [EXPORTH] =   { "export",   "[-fn] [name[=value]]",  exporthelp        },
-  [FALSEH] =    { "false",    " ",                     falsehelp         },
-  [FORH] =      { "for",      forusg,                  forhelp           },
-  [FGH] =       { "fg",       "[job]",                  fghelp           },
-  [GETOPTSH] =  { "getpopts", "(placeholder)",     "(placeholder)"       },
-  [HASHH] =     { "hash",     "[-r] [pathname][name]", hashhelp          },
-  [HELPH] =     { "help",     "[builtin]",            helphelp           },
-  [IFH] =       { "if",       ifusg,                   ifhelp            },
-  [JOBSH] =     { "jobs",     "[job]",                jobshelp           },
-  [KILLH] =     { "kill",     killusg,                "(placeholder)"    },
-  [LOCALH] =    { "local",    "name[=value]",        localhelp           },
-  [PWDH] =      { "pwd",      "[-LP]",                 pwdhelp           },
-  [READH] =     { "read",     "[-p prompt][-r] var",   readhelp          },
-  [READONLYH] = { "readonly", "name[=value]",     readonlyhelp           },
-  [RETURNH] =   { "return",   "[n]",                returnhelp           },
-  [SETH] =      { "set",      setusg,                  sethelp           },
-  [SHIFTH] =    { "shift",    "(placeholder)",        "(placeholder)"    },
-  [TESTH] =     { "test",     "[expr]",                testhelp          },
-  [TIMESH] =    { "times",    "(placeholder)",        "(placeholder)"    },
-  [TRAPH] =     { "trap",     "(placeholder)",         "(placeholder)"   },
-  [TRUEH] =     { "true",     " ",                     truehelp          },
-  [TYPEH] =     { "type",     "(placeholder)",         "(placeholder)"   },
-  [ULIMITH] =   { "ulimit",   "(placeholder)",       "(placeholder)"     },
-  [UMASKH] =    { "umask",    "[-s] mode",             umaskhelp         },
-  [UNTILH] =    { "until",    untilusg,                untilhelp         },
-  [UNALIASH] =  { "unalias",  "name",                unaliashelp         },
-  [UNSETH] =    { "unset",    "[-fv] name",            unsethelp         },
-  [WAITH] =     { "wait",     "(placeholder)",         "(placeholder)"   },
-  [WHILEH] =    { "while",    whileusg,                whilehelp         },
-  [BRACEH] =    { " { ",      "COMMANDS ;}",           bracehelp         },
+  [DOTH] =      { ".",        "filename [arguments]", dothelp         },
+  [LBRACKH] =   { "[",        "arg... ]",              testhelp        },
+  [COLONH] =    { ":",        " ",                     truehelp        },
+  [ALIASH] =    { "alias",    "[name[=value] ... ]",   aliashelp       },
+  [BGH] =       { "bg",       "[job]",                 bghelp          },
+  [BREAKH] =    { "break",    "[n]",                   breakhelp       },
+  [CASEH] =     { "case",     caseusg,                 casehelp        },
+  [CDH] =       { "cd",       "[-LP] dir",             cdhelp          },
+  [COMMANDH] =  { "command",  "(placeholder)",         "(placeholder)" },
+  [CONTINUEH] = { "continue", "[n]",                   continuehelp    },
+  [ECHOH] =     { "echo",     "[-n] arg",              echohelp        },
+  [EVALH] =     { "eval",     "[arg ..]",              "(placeholder)" },
+  [EXECH] =     { "exec",     execusg,                 exechelp        },
+  [EXITH] =     { "exit",     "[n]",                   exithelp        },
+  [EXPORTH] =   { "export",   "[-fn] [name[=value]]",  exporthelp      },
+  [FALSEH] =    { "false",    " ",                     falsehelp       },
+  [FORH] =      { "for",      forusg,                  forhelp         },
+  [FGH] =       { "fg",       "[job]",                 fghelp          },
+  [GETOPTSH] =  { "getpopts", "(placeholder)",         "(placeholder)" },
+  [HASHH] =     { "hash",     "[-r] [pathname][name]", hashhelp        },
+  [HELPH] =     { "help",     "[builtin]",             helphelp        },
+  [IFH] =       { "if",       ifusg,                   ifhelp          },
+  [JOBSH] =     { "jobs",     "[job]",                 jobshelp        },
+  [KILLH] =     { "kill",     killusg,                 "(placeholder)" },
+  [LOCALH] =    { "local",    "name[=value]",          localhelp       },
+  [PWDH] =      { "pwd",      "[-LP]",                 pwdhelp         },
+  [PRINTFH] =   { "printf",   "format [arg...]",       "(placeholder)" },
+  [READH] =     { "read",     "[-p prompt][-r] var",   readhelp        },
+  [READONLYH] = { "readonly", "name[=value]",          readonlyhelp    },
+  [RETURNH] =   { "return",   "[n]",                   returnhelp      },
+  [SETH] =      { "set",      setusg,                  sethelp         },
+  [SHIFTH] =    { "shift",    "(placeholder)",         "(placeholder)" },
+  [TESTH] =     { "test",     "[expr]",                testhelp        },
+  [TIMESH] =    { "times",    "(placeholder)",         "(placeholder)" },
+  [TRAPH] =     { "trap",     "(placeholder)",         "(placeholder)" },
+  [TRUEH] =     { "true",     " ",                     truehelp        },
+  [TYPEH] =     { "type",     "(placeholder)",         "(placeholder)" },
+  [ULIMITH] =   { "ulimit",   "(placeholder)",         "(placeholder)" },
+  [UMASKH] =    { "umask",    "[-s] mode",             umaskhelp       },
+  [UNTILH] =    { "until",    untilusg,                untilhelp       },
+  [UNALIASH] =  { "unalias",  "name",                  unaliashelp     },
+  [UNSETH] =    { "unset",    "[-fv] name",            unsethelp       },
+  [WAITH] =     { "wait",     "(placeholder)",         "(placeholder)" },
+  [WHILEH] =    { "while",    whileusg,                whilehelp       },
+  [BRACEH] =    { " { ",      "COMMANDS ;}",           bracehelp       },
 }; /* clang-format on */
 
 int

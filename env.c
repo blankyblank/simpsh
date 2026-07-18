@@ -3,9 +3,11 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "alloc.h"
+#include "main.h"
 #include "env.h"
 #include "error.h"
 #include "lex.h"
@@ -14,6 +16,9 @@
 
 alias *alias_tab[ENV_BUCKETS];
 shfunc *func_tab[ENV_BUCKETS];
+wf * wfdup(wf *s);
+static clause * clausedup(clause *c);
+static void free_wf(wf *);
 
 wf *
 wfdup(wf *s)
@@ -31,7 +36,7 @@ wfdup(wf *s)
   return n;
 }
 
-static inline clause *
+static clause *
 clausedup(clause *c)
 {
   size_t cnt = 0;
@@ -137,6 +142,110 @@ tree_dup(cmd_tree *s)
       }
   }
   return n;
+}
+
+static void
+free_wf(wf *f)
+{
+  if (!f)
+    return;
+  slfree(f->word);
+  free_wf(f->next);
+  slfree(f);
+}
+
+static inline void
+free_redir(redir *r)
+{
+  while (r) {
+    redir *tmp;
+    tmp = r;
+    r = r->next;
+    free_wf(tmp->name);
+    slfree(tmp);
+  }
+  return;
+}
+
+void
+free_tree(cmd_tree *n)
+{
+  if (!n)
+    return;
+
+  switch (n->type) {
+    case OP:
+      free_tree(n->left);
+      free_tree(n->right);
+      slfree(n);
+      break;
+    case SUBSHELL:
+      free_tree(n->left);
+      slfree(n);
+      break;
+    case FUNC:
+      free_wf(CARGS(n)[0]);
+      slfree(CARGS(n));
+      free_tree(n->left);
+      slfree(n);
+      break;
+    case REDIR:
+      free_redir(CREDR(n));
+      free_tree(n->left);
+      slfree(n);
+      break;
+    case WHILE:
+      free_tree(n->left);
+      free_tree(n->right);
+      slfree(n);
+      break;
+    case FOR:
+      free_tree(n->right);
+      if (CFOR(n).words) {
+        for (size_t i = 0; CFOR(n).words[i]; i++)
+          free_wf(CFOR(n).words[i]);
+        slfree(CFOR(n).words);
+      }
+      free_wf(CFOR(n).name);
+      slfree(n);
+      break;
+    case CASE:
+      free_wf(CCASE(n).word);
+      for (clause *c = CCASE(n).clauses; c;) {
+        clause *next = c->next;
+        for (size_t i = 0; c->ptrn[i]; i++)
+          free_wf(c->ptrn[i]);
+        slfree(c->ptrn);
+        free_tree(c->body);
+        slfree(c);
+        c = next;
+      }
+      slfree(n);
+      break;
+    case IF:
+      free_tree(n->left);
+      free_tree(n->right);
+      free_tree(CELSE(n));
+      slfree(n);
+      break;
+    case BRACE:
+      free_tree(n->left);
+      slfree(n);
+      break;
+    case CMD:
+      for (size_t i = 0; CARGS(n)[i]; i++)
+        free_wf(CARGS(n)[i]);
+      slfree(CARGS(n));
+      if (CVARS(n)) {
+        for (size_t i = 0; CVARS(n)[i]; i++)
+          free_wf(CVARS(n)[i]);
+        slfree(CVARS(n));
+      }
+      slfree(n);
+      break;
+    default:
+      return;
+  }
 }
 
 shfunc *

@@ -46,7 +46,6 @@ typedef struct {
 testop istestop(const char *, int);
 int testeval(testvar *, testop, const char *, const char *);
 int parse_test(testvar *);
-extern int testcmd(char **);
 
 #endif /* TEST_H */
 

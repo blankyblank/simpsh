@@ -50,7 +50,7 @@ typedef struct  {
   char *ppid_s; /* the shell's ppid */
   char *bgpid_s;  /* the last background processes pid */
   shvar linenov;
-  char linebuf[16];
+  char linebuf[24];
 } GVAR;
 
 enum {
@@ -85,12 +85,6 @@ extern tmp_var grabvar(char *);
 extern shvar *findvar_n(const char *restrict, size_t);
 extern void rmvar(const char *);
 extern void printvars(const char *,shvar_flags);
-
-/* builtins */
-extern int exportcmd(char **);
-extern int localcmd(char **);
-extern int readonlycmd(char **);
-extern int unsetcmd(char **);
 
 static inline char *
 getvar(const char *vt)

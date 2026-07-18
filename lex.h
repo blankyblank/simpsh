@@ -2,12 +2,7 @@
 #ifndef LEX_H
 #define LEX_H
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <stddef.h>
-
-#include "alloc.h"
-#include "main.h"
 
 enum chars {
   C_WORD,
@@ -117,7 +112,6 @@ extern wf *wf_chunk;
 extern unsigned int wf_chunk_left;
 extern int alias_depth;
 extern int notclosed;
-extern sh_tok last_tok;
 extern int chkwd;
 extern const struct kw kw[32];
 

@@ -1,6 +1,6 @@
 /* builtins.h - builtin shell commands */
-#ifndef BUILTIN_H
-#define BUILTIN_H
+#ifndef BUILTINS_H
+#define BUILTINS_H
 
 #include <stddef.h>
 #include "utils.h"
@@ -32,4 +32,4 @@ findbuiltin(const char *args)
   return NULL;
 }
 /* vim: set filetype=c: */
-#endif /* BUILTIN_H */
+#endif /* BUILTINS_H */

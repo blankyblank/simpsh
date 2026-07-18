@@ -14,9 +14,6 @@
 #define NSIG 64
 #endif /* NSIG */
 #define signal(sig, handler) __signal(sig, handler)
-#define init_eventloop(e) ((e)->nsrc = 0, (e)->running = 1)
-#define stopeventloop(e) ((e)->running = 0)
-#define runeventloop_cont(el) do { while((el)->running) runeventloop(el, -1); } while (0)
 /* clang-format on */
 
 typedef struct {
@@ -67,9 +64,6 @@ void trapsig(int);
 void cleartraps(void);
 void setsig(int);
 int getsig(const char *);
-int killcmd(char **);
-int trapcmd(char **);
-
 
 static inline void
 drain_chldp(void)

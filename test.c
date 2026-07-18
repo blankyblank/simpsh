@@ -250,13 +250,12 @@ nexpr(testvar *tv)
     tv->pos++;
     return !nexpr(tv);
   }
-
   return primary(tv);
-
 }
 
 static int
-aexpr(testvar *tv) {
+aexpr(testvar *tv)
+{
   int res, r;
 
   res = nexpr(tv);

@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
 #include <stddef.h>
+ 
 #include "arith.h"
 #include "error.h"
 #include "var.h"
@@ -84,17 +85,6 @@ static void next_tok(void);
 static i64 nud(void);
 static i64 led(i64);
 static i64 lookupavar(void);
-
-static inline int
-hexval(char c)
-{
-  if (c >= '0' && c <= '9')
-    return c - '0';
-  c = c | 1 << 5;
-  if (c >= 'a' && c <= 'f')
-    return c - 'a' + 10;
-  return 0;
-}
 
 static void
 next_tok(void)

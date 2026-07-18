@@ -123,7 +123,7 @@ int
 startjob(pid_t pgid)
 {
   if (tcsetpgrp(tty_fd, pgid) < 0 && !iflag)
-    err(-1, "tcset");
+    sherrx(-1, "tcset");
   return 0;
 }
 
@@ -237,24 +237,21 @@ child_setup_bg(void)
   sigprocmask(SIG_UNBLOCK, &set, NULL);
 }
 
-
-// TODO: check interative mode or not
 int
 bgcmd(char **argv)
 {
   size_t argc = 0;
   job *j;
 
+  if (!iflag || !mflag)
+    return shwarn(argv[0], "no job control");
   array_len(argv, argc);
   if (argc < 2) {
     j = findjob(NULL);
-    if (!j) {
-      shwarn(argv[0], "no current job"); /*NOLINT*/
-      return 1;
-    }
-    if (kill(-j->pgid, SIGCONT) < 0) {
-      err(1, "kill");
-    }
+    if (!j)
+      return shwarn(argv[0], "no current job");
+    if (kill(-j->pgid, SIGCONT) < 0)
+      return sherr(1, argv[0], "kill");
     j->state = JRUN;
     j->flags |= JCHANGED;
     jobmsg(j);
@@ -263,17 +260,12 @@ bgcmd(char **argv)
   } else {
     for (size_t i = 1; i < argc; i++) {
       j = findjob(argv[i]);
-      if (!j) {
-        shwarn_arg(argv[0], argv[i], "no such job"); /*NOLINT*/
-        return 1;
-      }
-      if (j->state != JSTP) {
-        shwarn_arg(argv[0], argv[i], "job not stopped"); /*NOLINT*/
-        return 1;
-      }
-      if (kill(-j->pgid, SIGCONT) < 0) {
-        err(1, "kill");
-      }
+      if (!j)
+        return shwarn_arg(argv[0], argv[i], "no such job");
+      if (j->state != JSTP)
+        return shwarn_arg(argv[0], argv[i], "job not stopped");
+      if (kill(-j->pgid, SIGCONT) < 0)
+        return shwarn(argv[0], "kill");
       j->state = JRUN;
       j->flags |= JCHANGED;
       jobmsg(j);
@@ -291,25 +283,18 @@ fgcmd(char **argv)
   array_len(argv, argc);
   if (argc < 2) {
     j = findjob(NULL);
-    if (!j) {
-      shwarn(argv[0], "no current job"); /*NOLINT*/
-      return 1;
-    }
+    if (!j)
+      return shwarn(argv[0], "no current job");
   } else {
     j = findjob(argv[argc - 1]);
-    if (!j) {
-      shwarn_arg(argv[0], argv[argc - 1], "no such job"); /*NOLINT*/
-      return 1;
-    }
+    if (!j)
+      return shwarn_arg(argv[0], argv[argc - 1], "no such job");
   }
 
-  if (j->state == JDONE) {
-    shwarn_arg(argv[0], argv[argc - 1], "job already completed"); /*NOLINT*/
-    return 1;
-  }
-  if (kill(-j->pgid, SIGCONT) != 0) {
-    err(1, "kill");
-  }
+  if (j->state == JDONE)
+    return shwarn_arg(argv[0], argv[argc - 1], "job already completed");
+  if (kill(-j->pgid, SIGCONT) != 0)
+    return shwarn(argv[0], "kill");
   j->state = JRUN;
 
   j->flags |= JFG;
@@ -317,9 +302,8 @@ fgcmd(char **argv)
     tcsetattr(tty_fd, TCSADRAIN, &j->ttystate);
   startjob(j->pgid);
   if (j->state == JSTP) {
-    if (kill(-j->pgid, SIGCONT) != 0) {
-      err(1, "kill");
-    }
+    if (kill(-j->pgid, SIGCONT) != 0)
+      return shwarn(argv[0], "kill");
     j->state = JRUN;
   }
   return fgwait(j);

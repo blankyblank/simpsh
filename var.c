@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -19,7 +20,7 @@
 #include "utils.h"
 #include "var.h"
 
-#define INTSIZE 16
+#define INTSIZE 24
 
 /* string literals */
 const char oinn[16] = "OPTIND";
@@ -359,7 +360,6 @@ grabvar(char *name)
 static char **
 rebuild_env(char **sh_env)
 {
-  /* TODO: find a way to hold on to shvar lengths until here */
   static size_t tmplen[MAX_ENV], lenarr[MAX_ENV];
   size_t c, sh_c, j, len, skipc;
   static char *tmpname[MAX_ENV], *shadowed[MAX_ENV];
@@ -530,10 +530,8 @@ init_env(void)
   gvar.pid_s = salloc(INTSIZE);
   gvar.bgpid_s = salloc(INTSIZE);
   gvar.ppid_s = salloc(INTSIZE);
-  if (!gvar.pid_s || !gvar.bgpid_s || !gvar.ppid_s) {
-    sherrx("malloc failed");
-    exit(1);
-  }
+  if (!gvar.pid_s || !gvar.bgpid_s || !gvar.ppid_s)
+    err(1, "malloc failed");
   shppid = getppid();
   shpid = getpid();
   lltoa(shpid, gvar.pid_s);

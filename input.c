@@ -12,7 +12,7 @@
 #include "simpsh.h"
 
 static char basebuf[BASEBUFSIZE];
-shinput base_shinput;
+static shinput base_shinput;
 shinput *shinpt = &base_shinput;
 
 void
@@ -127,6 +127,7 @@ setinputstrn(char *s, int len)
   new->b.mapsize = 0;
   new->b.lleft = 0;
   new->strpush = NULL;
+  new->name = NULL;
   shinpt = new;
 }
 

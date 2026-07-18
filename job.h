@@ -51,11 +51,6 @@ extern void child_setup_bg(void);
 extern int startjob(pid_t);
 extern job *findjob(const char *);
 
-extern int bgcmd(char **);
-extern int fgcmd(char **);
-extern int jobscmd(char **);
-extern int waitcmd(char **);
-
 #define init_pgrp() sh_pgid = getpgrp()
 
 /* return term back to process group */

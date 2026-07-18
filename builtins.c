@@ -302,23 +302,20 @@ breakcmd(char **argv)
   size_t argc = 0;
   int n;
 
-  if (!LOOPDEPTH) {
-    shwarn(argv[0], "not in a loop");
-    return 1;
-  }
+  if (!LOOPDEPTH)
+    return shwarn(argv[0], "not in a loop");
   array_len(argv, argc);
   if (argc < 2) {
     n = 1;
   } else if (argc == 2) {
-    n = bltin_atoi(argv[1], argv[0], "a numeric arguement is required");
+    n = bltin_atoi(argv[1], argv[0], "a numeric argument is required");
     if (n <= 0) {
       if (!n)
         shwarn_arg(argv[0], argv[1], "must be a positive integer");
       return 1;
     }
   } else {
-    shwarn_arg(argv[0], argv[2], "too many arguements");
-    return 1;
+    return shwarn_arg(argv[0], argv[2], "too many arguments");
   }
 
   if (n > LOOPDEPTH)
@@ -394,10 +391,8 @@ cdcmd(char **argv)
       return 1;
   }
   ARGEND;
-  if (argc > 1) {
-    shwarn(bargv0, "Too many arguements"); /*NOLINT*/
-    return 1;
-  }
+  if (argc > 1)
+    return shwarn(bargv0, "Too many arguments"); /*NOLINT*/
 
   oldpwd = findvar(STR("OLDPWD"));
   pwd = findvar(STR("PWD"));
@@ -429,10 +424,8 @@ cdcmd(char **argv)
     dir = gvar.home;
     destlen = gvar.homelen;
   } else if (*dest == '-' && dest[1] == '\0') {
-    if (!oldpwd) {
-      shwarn(bargv0, "OLDPWD not set"); /*NOLINT*/
-      return 1;
-    }
+    if (!oldpwd)
+      return shwarn(bargv0, "OLDPWD not set"); /*NOLINT*/
     dir = shvar_val(oldpwd);
     destlen = oldpwd->flen;
     prnt = 1;
@@ -444,12 +437,10 @@ cdcmd(char **argv)
   if (flag == FLAG_P) {
     if (destlen >= PATH_MAX)
       nts(respath, destlen - 1);
-    if (!realpath(dir, respath)) {
-      sherr(1, bargv0, dir);
-    }
-    if (chdir(respath) < 0) {
-      sherr(1, bargv0, dir);
-    }
+    if (!realpath(dir, respath))
+      return sherr(1, bargv0, dir);
+    if (chdir(respath) < 0)
+      return sherr(1, bargv0, dir);
     if (prnt) {
       printf("%s\n", respath);
     }
@@ -457,9 +448,8 @@ cdcmd(char **argv)
       return 1;
   } else {
     size_t plen, dlen;
-    if (chdir(dir) < 0) {
-      sherr(1, bargv0, dir);
-    }
+    if (chdir(dir) < 0)
+      return sherr(1, bargv0, dir);
     if (prnt == 1) {
       printf("%s\n", dir);
     }
@@ -476,10 +466,8 @@ cdcmd(char **argv)
       end = mempcpy_(end, dir, dlen);
       *end = '\0';
     }
-    if (!pwdpath(respath)) {
-      shwarn(bargv0, "path normalization failure"); /*NOLINT*/
-      return 1;
-    }
+    if (!pwdpath(respath))
+      return shwarn(bargv0, "path normalization failure"); /*NOLINT*/
   }
   setvar(STR("OLDPWD"), pwdval, VEXPRT);
   setvar(STR("PWD"), respath, VEXPRT);
@@ -529,10 +517,8 @@ commandcmd(char **argv)
   }
   if ((path = (def) ? defpath : getvar(STR("PATH"))))
     path = defpath;
-  if (!(fpath = chkpath(path, argv[0], X_OK, 0))) {
-    shwarn(argv[0], "command not found");
-    return 1;
-  }
+  if (!(fpath = chkpath(path, argv[0], X_OK, 0)))
+    return shwarn(argv[0], "command not found");
   jcmd = join_strn(argv, NULL);
   env = build_env(NULL);
   status = forkexec(fpath, argv, env, jcmd, NULL);
@@ -546,23 +532,20 @@ continuecmd(char **argv)
   int n;
   size_t argc = 0;
 
-  if (!LOOPDEPTH) {
-    shwarn(argv[0], "not in a loop");
-    return 1;
-  }
+  if (!LOOPDEPTH)
+    return shwarn(argv[0], "not in a loop");
   array_len(argv, argc);
   if (argc < 2) {
     n = 1;
   } else if (argc == 2) {
-    if ((n = bltin_atoi(argv[1], argv[0], "a numeric arguement is required")) <=
+    if ((n = bltin_atoi(argv[1], argv[0], "a numeric argument is required")) <=
         0) {
       if (!n)
         shwarn_arg(argv[0], argv[1], "must be a positive integer");
       return 1;
     }
   } else {
-    shwarn_arg(argv[0], argv[2], "too many arguements");
-    return 1;
+    return shwarn_arg(argv[0], argv[2], "too many arguments");
   }
 
   if (n > LOOPDEPTH)
@@ -581,10 +564,8 @@ dotcmd(char **argv)
 
   array_len(argv, argc);
 
-  if (argc < 2) {
-    shwarn(argv[0], "filename arguement require");
-    return 1;
-  }
+  if (argc < 2)
+    return shwarn(argv[0], "filename argument required");
 
   if (strchr(argv[1], '/')) {
     if (access(argv[1], R_OK) < 0)
@@ -650,17 +631,14 @@ echocmd(char *argv[])
     nf = FLAG_N, argv++, argc--;
   argv++, argc--;
 
-  if (fcntl(STDOUT_FILENO, F_GETFD) < 0) {
-    sherr(1, argv0, "could not write to stdout");
-  }
+  if (fcntl(STDOUT_FILENO, F_GETFD) < 0)
+    return sherr(1, argv0, "could not write to stdout");
   for (size_t i = 0; argv[i]; i++) {
-    if (fputs(argv[i], stdout) == EOF) {
-      sherr(1, argv0, "could not write to stdout");
-    }
+    if (fputs(argv[i], stdout) == EOF)
+      return sherr(1, argv0, "could not write to stdout");
     if (i < argc - 1)
-      if (fputc(' ', stdout) == EOF) {
-        sherr(1, argv0, "could not write to stdout");
-      }
+      if (fputc(' ', stdout) == EOF)
+        return sherr(1, argv0, "could not write to stdout");
   }
   if (!(nf & FLAG_N))
     if (fputc('\n', stdout) == EOF) {
@@ -698,13 +676,11 @@ exitcmd(char **argv)
 
   exnum = 0;
   array_len(argv, argc);
-  if (argc > 2) {
-    shwarn(argv[0], "too many arguements"); /*NOLINT*/
-    return 1;
-  }
+  if (argc > 2)
+    return shwarn(argv[0], "too many arguments"); /*NOLINT*/
 
   if (argc == 2) {
-    exnum = bltin_atoi(argv[1], argv[0], "a numeric arguement is required");
+    exnum = bltin_atoi(argv[1], argv[0], "a numeric argument is required");
     if (exnum < 0)
       return 1;
   }
@@ -798,10 +774,8 @@ readcmd(char **argv)
       return 1;
   }
   ARGEND;
-  if (!argc) {
-    shwarn_arg(argv0, "1", "requires variable name");
-    return 1;
-  }
+  if (!argc)
+    return shwarn_arg(argv0, "1", "requires variable name");
 
   stmark rmark;
   int c, status = 0;
@@ -917,20 +891,15 @@ returncmd(char **argv)
   int status = 0;
   array_len(argv, argc);
 
-  if (argc > 2) {
-    shwarn(argv[0], "too many arguements");
-    return 1;
-  }
+  if (argc > 2)
+    return shwarn(argv[0], "too many arguments");
 
   if (argc == 2) {
     for (size_t i = 0; argv[1][i]; i++) {
-      if (!isdigit_(argv[1][i])) {
-        shwarn_arg(argv[0], argv[1], "a numeric arguement is required");
-        return 1;
-      }
+      if (!isdigit_(argv[1][i]))
+        return shwarn_arg(argv[0], argv[1], "a numeric argument is required");
     }
     status = atoi_(argv[1]);
-    // status = (status < 256) ? status : lstatus;
   }
   RETVAL = status, RETNOW = 1;
   return status;
@@ -946,19 +915,16 @@ shiftcmd(char **argv)
   if (argc == 1) {
     n = 1;
   } else if (argc == 2) {
-    n = bltin_atoi(argv[1], argv[0], "a numeric arguement is required");
+    n = bltin_atoi(argv[1], argv[0], "a numeric argument is required");
     if (n < 0)
       return 1;
   } else {
-    shwarn_arg(argv[0], argv[2], "too many arguements");
-    return 1;
+    return shwarn_arg(argv[0], argv[2], "too many arguments");
   }
   if (!n)
     return 0;
-  if (n > SHARGC) {
-    shwarn(argv[0], "can't shift that many");
-    return 1;
-  }
+  if (n > SHARGC)
+    return shwarn(argv[0], "can't shift that many");
 
   if (ALLOCED)
     for (int i = 0; i < n; i++)
@@ -1099,10 +1065,8 @@ ulimitcmd(char **argv)
       l = limits;
       while (l->name && l->option != *s)
         l++;
-      if (!l->name) {
-        shwarn_arg(argv0, s, "unknown option");
-        return 1;
-      }
+      if (!l->name)
+        return shwarn_arg(argv0, s, "unknown option");
       getrlimit(l->resource, &lim);
       if (ltype & HARD)
         val = lim.rlim_max;
@@ -1121,10 +1085,8 @@ ulimitcmd(char **argv)
     return 0;
   }
 
-  if (argv[1]) {
-    shwarn_arg(argv0, *argv, "too many arguements");
-    return 1;
-  }
+  if (argv[1])
+    return shwarn_arg(argv0, *argv, "too many arguments");
   char *arg = *argv;
   int n = 0;
   rlim_t val;
@@ -1136,8 +1098,7 @@ ulimitcmd(char **argv)
       return 1;
     val = n;
   } else {
-    shwarn_arg(argv0, arg, "invalid number");
-    return 1;
+    return shwarn_arg(argv0, arg, "invalid number");
   }
 
   for (char *s = opt; *s; s++) {
@@ -1145,10 +1106,8 @@ ulimitcmd(char **argv)
     l = limits;
     while (l->name && l->option != *s)
       l++;
-    if (!l->name) {
-      shwarn_arg(argv0, s, "unknown option");
-      return 1;
-    }
+    if (!l->name)
+      return shwarn_arg(argv0, s, "unknown option");
 
     getrlimit(l->resource, &lim);
     if (ltype & HARD)
@@ -1156,9 +1115,8 @@ ulimitcmd(char **argv)
     else
       lim.rlim_cur = (val == RLIM_INFINITY) ? val : val * l->factor;
 
-    if (setrlimit(l->resource, &lim) < 0) {
-      sherr(1, argv0, "setrlimit");
-    }
+    if (setrlimit(l->resource, &lim) < 0)
+      return sherr(1, argv0, "setrlimit");
   }
   return 0;
 }
@@ -1219,10 +1177,8 @@ umaskcmd(char **argv)
 
     for (int i = 0; argv[0][i]; i++) {
       int c = (unsigned char)argv[0][i];
-      if (c < '0' || c > '7') {
-        shwarn_arg(argv0, argv[0], "octal number out of range");
-        return 1;
-      }
+      if (c < '0' || c > '7')
+        return shwarn_arg(argv0, argv[0], "octal number out of range");
       val = (val << 3) | (c - '0');
     }
     umask(val);

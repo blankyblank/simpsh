@@ -1,15 +1,18 @@
 #define _POSIX_C_SOURCE 200809L
 #include <limits.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "alloc.h"
 #include "arg.h"
 #include "error.h"
-#include "expand.h"
 #include "main.h"
+#include "lex.h"
+#include "expand.h"
 #include "opts.h"
 #include "path.h"
 #include "utils.h"

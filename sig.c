@@ -31,6 +31,7 @@ int tty_fd = -1;
 int selfpipe[2] = { -1, -1 };
 int intpipe[2] = { -1, -1 };
 
+#define init_eventloop(e) ((e)->nsrc = 0, (e)->running = 1)
 static void restoreterm(void) { tcsetattr(tty_fd, TCSADRAIN, &sh_termios); }
 
 void
@@ -189,7 +190,7 @@ init_traps(void)
   signame[SIGSTKFLT] = "STKFLT";
 #endif
 
-  for (size_t i = 1; i < arsz(sigprobe, sigprobe[0]); i++) {
+  for (size_t i = 1; i < arsz(sigprobe); i++) {
     int s = sigprobe[i];
     struct sigaction old;
     if (sigaction(s, NULL, &old) < 0)
@@ -212,7 +213,6 @@ setsignal(int n)
   int set;
   struct sigaction sa;
 
-  // XXX: check if this is right spot for guard
   if (!sigmode[n]) {
     struct sigaction old;
     sigmode[n] = (sigaction(n, NULL, &old) == 0 && old.sa_handler == SIG_IGN)

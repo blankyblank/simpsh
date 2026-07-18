@@ -3,6 +3,7 @@
 /* NOLINTBEGIN(readability-function-cognitive-complexity) */
 #define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -23,7 +24,6 @@ static size_t wflen;
 unsigned int wf_chunk_left = 0;
 int alias_depth = 0;
 int notclosed = 0;
-sh_tok last_tok = { .type = TNONE };
 int chkwd = 0;
 
 #define CTX_MAX     8
@@ -333,15 +333,9 @@ done:
 __attribute__((hot)) sh_tok
 tokenize(void)
 {
-  sh_tok t;
   int wd, c, n;
   wf *f;
 
-  if (last_tok.type != TNONE) {
-    t = last_tok;
-    last_tok = SHTOK(TNONE);
-    return t;
-  }
   wd = chkwd;
   chkwd = 0;
 
@@ -556,7 +550,6 @@ lexcmdsub(void)
     if (ch == SHEOF) {
       notclosed = 1;
       return SHEOF;
-      // goto done;
     }
     switch (cstate) {
       qescape(ch)
@@ -630,14 +623,12 @@ startarith:
     if ((ch = shgetchar()) == SHEOF) {
       notclosed = 1;
       return SHEOF;
-      // goto done;
     }
     if (ch == '(') {
       depth++;
       if (arlen >= sizeof(arbuf) - 1) {
         shwarn_arg("arithmetic", arbuf, "expression too long");
         return SHEOF;
-        // goto done;  // or break
       }
       arbuf[arlen++] = ch;
     } else if (ch == '$') {
@@ -690,7 +681,6 @@ startarith:
       if (arlen >= sizeof(arbuf) - 1) {
         shwarn_arg("arithmetic", arbuf, "expression too long");
         return SHEOF;
-        // goto done;  // or break
       }
       arbuf[arlen++] = ch;
     }
@@ -717,7 +707,6 @@ lexvbrace(void)
     if (ch == SHEOF) {
       notclosed = 1;
       return SHEOF;
-      // goto done;
     }
     if (ch == '}')
       break;
