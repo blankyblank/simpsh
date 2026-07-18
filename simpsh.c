@@ -9,7 +9,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #ifdef LIBEDIT
-  #include <dlfcn.h>
   #include "histeditshm.h"
 #else
   #include "utils.h"
@@ -34,46 +33,17 @@ static int read_cont(char **, size_t *);
 static int read_cmd(char ** restrict, size_t * restrict);
 static shinput *init_interactive(void);
 static char *nxtline;
+#define LINEBUF 2048
+
+#define stopeventloop(e) ((e)->running = 0)
 
 #ifdef LIBEDIT
-#define DLSYM_FN(h, var, name) *(void **)&(var) = dlsym((h), (name))
-static EditLine *edl;
 static int ps1mode;
 static EditLine *edl;
-static EditLine *(*libedit_el_init)(const char *, FILE *, FILE *, FILE *);
-static int (*libedit_el_set)(EditLine *, int, ...);
-static const char *(*libedit_el_gets)(EditLine *, int *);
-static unsigned char (*libedit_el_sh_complete)(EditLine *, int);
 
 static int input_notify(EditLine *, wchar_t *);
 static char *prompt_fn(EditLine *);
-
-  #ifdef STATICLIBEDIT
-  static int
-  load_libedit(void)
-  {
-    libedit_el_init = el_init;
-    libedit_el_set = el_set;
-    libedit_el_gets = el_gets;
-    libedit_el_sh_complete = _el_fn_sh_complete;
-    return 1;
-  }
-  #else
-
-  static int
-  load_libedit(void)
-  {
-    void *h = dlopen("libedit.so.0", RTLD_LAZY | RTLD_LOCAL);
-    if (!h)
-      return 0;
-    DLSYM_FN(h, libedit_el_init, "el_init");
-    DLSYM_FN(h, libedit_el_set, "el_set");
-    DLSYM_FN(h, libedit_el_gets, "el_gets");
-    DLSYM_FN(h, libedit_el_sh_complete, "_el_fn_sh_complete");
-    return libedit_el_init && libedit_el_set && libedit_el_gets;
-  }
-  #endif /* STATICLIBEDIT */
-#endif   /* LIBEDIT */
+#endif /* LIBEDIT */
 
 static void stdin_cb(void *data);
 
@@ -103,7 +73,7 @@ static inline void
 feed_input(shinput *inpt, const char *lines, size_t llen)
 {
   size_t cpylen;
-  cpylen = llen > BUFSIZ ? BUFSIZ : llen;
+  cpylen = llen > LINEBUF ? LINEBUF : llen;
   memcpy(inpt->buf, lines, cpylen);
   inpt->nchar = inpt->buf;
   inpt->nleft = cpylen;
@@ -113,26 +83,41 @@ feed_input(shinput *inpt, const char *lines, size_t llen)
 static int
 read_cont(char **lines, size_t *llen)
 {
-  char *line;
-  size_t n;
-  while (need_more(*lines, *llen)) {
-    line = lineread(0);
-    if (!line)
+  char *buf;
+  size_t n, cap, tlen;
+
+  cap = *llen + LINEBUF;
+  buf = st_alloc(cap);
+  tlen = *llen;
+  memcpy(buf, *lines, *llen);
+  while (need_more(buf, tlen)) {
+    char *line;
+    size_t need;
+    if (!(line = lineread(0)))
       return -1;
     if (vflag) {
       fputs(line, stderr);
       fputc('\n', stderr);
     }
-
     n = strlen(line);
-    char *new = st_alloc(*llen + n + 2);
-    memcpy(new, *lines, *llen);
-    memcpy(new + *llen, line, n);
-    new[*llen + n] = '\n';
-    new[*llen + n + 1] = '\0';
-    *lines = new;
-    *llen += n + 1;
+    need = tlen + n + 2;
+    if (need > cap) {
+      char *nbuf;
+      size_t ncap = cap;
+      while (ncap < need)
+        ncap *= 2;
+      nbuf = st_alloc(ncap);
+      memcpy(nbuf, buf, tlen);
+      buf = nbuf;
+      cap = ncap;
+    }
+    memcpy(buf + tlen, line, n);
+    tlen += n;
+    buf[tlen++] = '\n';
+    buf[tlen] = '\0';
   }
+  *lines = buf;
+  *llen = tlen;
   return 0;
 }
 
@@ -216,14 +201,13 @@ eval_run(void)
     cmd_tree *c;
     stmark mark;
 
-    if (last_tok.type == TNL)
-      last_tok = SHTOK(TNONE);
+    tokreset();
     mark = stack_mark();
     chkwd = CHKKWD | CHKALIAS | CHKNL;
-    c = parse_list(TEOF);
+    c = parse_list(0);
     if (!c) {
       stack_restore(mark);
-      last_tok = SHTOK(TNONE);
+      tokreset();
       break;
     }
     if (!nflag)
@@ -233,7 +217,7 @@ eval_run(void)
       break;
     }
     stack_restore(mark);
-    last_tok = SHTOK(TNONE);
+    tokreset();
   }
   return status;
 }
@@ -245,18 +229,16 @@ simpsh_run(void)
     cmd_tree *c;
     stmark mark;
 
-    if (last_tok.type == TNL)
-      last_tok = SHTOK(TNONE);
-
+    tokreset();
     mark = stack_mark();
     chkwd = CHKKWD | CHKALIAS | CHKNL;
 
     if (fchksig)
       dotrap();
-    c = parse_list(TEOF);
+    c = parse_list(0);
     if (!c) {
       stack_restore(mark);
-      last_tok = SHTOK(TNONE);
+      tokreset();
       break;
     }
     if (!nflag)
@@ -268,7 +250,7 @@ simpsh_run(void)
       break;
     }
     stack_restore(mark);
-    last_tok = SHTOK(TNONE);
+    tokreset();
     if (fchksig)
       dotrap();
     if (iflag || mflag)
@@ -332,7 +314,7 @@ sh_interactive(void)
       if (Iflag && iflag) {
         clearerr(stdin);
         if ((write(STDOUT_FILENO, dmsg, strlen(dmsg) + 1)) < 0)
-          err(1, "write");
+          return sherrx(1, "write");
         stack_restore(mark);
         continue;
       }
@@ -364,9 +346,19 @@ need_more(const char *lines, size_t llen)
     NCTX_ARITH,
     NCTX_BTICK
   } nctx;
+
+  enum {
+    K_IF,
+    K_FOR,
+    K_WHILE,
+    K_UNTIL,
+    K_CASE,
+    K_DO
+  } kstack[16];
+
   nctx ctx = NCTX_NORMAL;
-  int depth = 0;
-  int last = 0, prev = 0;
+  int depth = 0, last = 0, prev = 0;
+  int boundary = 1, kdepth = 0;
   size_t i;
 
   for (i = 0; i < llen; i++) {
@@ -383,7 +375,7 @@ need_more(const char *lines, size_t llen)
           ctx = NCTX_BTICK;
         else if (c == '\\' && next)
           i++;
-        if (c == '$' && next == '(') {
+        else if (c == '$' && next == '(') {
           i++;
           if (i + 1 < llen && lines[i + 1] == '(') {
             i++;
@@ -393,9 +385,79 @@ need_more(const char *lines, size_t llen)
             ctx = NCTX_CSUB;
             depth = 1;
           }
-        } else if (c != '\n' && c != ' ' && c != '\t') {
-          prev = last;
-          last = c;
+        } else {
+          if (c == '\n' || c == ' ' || c == '\t')
+            boundary = 1;
+          else if (c == '&')
+            boundary = 1;
+
+          if (boundary && c != ' ' && c != '\t' && c != '\n' && c != ';' &&
+              c != '|' && c != '&') {
+            size_t s = i;
+            int wlen, h;
+            while (i < llen && lines[i] != ' ' && lines[i] != '\t' &&
+                   lines[i] != '\n' && lines[i] != ';' && lines[i] != '|')
+              i++;
+            wlen = i - s;
+            h = kwhash(lines + s, wlen);
+            if (kw[h].word && kw[h].len == wlen &&
+                memcmp(kw[h].word, lines + s, wlen) == 0) {
+              switch (kw[h].tok) {
+                case TIF:
+                  if (kdepth < 16)
+                    kstack[kdepth++] = K_IF;
+                  break;
+                case TFOR:
+                  if (kdepth < 16)
+                    kstack[kdepth++] = K_FOR;
+                  break;
+                case TWHILE:
+                  if (kdepth < 16)
+                    kstack[kdepth++] = K_WHILE;
+                  break;
+                case TUNTIL:
+                  if (kdepth < 16)
+                    kstack[kdepth++] = K_UNTIL;
+                  break;
+                case TCASE:
+                  if (kdepth < 16)
+                    kstack[kdepth++] = K_CASE;
+                  break;
+                case TDO:
+                  if (kdepth < 16)
+                    kstack[kdepth++] = K_DO;
+                  break;
+                case TFI:
+                  while (kdepth && kstack[kdepth - 1] != K_IF)
+                    kdepth--;
+                  if (kdepth)
+                    kdepth--;
+                  break;
+                case TDONE:
+                  while (kdepth && kstack[kdepth - 1] != K_DO)
+                    kdepth--;
+                  if (kdepth)
+                    kdepth--;
+                  if (kdepth)
+                    kdepth--;
+                  break;
+                case TESAC:
+                  while (kdepth && kstack[kdepth - 1] != K_CASE)
+                    kdepth--;
+                  if (kdepth)
+                    kdepth--;
+                  break;
+                default:
+                  break;
+              }
+            }
+            boundary = 0;
+            i--;
+          }
+          if (c != '\n' && c != ' ' && c != '\t') {
+            prev = last;
+            last = c;
+          }
         }
         break;
       case NCTX_SQUOTE:
@@ -464,97 +526,8 @@ need_more(const char *lines, size_t llen)
     if (i > 0 && lines[i] == '\\' && lines[i - 1] != '\\')
       return 1;
   }
-  {
-    int kdepth = 0, ksquote = 0, kdquote = 0, boundary = 1;
-    enum {
-      K_IF,
-      K_FOR,
-      K_WHILE,
-      K_UNTIL,
-      K_CASE,
-      K_DO
-    } kstack[16];
-
-    for (size_t k = 0; k < llen; k++) {
-      unsigned char c = lines[k];
-      if (c == '\'' && !kdquote) {
-        ksquote = !ksquote;
-        continue;
-      }
-      if (c == '"' && !ksquote) {
-        kdquote = !kdquote;
-        continue;
-      }
-      if (ksquote || kdquote)
-        continue;
-
-      if (c == '\n' || c == ';' || c == '|') {
-        boundary = 1;
-        continue;
-      }
-      if (c == '&' && k + 1 < llen && lines[k + 1] == '&') {
-        boundary = 1;
-        k++;
-        continue;
-      }
-
-      if (boundary && c != ' ' && c != '\t') {
-        size_t s = k;
-        while (k < llen && lines[k] != ' ' && lines[k] != '\t' &&
-               lines[k] != '\n' && lines[k] != ';' && lines[k] != '|')
-          k++;
-        int wlen = k - s, h = kwhash(lines + s, wlen);
-        if (kw[h].len == wlen && memcmp(kw[h].word, lines + s, wlen) == 0) {
-          switch (kw[h].tok) {
-            case TIF:
-              kstack[kdepth++] = K_IF;
-              break;
-            case TFOR:
-              kstack[kdepth++] = K_FOR;
-              break;
-            case TWHILE:
-              kstack[kdepth++] = K_WHILE;
-              break;
-            case TUNTIL:
-              kstack[kdepth++] = K_UNTIL;
-              break;
-            case TCASE:
-              kstack[kdepth++] = K_CASE;
-              break;
-            case TDO:
-              kstack[kdepth++] = K_DO;
-              break;
-            case TFI:
-              while (kdepth && kstack[kdepth - 1] != K_IF)
-                kdepth--;
-              if (kdepth)
-                kdepth--;
-              break;
-            case TDONE:
-              while (kdepth && kstack[kdepth - 1] != K_FOR &&
-                     kstack[kdepth - 1] != K_WHILE &&
-                     kstack[kdepth - 1] != K_UNTIL &&
-                     kstack[kdepth - 1] != K_DO)
-                kdepth--;
-              if (kdepth)
-                kdepth--;
-              break;
-            case TESAC:
-              while (kdepth && kstack[kdepth - 1] != K_CASE)
-                kdepth--;
-              if (kdepth)
-                kdepth--;
-              break;
-            default:
-              break;
-          }
-        }
-        boundary = 0;
-      }
-    }
-    if (kdepth)
-      return 1;
-  }
+  if (kdepth)
+    return 1;
 
   return 0;
 }
@@ -576,6 +549,32 @@ stdin_cb(void *data)
   } else if (!n) {
     stopeventloop(&el);
   }
+}
+
+char *
+_lineread_(int ps1)
+{
+    char *prompt;
+    addeventloop(&el, STDIN_FILENO, POLLIN, stdin_cb, NULL);
+    prompt = update_prompt(ps1);
+    fputs(prompt, stdout);
+    fflush(stdout);
+    nxtline = NULL;
+    el.running = 1;
+    while (el.running) {
+      runeventloop(&el, -1);
+      if (intsig) {
+        intsig = 0;
+        putchar('\n');
+        fputs(prompt, stdout);
+        fflush(stdout);
+        nxtline = NULL;
+        el.running = 1;
+        continue;
+      }
+    }
+    rmeventloop(&el, STDIN_FILENO);
+    return nxtline;
 }
 
 #ifdef LIBEDIT
@@ -621,29 +620,8 @@ prompt_fn(EditLine *e)
 char *
 lineread(int ps1)
 {
-  if (!edl) {
-    char *prompt;
-    addeventloop(&el, STDIN_FILENO, POLLIN, stdin_cb, NULL);
-    prompt = update_prompt(ps1);
-    fputs(prompt, stdout);
-    fflush(stdout);
-    nxtline = NULL;
-    el.running = 1;
-    while (el.running) {
-      runeventloop(&el, -1);
-      if (intsig) {
-        intsig = 0;
-        putchar('\n');
-        fputs(prompt, stdout);
-        fflush(stdout);
-        nxtline = NULL;
-        el.running = 1;
-        continue;
-      }
-    }
-    rmeventloop(&el, STDIN_FILENO);
-    return nxtline;
-  }
+  if (!edl)
+    return _lineread_(ps1);
   int count;
   char *s;
   const char *line;
@@ -670,33 +648,12 @@ again:
   s[count] = '\0';
   return s;
 }
-
 #else
+
 /** lineread with no readline, for testing */
 char *
 lineread(int ps1)
 {
-  char *prompt;
-  addeventloop(&el, STDIN_FILENO, POLLIN, stdin_cb, NULL);
-  prompt = update_prompt(ps1);
-  fputs(prompt, stdout);
-  fflush(stdout);
-  nxtline = NULL;
-  el.running = 1;
-
-  while (el.running) {
-    runeventloop(&el, -1);
-    if (intsig) {
-      intsig = 0;
-      putchar('\n');
-      fputs(prompt, stdout);
-      fflush(stdout);
-      nxtline = NULL;
-      el.running = 1;
-      continue;
-    }
-  }
-  rmeventloop(&el, STDIN_FILENO);
-  return nxtline;
+  return _lineread_(ps1);
 }
 #endif /* ifdef LIBEDIT */
