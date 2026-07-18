@@ -2,8 +2,6 @@
 #ifndef PARSE_H
 #define PARSE_H
 
-#include "lex.h"
-
 typedef struct redir redir;
 struct redir {
   redir *next;
@@ -73,8 +71,14 @@ enum {
 #define CSAFE(n) ((n)->flags & EFLAG_SAFE) /* check if NEGATE set */
 #define CELSE(n) ((n)->t.if_.else_)
 
+#define peektok(t, f) ((tbuf.type == TNONE) ? (chkwd |= (f), tbuf = tokenize()) : tbuf, (t) = tbuf)
+#define nexttok(t, f) ((tbuf.type != TNONE) ? ((t) = tbuf, tbuf = SHTOK(TNONE), (t)) : (chkwd |= (f), (t) = tokenize()))
+#define tokreset() (tbuf = SHTOK(TNONE))
+#define tokpushbk(t) (tbuf = (t))
+
+extern sh_tok tbuf;
 /** build ast tree */
-extern cmd_tree *parse_list(token s);
+extern cmd_tree *parse_list(int multi);
 
 #endif /* PARSE_H */
 
