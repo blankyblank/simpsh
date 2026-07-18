@@ -3,60 +3,22 @@
 #define EXEC_H
 
 #define _POSIX_C_SOURCE 200809L
-#include <stdio.h>
 #include <sys/wait.h>
-#include <sys/poll.h>
 #include <signal.h>
 
 #include "job.h"
+#include "main.h"
+#include "lex.h"
 #include "parse.h"
 #include "opts.h"
 #include "sig.h"
 
-#define _INCHLD (1 << 0)
 
 #define builtin_launch(b, a) (b->fn(a))
 
 extern int run_commands(const cmd_tree *, int);
 extern int run_cmdsub(const cmd_tree *);
 extern int forkexec(char *, char **, char **, const char *, redir *r);
-extern int execcmd(char **);
-
-#define DUPFD(s, d) \
-  if (dup2(s, d) < 0) { \
-    perror("dup2"); \
-    return 1; \
-  }
-#define OPENFD(f, m, n) \
-  if ((n = open(f, m, 0666)) < 0) { \
-    perror("open"); \
-    return 1; \
-  }
-#define CLOSEFD(f) \
-  if (close(f) < 0) { \
-    perror("close"); \
-    return 1; \
-  }
-
-static inline int
-_wait_(pid_t pid)
-{
-  int wstatus;
-  if (!mflag) {
-    waitpid(pid, &wstatus, 0);
-  } else {
-    for (;;) {
-      if (waitpid(pid, &wstatus, WNOHANG) > 0)
-        break;
-      runeventloop(&el, -1);
-      if (intsig) {
-        intsig = 0;
-        kill(pid, SIGINT);
-      }
-    }
-  }
-  return WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
-}
 
 static inline int
 fgwait(job *j)

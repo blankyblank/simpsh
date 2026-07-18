@@ -3,6 +3,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <spawn.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -25,34 +26,57 @@
 #include "utils.h"
 #include "var.h"
 
-#define OPENRW 0666
 #define LOOPERR 130
-#define FD_MAX 10
 #define MAX_TMP_VARS 40
-#define xpnd(a) (join_wf(exp_word(a, NULL)))
-
-redir *predir = NULL;
+#define FD_MAX 10
+#define FD_CACHE_MAX 4
+#define HEREDOC_LIMIT 65536
+#define OPENRW 0666
+#define xpnd(a) (join_wf(exp_word((a), NULL)))
+#define _INCHLD (1 << 0)
+#define DUPFD(s, d) \
+  if (dup2((s), (d)) < 0) { \
+    return sherrx(1, "dup fd"); \
+  }
+#define OPENFD(f, m, n) \
+  if ((n = open((f), (m), 0666)) < 0) { \
+    return sherrx(1, "open fd"); \
+  }
+#define CLOSEFD(f) \
+  if (close(f) < 0) { \
+    return sherrx(1, "close fd"); \
+  }
 
 typedef struct fdlist {
   int orig;
   int saved;
 } fdlist;
-
-static const struct {
+struct redirtable {
   int flags;
   mode_t mode;
-} redir_tab[] = {
+};
+struct fdcachetable {
+  const char *path;
+  int fd;
+  size_t len;
+};
+
+static const struct redirtable redir_tab[] = {
   [RDIN] = { O_RDONLY },
   [RDOUT] = { O_WRONLY | O_CREAT | O_TRUNC, OPENRW },
   [RDCLOB] = { O_WRONLY | O_CREAT | O_TRUNC, OPENRW },
   [RDAPP] = { O_WRONLY | O_CREAT | O_APPEND, OPENRW },
   [RDRW] = { O_RDWR | O_CREAT, OPENRW },
 };
+redir *predir = NULL;
+static struct fdcachetable fdcache[FD_CACHE_MAX];
+static int fdc_cnt;
 
 static void poptmpvars(tmp_var *, size_t);
 static int save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
 static pid_t forkrun(int);
+static int fgwait_simple(pid_t, const char *);
 static int run_if(const cmd_tree *);
 static int run_case(const cmd_tree *);
 static int run_while(const cmd_tree *);
@@ -60,28 +84,87 @@ static int run_for(const cmd_tree *);
 static int run_func(const cmd_tree *restrict, char **restrict);
 static int run_pipe(const cmd_tree *);
 static int run_bg(const cmd_tree *);
+static int run_redir(const cmd_tree *n, int nchld);
 static int run_subsh(const cmd_tree *, int);
 static int run_cmd(const cmd_tree *, int);
 static void shexec(char ** restrict, char ** restrict, redir *)
   __attribute__((noreturn));
+int execcmd(char **);
 static int shfexec(char ** restrict, const cmd_tree * restrict,
                    char ** restrict, redir *);
+
+static char *
+bg_cmd(const cmd_tree *n)
+{
+  switch (n->type) {
+    case CMD:
+      {
+        char **argv;
+        size_t len;
+        argv = expand_argv(CARGS(n), &len);
+        return join_strn(argv, &len);
+      }
+    case OP:
+      return "(pipeline)";
+    default:
+      return "(command)";
+  }
+}
 
 static inline int
 restore_fd(fdlist *sfd, size_t sfdc)
 {
-  for (ssize_t i = sfdc; i-- > 0;) {
-    if (dup2(sfd[i].saved, sfd[i].orig) < 0) {
-      perror("dup2");
+  for (ssize_t i = sfdc; i-- > 0;)
+    if (dup2(sfd[i].saved, sfd[i].orig) < 0)
+      return sherr(1, "redirection", "dup2");
+  for (ssize_t i = sfdc; i-- > 0;)
+    if (close(sfd[i].saved) < 0)
+      return sherr(1, "redirection", "close");
+  return 0;
+}
+
+static int
+findcachefd(wf *r)
+{
+  if (r->len < 8)
+    return -1;
+  for (int i = 0; i < fdc_cnt; i++)
+    if (r->word[1] == fdcache[i].path[1] && memcmp(r->word, fdcache[i].path, fdcache[i].len) == 0)
+      return fdcache[i].fd;
+  return -1;
+}
+
+static int
+fdcacheadd(wf *r, int fd)
+{
+  if (fdc_cnt >= FD_CACHE_MAX)
+    return 0;
+  fdcache[fdc_cnt].path = strdup_(r->word);
+  fdcache[fdc_cnt].len = r->len;
+  fdcache[fdc_cnt++].fd = fd;
+  fcntl(fd, F_SETFD, FD_CLOEXEC);
+  return 1;
+}
+
+static int
+cancachefd(wf *r)
+{
+  if (r->len < 8)
+    return 0;
+  if (r->word[0] != '/' || r->word[1] != 'd' || r->word[2] != 'e')
+    return 0;
+  static const struct {
+    const char *s;
+    size_t len;
+  } fdnames[] = {
+    { "/dev/null",   sizeof("/dev/null") - 1   },
+    { "/dev/tty",    sizeof("/dev/tty") - 1    },
+    { "/dev/zero",   sizeof("/dev/zero") - 1   },
+    { "/dev/random", sizeof("/dev/random") - 1 }
+  };
+  for (int i = 0; i < (int)arsz(fdnames); i++)
+    if (!memcmp(r->word, fdnames[i].s, fdnames[i].len))
       return 1;
-    }
-  }
-  for (ssize_t i = sfdc; i-- > 0;) {
-    if (close(sfd[i].saved) < 0) {
-      perror("close");
-      return 1;
-    }
-  }
   return 0;
 }
 
@@ -91,7 +174,7 @@ apply_redir(redir *r)
   int qs;
   while (r) {
     char *name;
-    int fd;
+    int fd, flags, cached = 0;
     if (!(name = xpnd(r->name)))
       return 1;
     switch (r->type) {
@@ -99,24 +182,50 @@ apply_redir(redir *r)
       case RDAPP:
       case RDCLOB:
       case RDRW:
-        OPENFD(name, redir_tab[r->type].flags, fd)
-        goto dupfall;
+        flags = redir_tab[r->type].flags;
+        if ((fd = findcachefd(r->name)) >= 0)
+          goto dupredir;
+        if (cancachefd(r->name)) {
+          flags = O_RDWR, cached = 1;
+          OPENFD(name, flags, fd)
+          fdcacheadd(r->name, fd);
+          goto dupredir;
+        }
+        OPENFD(name, flags, fd)
+        goto dupredir;
         break;
       case RDOUT:
         if (Cflag) {
-          if ((fd = open(name, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, OPENRW)) <
-              0) {
-            warn("%s", name);
-            return 1;
+          if ((fd = findcachefd(r->name)) >= 0) {
+            cached = 1;
+            goto dupredir;
+          } else if (cancachefd(r->name)) {
+            flags = O_RDWR, cached = 1;
+            OPENFD(name, flags, fd);
+            fdcacheadd(r->name, fd);
+            goto dupredir;
           }
+          if ((fd = open(name, O_WRONLY | O_CREAT | O_TRUNC | O_EXCL, OPENRW)) < 0)
+            return sherr(1, name, "open");
         } else {
+          flags = redir_tab[r->type].flags;
+          if ((fd = findcachefd(r->name)) >= 0) {
+            cached = 1;
+            goto dupredir;
+          } else if (cancachefd(r->name)) {
+            flags = O_RDWR, cached = 1;
+            OPENFD(name, flags, fd);
+            fdcacheadd(r->name, fd);
+            goto dupredir;
+          }
           OPENFD(name, O_WRONLY | O_CREAT | O_TRUNC, fd)
         }
-        goto dupfall;
+        goto dupredir;
         /* fall through */
-dupfall:
+dupredir:
         DUPFD(fd, r->fd)
-        CLOSEFD(fd)
+        if (!cached)
+          CLOSEFD(fd)
         break;
 
       case RDDUPO:
@@ -128,7 +237,7 @@ dupfall:
           while (*p && isdigit_(*p))
             p++;
           if (*p) {
-            err(1, "simpsh");
+            return sherr(1, "redirection", "close");
           }
           fd = atoi_(name);
           DUPFD(fd, r->fd);
@@ -166,13 +275,28 @@ dupfall:
             body = xpnd(&b);
             blen = strlen(body);
           }
-          if (pipe(p) < 0)
-            err(1, "pipe");
-          if (write(p[1], body, blen) < 0)
-            err(1, "write");
-          CLOSEFD(p[1]);
-          DUPFD(p[0], r->fd);
-          CLOSEFD(p[0]);
+          if (blen < HEREDOC_LIMIT) {
+            if (pipe(p) < 0)
+              return sherr(1, "heredoc", "pipe");
+            if (write(p[1], body, blen) < 0)
+              return sherr(1, "heredoc", "write");
+            CLOSEFD(p[1]);
+            DUPFD(p[0], r->fd);
+            CLOSEFD(p[0]);
+          } else {
+            char tmpf[] = "/tmp/simpsh-heredoc-XXXXXX";
+            int fd;
+            if ((fd = mkstemp(tmpf)) < 0)
+              return 1;
+            unlink(tmpf);
+            if (write(fd, body, blen) < 0) {
+              close(fd);
+              return 1;
+            }
+            lseek(fd, 0, SEEK_SET);
+            DUPFD(fd, r->fd);
+            CLOSEFD(fd);
+          }
           break;
         }
     }
@@ -200,82 +324,13 @@ save_fd(redir *r, fdlist *sfd, size_t * restrict sfdc)
   while (t) {
     sfd[*sfdc].orig = t->fd;
     if ((sfd[(*sfdc)++].saved = dup(t->fd)) < 0) {
-      sherr(1, "redirection", "save fd failed");
-      return 1;
+      return sherr(1, "redirection", "save fd failed");
     }
     t = t->next;
   }
   return 0;
 }
 
-static inline int
-run_funcdef(const cmd_tree *n)
-{
-  char *name;
-  name = st_strndup(CFUNC(n)->word, CFUNC(n)->len);
-  setfunc(name, n->left);
-  return 0;
-}
-
-static inline int
-run_redir(const cmd_tree *n, int nchld)
-{
-  fdlist sfd[FD_MAX];
-  size_t sfdc;
-  int status;
-  redir *r;
-
-  r = CREDR(n);
-
-  if (n->left->type == CMD || n->left->type == SUBSHELL) {
-    redir *prev = predir;
-    predir = r;
-    status = run_commands(n->left, nchld);
-    predir = prev;
-    return status;
-  }
-
-  sfdc = 0;
-  if ((save_fd(CREDR(n), sfd, &sfdc)))
-    return 1;
-  if (apply_redir(r))
-    return 1;
-  status = run_commands(n->left, nchld);
-  fflush(NULL);
-  if (restore_fd(sfd, sfdc))
-    return 1;
-
-  if (eflag && LSTATUS != 0 && !iflag && !(n->flags & EFLAG_SAFE))
-    exit(LSTATUS);
-  return status;
-}
-
-int
-execcmd(char **argv)
-{
-  if (!argv[1])
-    return 0;
-  char *fullpath;
-  char **env = build_env(NULL);
-
-  if (!env)
-    shwarn(argv[0], "failed to get environ"); /*NOLINT*/
-
-  fullpath = getpath(argv[1]);
-  if (!fullpath)
-    goto fail;
-  if (execve(fullpath, &argv[1], env) < 0)
-    goto fail;
-  return 0;
-
-fail:
-  perror(argv[0]);
-  if (env) {
-    slfree(env);
-  }
-  slfree(fullpath);
-  return 1;
-}
 static int
 fgwait_simple(pid_t pid, const char *cmd)
 {
@@ -317,47 +372,93 @@ fgwait_simple(pid_t pid, const char *cmd)
   }
 }
 
+static inline int
+_wait_(pid_t pid)
+{
+  int wstatus;
+  if (!mflag) {
+    waitpid(pid, &wstatus, 0);
+  } else {
+    for (;;) {
+      if (waitpid(pid, &wstatus, WNOHANG) > 0)
+        break;
+      runeventloop(&el, -1);
+      if (intsig) {
+        intsig = 0;
+        kill(pid, SIGINT);
+      }
+    }
+  }
+  return WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+}
+
 int
 forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
 {
   pid_t pid;
-  switch (pid = fork()) {
-    case -1:
-      perror("fork");
-      return -1;
-    case 0:
-      child_setup_fg(0);
-      if (r && apply_redir(r))
-        _exit(1);
-      execve(path, argv, env);
-      _exit(127);
-    default:
-      {
-        if (mflag && getpid() == sh_pgid) {
-          setpgid(pid, pid);
-          startjob(pid);
-          return fgwait_simple(pid, cmd);
-        }
-        return _wait_(pid);
-      }
+  posix_spawnattr_t attr;
+  sigset_t sd;
+  fdlist sfd[FD_MAX];
+  size_t sfdc;
+  int flags, err;
+
+  if (r) {
+    sfdc = 0;
+    if (save_fd(r, sfd, &sfdc) || apply_redir(r)) {
+      if (sfdc)
+        restore_fd(sfd, sfdc);
+      return 1;
+    }
   }
+
+  posix_spawnattr_init(&attr);
+  sigemptyset(&sd);
+  sigaddset(&sd, SIGINT);
+  sigaddset(&sd, SIGQUIT);
+  sigaddset(&sd, SIGTSTP);
+  sigaddset(&sd, SIGTTIN);
+  sigaddset(&sd, SIGTTOU);
+  posix_spawnattr_setsigdefault(&attr, &sd);
+  flags = POSIX_SPAWN_SETSIGDEF;
+  if (mflag) {
+    posix_spawnattr_setpgroup(&attr, 0);
+    flags |= POSIX_SPAWN_SETPGROUP;
+  }
+  posix_spawnattr_setflags(&attr, flags);
+
+
+  err = posix_spawn(&pid, path, NULL, &attr, argv, env);
+  posix_spawnattr_destroy(&attr);
+  if (r)
+    restore_fd(sfd, sfdc);
+  if (err) {
+    errno = err;
+    perror(path);
+    return 127;
+  }
+  if (mflag && getpid() == sh_pgid) {
+    startjob(pid);
+    return fgwait_simple(pid, cmd);
+  }
+  return _wait_(pid);
 }
 
-static char *
-bg_cmd(const cmd_tree *n)
+static pid_t
+forkrun(int bg)
 {
-  switch (n->type) {
-    case CMD:
-      {
-        char **argv;
-        size_t len;
-        argv = expand_argv(CARGS(n), &len);
-        return join_strn(argv, &len);
-      }
-    case OP:
-      return "(pipeline)";
+  pid_t pid;
+
+  switch (pid = fork()) {
+    case -1:
+      return sherr(-1, "fork", "create child process");
+    case 0:
+      if (bg)
+        child_setup_bg();
+      else
+        child_setup_fg(0);
+      return pid;
     default:
-      return "(command)";
+      return pid;
   }
 }
 
@@ -381,8 +482,7 @@ shexec(char **restrict args, char **restrict env, redir *r)
 
 /** fork and exec external command */
 static int
-shfexec(char ** restrict argv, const cmd_tree * restrict n,
-        char ** restrict env, redir *r)
+shfexec(char ** restrict argv, const cmd_tree * restrict n, char ** restrict env, redir *r)
 {
   char *fullpath;
 
@@ -394,6 +494,15 @@ shfexec(char ** restrict argv, const cmd_tree * restrict n,
     return 1;
   }
   return forkexec(fullpath, argv, env, bg_cmd(n), r);
+}
+
+static inline int
+run_funcdef(const cmd_tree *n)
+{
+  char *name;
+  name = st_strndup(CFUNC(n)->word, CFUNC(n)->len);
+  setfunc(name, n->left);
+  return 0;
 }
 
 /**  run command tree  */
@@ -582,10 +691,8 @@ run_cmd(const cmd_tree *n, int inchld)
       evars = NULL;
     }
     env = build_env(evars);
-    if (!env) {
-      perror("no environment found");
-      return 1;
-    }
+    if (!env)
+      return shwarn("exec", "no environment found");
     if (inchld & _INCHLD)
       shexec(final, env, predir);
     else
@@ -598,26 +705,6 @@ run_cmd(const cmd_tree *n, int inchld)
   if (efl && status != 0 && !ifl && !(n->flags & EFLAG_SAFE) && !CNEG(n))
     exit(status);
   return status;
-}
-
-static pid_t
-forkrun(int bg)
-{
-  pid_t pid;
-
-  switch (pid = fork()) {
-    case -1:
-      perror("fork");
-      return -1;
-    case 0:
-      if (bg)
-        child_setup_bg();
-      else
-        child_setup_fg(0);
-      return pid;
-    default:
-      return pid;
-  }
 }
 
 static int
@@ -819,6 +906,39 @@ run_bg(const cmd_tree *n)
 }
 
 static int
+run_redir(const cmd_tree *n, int nchld)
+{
+  fdlist sfd[FD_MAX];
+  size_t sfdc;
+  int status;
+  redir *r;
+
+  r = CREDR(n);
+
+  if (n->left->type == CMD || n->left->type == SUBSHELL) {
+    redir *prev = predir;
+    predir = r;
+    status = run_commands(n->left, nchld);
+    predir = prev;
+    return status;
+  }
+
+  sfdc = 0;
+  if ((save_fd(CREDR(n), sfd, &sfdc)))
+    return 1;
+  if (apply_redir(r))
+    return 1;
+  status = run_commands(n->left, nchld);
+  fflush(NULL);
+  if (restore_fd(sfd, sfdc))
+    return 1;
+
+  if (eflag && LSTATUS != 0 && !iflag && !(n->flags & EFLAG_SAFE))
+    exit(LSTATUS);
+  return status;
+}
+
+static int
 run_subsh(const cmd_tree *n, int chld)
 {
   int status;
@@ -848,7 +968,7 @@ run_subsh(const cmd_tree *n, int chld)
       if (predir && apply_redir(predir))
         _exit(1);
       status = run_commands(n->left, _INCHLD);
-      if (efl && status != 0 && !ifl)  // XXX: make sure i should keep
+      if (efl && status != 0 && !ifl)
         _exit(status);
       fflush(NULL);
       _exit(status);
@@ -887,7 +1007,7 @@ run_cmdsub(const cmd_tree *restrict n)
     return -1;
   pipefd[0] = pipefd[1] = -1;
   if (pipe(pipefd) < 0) {
-    perror("pipe");
+    sherrx(1, "create pipe");
     ret = -1;
     goto cleanup;
   }
@@ -915,7 +1035,7 @@ run_cmdsub(const cmd_tree *restrict n)
         len = 0;
 
         if (close(pipefd[1]) < 0) {
-          perror("close");
+          sherrx(1, "close pipe");
           ret = -1;
           goto cleanup;
         }
@@ -1071,3 +1191,30 @@ run_pipe(const cmd_tree *n)
     exit(status);
   return status;
 }
+
+int
+execcmd(char **argv)
+{
+  if (!argv[1])
+    return 0;
+  char *fullpath;
+  char **env = build_env(NULL);
+
+  if (!env)
+    shwarn(argv[0], "failed to get environ"); /*NOLINT*/
+
+  fullpath = getpath(argv[1]);
+  if (!fullpath)
+    goto fail;
+  if (execve(fullpath, &argv[1], env) < 0)
+    goto fail;
+  return 0;
+
+fail:
+  if (env) {
+    slfree(env);
+  }
+  slfree(fullpath);
+  return sherrx(1, argv[0]);
+}
+
