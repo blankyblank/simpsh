@@ -210,6 +210,7 @@ hist_cleanup(void)
   histcur = -1;
 }
 
+#ifdef LIBEDIT
 static int histpos;
 
 int
@@ -253,6 +254,7 @@ hist_cb(void *cookie, HistEvent *ev, int op, ...)
       return -1;
   }
 }
+#endif /* ifdef LIBEDIT */
 
 /**  created directories and their parents if they don't exist  */
 static int
@@ -277,7 +279,6 @@ int
 histentry(const char *arg)
 {
   int n = 0;
-  /* XXX: check if this is doing everything i need*/
   if (*arg == '-' && isdigit_(arg[1])) {
     while (isdigit_(*arg))
       n = n * 10 + (*arg++ - '0');
@@ -294,8 +295,6 @@ histentry(const char *arg)
     }
     return -1;
   } else {
-    // size_t arglen;
-    // if (!(arglen = strlen(arg)))
     if (!arg)
       return -1;
     for (int j = histcnt; j >= 0; j--) {
@@ -327,7 +326,7 @@ fccmd(char **argv)
   }
 
   int status = 0, flags = 0, argc = 0;
-  char *editor;
+  char *editor = NULL;
 
   array_len(argv, argc);
   ARGBEGIN
@@ -435,12 +434,10 @@ fccmd(char **argv)
     }
 
     char tmpname[] = "/tmp/sh-fc.XXXXXX";
-    if ((fd = mkstemp(tmpname)) < 0) {
-      sherr(1, argv0, "mkstemp");
-    }
-    if (!(tmp = fdopen(fd, "w+"))) {
-      sherr(1, argv0, "open");
-    }
+    if ((fd = mkstemp(tmpname)) < 0)
+      return sherr(1, argv0, "mkstemp");
+    if (!(tmp = fdopen(fd, "w+")))
+      return sherr(1, argv0, "open");
 
     char *const editargs[] = {editor, tmpname, NULL};
 
@@ -475,9 +472,8 @@ fccmd(char **argv)
 cleanup:
     fclose(tmp);
     unlink(tmpname);
-    if (err) {
-      sherr(1, argv0, "fork");
-    }
+    if (err)
+      return sherr(1, argv0, "fork");
     return LSTATUS;
   }
 
