@@ -1,5 +1,5 @@
 ## cc | gcc | clang
-CC := clang
+CC := gcc
 
 ## paths
 PREFIX := /usr/local
@@ -15,8 +15,7 @@ BUILD_LINK  ?= dynamic
 LIBEDITFLAGS := -DLIBEDIT
 ifeq ($(BUILD_LINK),static)
   LIBEDITLIBS := -ledit -lncurses
-  CFLAGS += -DSTATICLIBEDIT
-  LDLIBS += $(LIBEDITLIBS)
+  LIBEDITFLAGS += -DSTATICLIBEDIT
 else
   LDLIBS += -ldl
 endif
@@ -26,7 +25,6 @@ ASANFLAGS := -fsanitize=address,undefined
 ## clang extras: -fsanitize=implicit-conversion | -fsanitize=integer
 ASANFLAGS += -fsanitize=integer
 # ASANFLAGS += -fsanitize=cfi -fvisibility=hidden -O2 -flto
-# export UBSAN_OPTIONS=print_stacktrace=1:abort_on_error=1
 
 ## valgrind profiling i.e. callgrind/cachegrind
 # PROFFLAGS := -DDEBUG -DENABLE_VALGRIND -fxray-instrument

@@ -10,9 +10,14 @@ endif
 
 ifeq ($(BUILD),release)
 	CFLAGS += -march=native
+	ifeq ($(CC),gcc)
+		CFLAGS += $(if $(filter gcc,$(CC)),-O2 -flto=auto -s)
+		LDFLAGS += $(if $(filter gcc,$(CC)),-flto=auto)
+	else
+		CFLAGS += $(if $(filter clang,$(CC)), -flto -O2 -fvectorize -flto=full)
+		LDFLAGS += $(if $(filter clang,$(CC)), -flto=full -Wl,--strip-all)
+	endif
 	# CFLAGS += -march=native -O3 -ffast-math -flto
-	CFLAGS += $(if $(filter gcc,$(CC)),-O2 -Wno-stringop-overflow -flto=auto)
-	CFLAGS += $(if $(filter clang,$(CC)), -flto -O3 -flto=full)
 else ifeq ($(BUILD),debug)
 	CFLAGS += $(DEBUGFLAGS)
 	CFLAGS += $(if $(filter gcc,$(CC)),-Og -flto=auto)
@@ -39,12 +44,10 @@ else ifeq ($(BUILD),sanitize)
 		LDFLAGS += $(ASANFLAGS)
 	endif
 endif
-
 ifdef GCOV
 	CFLAGS += --coverage -fno-lto
 	LDFLAGS += --coverage
 endif
-
 # Link type
 LDFLAGS += $(if $(filter static static-musl,$(BUILD_LINK)),-static)
 ifeq ($(BUILD_LINK),static-musl)
@@ -59,19 +62,15 @@ OBJ 	 	   := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
 TARGET		   := simpsh
 CFLAGS		   := $(CFLAGS)
 
-.PHONY: all clean test install uninstall analyze examine bench
+.PHONY: all clean test install uninstall analyze examine bench parsebench
 
 all: $(TARGET)
-
 $(OBJDIR)/%.o: %.c | $(OBJDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 $(OBJDIR):
 	mkdir -p $@
 $(TARGET): $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LDLIBS)
-
-all.c:
-	echo "int main() { return 0;}" > all.c
 
 install:
 	rm -f $(BINDIR)/simpsh
@@ -88,4 +87,9 @@ examine:
 test:
 	cd tests && ./runtests.sh
 bench:
-	hyperfine --warmup 4 './simpsh profiling/bench.sh'
+	hyperfine --warmup 4 './simpsh profile/bench.sh'
+parsebench: $(OBJDIR)/parsebench.o $(filter-out $(OBJDIR)/main.o,$(OBJ))
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LDLIBS)
+
+# $(OBJDIR)/parsebench.o: profiling/parsebench.c | $(OBJDIR)
+# 	$(CC) $(CFLAGS) -c $< -o $@
