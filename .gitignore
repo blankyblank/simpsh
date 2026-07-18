@@ -23,6 +23,7 @@ profile
 GPATH
 GTAGS
 GRTAGS
+cscope*
 *vterm*
 *.ede
 *.seer
