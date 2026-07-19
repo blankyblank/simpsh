@@ -23,6 +23,7 @@ volatile sig_atomic_t intsig;
 volatile sig_atomic_t ndnotify = 0;
 volatile sig_atomic_t chksig[NSIG];
 volatile sig_atomic_t fchksig = 0;
+jmploc *volatile handler;
 
 const char *signame[NSIG + 1];
 eventloop el;
@@ -281,6 +282,8 @@ trapsig(int n)
           if (write(intpipe[1], "\1", 1) < 0)
             return;
         intsig = 1;
+        if (iflag && !trap[SIGINT] && handler)
+          siglongjmp(handler->loc, 1);
         break;
       case SIGTERM:
         _exit(0);

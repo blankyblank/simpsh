@@ -578,9 +578,11 @@ run_cmd(const cmd_tree *n, int inchld)
   wf **vars;
   shvar *v;
   shfunc *f = NULL;
-  const builtin *b = NULL;
+  jmploc * volatile svhandler;
+  jmploc jmploc;
+  const builtin *volatile b = NULL;
   size_t i, len;
-  size_t vc;
+  volatile size_t vc;
 
   ifl = iflag;
   efl = eflag;
@@ -625,6 +627,7 @@ run_cmd(const cmd_tree *n, int inchld)
   if ((b = findbuiltin(*final)) && (b->flags & SBLTN)) {
     fdlist sfd[FD_MAX];
     size_t sfdc = 0;
+    volatile int st = 0;
     if (predir) {
       fflush(stdout);
       if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
@@ -638,7 +641,17 @@ run_cmd(const cmd_tree *n, int inchld)
         setvar(name, val, 0);
       }
     }
-    if ((status = builtin_launch(b, final)) > 0) {
+    svhandler = handler;
+    if (sigsetjmp(jmploc.loc, 1)) {
+      handler = svhandler;
+      intsig = 0;
+      st = 128 + SIGINT;
+    } else {
+      handler = &jmploc;
+      st = builtin_launch(b, final);
+      handler = svhandler;
+    }
+    if ((int)st > 0) {
       if (!iflag)
         exit(1);
     }
@@ -648,7 +661,7 @@ run_cmd(const cmd_tree *n, int inchld)
         restore_fd(sfd, sfdc);
       }
     }
-    return status;
+    return (int)st;
   }
   if ((f = findfunc(final[0])) || b) {
     fdlist sfd[FD_MAX];
@@ -667,10 +680,28 @@ run_cmd(const cmd_tree *n, int inchld)
         vc++;
         setvar(name, val, 0);
       }
-      status = f ? run_func(f->body, final) : builtin_launch(b, final);
+      svhandler = handler;
+      if (sigsetjmp(jmploc.loc, 1)) {
+        handler = svhandler;
+        intsig = 0;
+        status = 128 + SIGINT;
+      } else {
+        handler = &jmploc;
+        status = f ? run_func(f->body, final) : builtin_launch(b, final);
+        handler = svhandler;
+      }
       poptmpvars(tmp, vc);
     } else {
-      status = f ? run_func(f->body, final) : builtin_launch(b, final);
+      svhandler = handler;
+      if (sigsetjmp(jmploc.loc, 1)) {
+        handler = svhandler;
+        intsig = 0;
+        status = 128 + SIGINT;
+      } else {
+        handler = &jmploc;
+        status = f ? run_func(f->body, final) : builtin_launch(b, final);
+        handler = svhandler;
+      }
       if (predir) {
         if (!(b && b->fn == &execcmd && !final[1])) {
           fflush(NULL);
@@ -681,6 +712,8 @@ run_cmd(const cmd_tree *n, int inchld)
 
   } else { /* if this is a external command */
     char **evars;
+    svhandler = handler;
+    handler = NULL;
     if ((vc = CVARC(n))) {
       evars = st_alloc((vc + 1) * sizeof(char *));
       for (i = 0; i < vc; i++) {
@@ -699,6 +732,7 @@ run_cmd(const cmd_tree *n, int inchld)
       status = shfexec(final, n, env, predir);
     if (evars)
       slfree(env);
+    handler = svhandler;
   }
   if (CNEG(n))
     status = !status;
@@ -1083,23 +1117,69 @@ cleanup:
   return ret;
 }
 
+static inline int
+canfakepipe(cmd_tree *n)
+{
+  char *b = CARGS(n)[0]->word;
+  size_t l = CARGS(n)[0]->len;
+  if (findbuiltin(b) &&
+      !(l == 4 && b[0] == 'e' && b[1] == 'x' && b[2] == 'e' && b[3] == 'c'))
+    return 1;
+  return 0;
+}
+
 static int
 run_pipe(const cmd_tree *n)
 {
   cmd_tree **stgs;
   size_t nstg;
-  int status;
-  int pipefd[2], prevr;
-  int mfl;
-  pid_t pids[256];
+  int status, mfl;
 
-  prevr = -1;
   stgs = CPIPE(n);
   nstg = CPIPEC(n);
-  mfl = (int)mflag;
 
   if (!nstg)
     return 0;
+  for (size_t i = 0; i < nstg; i++)
+    if (stgs[i]->type != CMD || !canfakepipe(stgs[i]))
+      goto realpipe;
+
+  FILE *stdinbk, *stdoutbk;
+  char *outbuf, *cleanbuf, *lastbuf = NULL;
+  size_t outlen, llen = 0;
+  for (size_t i = 0; i < nstg; i++) {
+    if (i > 0) {
+      stdinbk = stdin;
+      stdin = fmemopen(lastbuf, llen, "r");
+      cleanbuf = lastbuf;
+    }
+    if (i < nstg - 1) {
+      fflush(stdout);
+      stdoutbk = stdout;
+      stdout = open_memstream(&outbuf, &outlen);
+    }
+    status = run_commands(stgs[i], 0);
+    if (i < nstg - 1) {
+      fclose(stdout);
+      stdout = stdoutbk;
+      lastbuf = outbuf;
+      llen = outlen;
+    }
+    if (i > 0) {
+      fclose(stdin);
+      if (cleanbuf)
+        free(cleanbuf);
+      stdin = stdinbk;
+    }
+  }
+  return status;
+
+realpipe:
+  mfl = (int)mflag;
+  int pipefd[2], prevr;
+  pid_t pids[256];
+  prevr = -1;
+
   for (size_t i = 0; i < nstg; i++) {
     if (i < nstg - 1 && pipe(pipefd) < 0) {
       err(1, "pipe");
@@ -1138,9 +1218,9 @@ run_pipe(const cmd_tree *n)
         break;
     }
   }
+
   if (prevr >= 0)
     CLOSEFD(prevr);
-
   if (mfl && getpid() == sh_pgid) {
     job *j;
     j = newjob(pids[0], bg_cmd(n));

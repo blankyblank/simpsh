@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/poll.h>
+#include <setjmp.h>
 
 #include "opts.h"
 #include "job.h"
@@ -38,6 +39,11 @@ typedef enum {
   S_HIGN,
 } sig;
 
+typedef struct {
+  sigjmp_buf loc;
+} jmploc;
+
+extern jmploc *volatile handler;
 extern eventloop el;
 extern volatile sig_atomic_t intsig;
 extern volatile sig_atomic_t ndnotify;
