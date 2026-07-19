@@ -327,16 +327,17 @@ breakcmd(char **argv)
 int
 catcmd(char **argv)
 {
-  const unsigned MAX_LENGTH = 256;
-  int  argc = 0, i = 1;
+  int n = 0, argc = 0, i = 1, bufsize = BUFSIZ;
   FILE *f = NULL;
-  array_len(argv, argc);
-  char buf[MAX_LENGTH];
+  struct stat st;
+  char *buf;
 
+  array_len(argv, argc);
 
   if (argc == 1) {
-    while (fgets(buf, MAX_LENGTH, stdin))
-      fputs(buf, stdout);
+    buf = salloc(bufsize);
+    while ((n = fread(buf, 1, bufsize, stdin)) > 0)
+      fwrite(buf, 1, n, stdout);
     if (ferror(stdin)) {
       fprintf(stderr, "cat: Bad file descriptor\n");
       return 1;
@@ -345,21 +346,15 @@ catcmd(char **argv)
   }
 
   while (i < argc) {
-    if (access(argv[i], R_OK) == 0) {
-      f = fopen(argv[i], "r");
-    } else {
-      printf("%s: Error: could not access file\n", argv[i]);
-      return 1;
-    }
-    if (!f) {
-      printf("Error: could not access file");
-      return 0;
-    }
-    if (f) {
-      while (fgets(buf, MAX_LENGTH, f))
-        fputs(buf, stdout);
-      fclose(f);
-    }
+    if (!(f = fopen(argv[i], "r")))
+      return sherr(1, argv[i], "could not access file");
+    fstat(fileno(f), &st);
+    bufsize = st.st_blksize ? st.st_blksize : BUFSIZ;
+    buf = salloc(bufsize);
+    while ((n = fread(buf, 1, bufsize, f)) > 0)
+      fwrite(buf, 1, n, stdout);
+    // fflush(stdout);
+    fclose(f);
     i++;
   }
   return 0;
@@ -748,24 +743,23 @@ physical:
   }
 }
 
-#define rfl 1 << 0
-#define pfl 1 << 1
-
 static int
 readcmd(char **argv)
 {
-  size_t argc = 0;
+  int rflag = 1 << 0;
+  int pflag = 1 << 1;
   int flag = 0;
+  size_t argc = 0;
   char *prompt = NULL;
 
   array_len(argv, argc);
   ARGBEGIN
   {
     case 'r':
-      flag |= rfl;
+      flag |= rflag;
       break;
     case 'p':
-      flag |= pfl;
+      flag |= pflag;
       if (!(prompt = EARGF(no_opt(argv0, ARGC()))))
         return 1;
       break;
@@ -783,27 +777,27 @@ readcmd(char **argv)
   char *ifs = NULL;
   char ifsws[4],  *line, *p;
 
-  setinputf(STDIN_FILENO, NULL, 1);
   rmark = stack_mark();
 
-  if ((flag & pfl)) {
+  if ((flag & pflag)) {
     fputs(prompt, stderr);
     fflush(stderr);
   }
   stcheck(32);
-  while ((c = shgetchar())) {
+  clearerr(stdin);
+  while ((c = fgetc(stdin))) {
     switch (c) {
-      case SHEOF:
+      case EOF:
         status = 1;
         goto rend;
       case '\0':
         continue;
       case '\\':
-        if ((c = shgetchar()) == SHEOF) {
+        if ((c = fgetc(stdin)) == EOF) {
           status = 1;
           goto rend;
         }
-        if (flag & rfl) {
+        if (flag & rflag) {
           st_putc('\\'), st_putc(c), len += 2;
         } else if (c == '\n') {
           continue;
@@ -818,7 +812,6 @@ readcmd(char **argv)
     }
   }
 rend:
-  popinput();
   if (status) {
     stack_restore(rmark);
     return 1;
