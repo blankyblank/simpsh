@@ -23,7 +23,7 @@ endif
 ## sanitizer flags: use with the sanitize build target
 ASANFLAGS := -fsanitize=address,undefined
 ## clang extras: -fsanitize=implicit-conversion | -fsanitize=integer
-ASANFLAGS += -fsanitize=integer
+ASANFLAGS += $(if $(filter clang,$(CC)),-fsanitize=integer)
 # ASANFLAGS += -fsanitize=cfi -fvisibility=hidden -O2 -flto
 
 ## valgrind profiling i.e. callgrind/cachegrind
