@@ -37,3 +37,4 @@ reports
 perf.data*
 heaptrack.*
 /parsebench
+/tests/testfiles/source.sh
