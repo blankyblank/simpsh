@@ -141,6 +141,16 @@ else
 fi
 rm -f "$errf"
 
+msg_run 'redir <> test: read-write on same fd'
+out=$(../simpsh -c 'echo hello > f; exec 3<>f; read -r line <&3; echo "$line"; exec 3>&-')
+if [ "$out" = "hello" ]; then
+  test_pass "out" "matches" "hello"
+else
+  test_fail "out" "expected" "hello"
+  exit 1
+fi
+rm -f f
+
 # === Redirect ordering ===
 # i should definitely be able to get rid of some of these.
 msg_run "redir seperate test: >out 2>err"

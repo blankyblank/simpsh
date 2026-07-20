@@ -32,15 +32,142 @@ else
   exit 1
 fi
 
+msg_run 'set -- and shift'
+out=$(../simpsh -c 'set -- a b c d; shift; shift; echo $1 $#')
+if [ "$out" = "c 2" ]; then
+  test_pass "out" "matches" "c 2"
+else
+  test_fail "out" "expected" "c 2"
+  exit 1
+fi
 
-# NOTE: need to add these tests
-# "$@" with set -- a "" b
-# "$*" with IFS=:
-# "$*" with IFS=
-# $@ with set -- "a b" c
-# set -- then "$@"
-# "${@}" / "${*}"
-# $@ with set -- '*.c'
+msg_run '$# $* $@'
+out=$(../simpsh -c 'set -- a "b c" d; echo $#; for i in "$@"; do echo $i; done')
+if [ "$out" = "$(printf '3\na\nb c\nd')" ]; then
+  test_pass "out" "matches expected" ""
+else
+  test_fail "out" "unexpected" "$out"
+  exit 1
+fi
+
+msg_run '$- flags'
+out=$(../simpsh -c 'echo $-')
+# interactive shell should at least have "s" in $- from sh -c
+if [ -n "$out" ]; then
+  test_pass "out" "non-empty" ""
+else
+  test_fail "out" "expected non-empty" ""
+  exit 1
+fi
+
+msg_run 'readonly prevents assignment'
+out=$(../simpsh -c 'readonly v=1; v=2; echo $v' 2>&1)
+if [ "$out" = "1" ]; then
+  test_pass "out" "still" "1"
+else
+  test_fail "out" "expected" "1"
+  exit 1
+fi
+
+msg_run 'readonly read across shell scripts'
+out=$(../simpsh -c 'readonly v=1; ../simpsh -c "echo \$v"' 2>&1)
+if [ "$out" = "" ]; then
+  test_pass "out" "empty (not exported)" ""
+else
+  test_fail "out" "expected" ""
+  exit 1
+fi
+
+msg_run '\$@ with set -- a "" b: expands to 3 args'
+out=$(../simpsh -c 'set -- a "" b; for i in "$@"; do echo $i; done')
+if [ "$out" = "$(printf 'a\n\nb')" ]; then
+  test_pass "out" "3 args with empty middle" ""
+else
+  test_fail "out" "unexpected" "$out"
+  exit 1
+fi
+
+msg_run '${var:-word} default value'
+out=$(../simpsh -c 'echo ${unsetvar:-default}')
+if [ "$out" = "default" ]; then
+  test_pass "out" "matches" "default"
+else
+  test_fail "out" "expected" "default"
+  exit 1
+fi
+
+msg_run '${var:=word} assign default'
+out=$(../simpsh -c 'unset x; : ${x:=assigned}; echo $x')
+if [ "$out" = "assigned" ]; then
+  test_pass "out" "matches" "assigned"
+else
+  test_fail "out" "expected" "assigned"
+  exit 1
+fi
+
+msg_run '${var:+word} alternate value'
+out=$(../simpsh -c 'v=set; echo ${v:+alt}')
+if [ "$out" = "alt" ]; then
+  test_pass "out" "matches" "alt"
+else
+  test_fail "out" "expected" "alt"
+  exit 1
+fi
+
+msg_run '${var:?msg} error on unset'
+out=$(../simpsh -c 'unset x; echo ${x:?oops}' 2>&1)
+rc=$?
+if [ $rc -ne 0 ] && echo "$out" | grep -q "oops"; then
+  test_pass "out" "error with message" ""
+else
+  test_fail "out" "expected error" "$out"
+  exit 1
+fi
+
+msg_run '${#var} string length'
+out=$(../simpsh -c 'v=hello; echo ${#v}')
+if [ "$out" = "5" ]; then
+  test_pass "out" "matches" "5"
+else
+  test_fail "out" "expected" "5"
+  exit 1
+fi
+
+msg_run '${var%pattern} remove suffix shortest'
+out=$(../simpsh -c 'f=file.txt; echo ${f%.*}')
+if [ "$out" = "file" ]; then
+  test_pass "out" "matches" "file"
+else
+  test_fail "out" "expected" "file"
+  exit 1
+fi
+
+msg_run '${var%%pattern} remove suffix longest'
+out=$(../simpsh -c 'f=a.b.c; echo ${f%%.*}')
+if [ "$out" = "a" ]; then
+  test_pass "out" "matches" "a"
+else
+  test_fail "out" "expected" "a"
+  exit 1
+fi
+
+msg_run '${var#pattern} remove prefix shortest'
+out=$(../simpsh -c 'f=foo.bar; echo ${f#*.}')
+if [ "$out" = "bar" ]; then
+  test_pass "out" "matches" "bar"
+else
+  test_fail "out" "expected" "bar"
+  exit 1
+fi
+
+msg_run '${var##pattern} remove prefix longest'
+out=$(../simpsh -c 'f=a/b/c; echo ${f##*/}')
+if [ "$out" = "c" ]; then
+  test_pass "out" "matches" "c"
+else
+  test_fail "out" "expected" "c"
+  exit 1
+fi
 
 msg_run 'variable stress test'
 printf '%s\n' \

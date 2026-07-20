@@ -20,3 +20,21 @@ if [ "$out1" != "../simpsh: f: command not found" ]; then
 else
   test_pass "out1" "matches" "simpsh: f: command not found"
 fi
+
+msg_run 'local variable in function'
+out=$(../simpsh -c 'f() { local x=42; echo $x; }; f; echo $x')
+if [ "$out" = "42" ]; then
+  test_pass "out" "matches" "42"
+else
+  test_fail "out" "expected" "42"
+  exit 1
+fi
+
+msg_run 'return from function'
+out=$(../simpsh -c 'f() { return 5; }; f; echo $?')
+if [ "$out" = "5" ]; then
+  test_pass "out" "matches" "5"
+else
+  test_fail "out" "expected" "5"
+  exit 1
+fi
