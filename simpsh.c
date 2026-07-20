@@ -90,6 +90,7 @@ read_cont(char **lines, size_t *llen)
   buf = st_alloc(cap);
   tlen = *llen;
   memcpy(buf, *lines, *llen);
+  buf[*llen] = '\0';
   while (need_more(buf, tlen)) {
     char *line;
     size_t need;
@@ -325,10 +326,10 @@ sh_interactive(void)
       stack_restore(mark);
       return 1;
     }
-    hist_add(lines);
-    hist_save();
     feed_input(inpt, lines, llen);
     simpsh_run();
+    hist_add(lines);
+    hist_save();
     stack_restore(mark);
   }
   ttyrestore();
