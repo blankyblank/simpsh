@@ -1,10 +1,12 @@
 /* expand.c - variable/string expandsion logic */
 #define _POSIX_C_SOURCE 200809L
+#include <err.h>
+#include <errno.h>
+#include <limits.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <limits.h>
-#include <stdio.h>
 
 #include "alloc.h"
 #include "arith.h"
@@ -22,8 +24,11 @@
 #include "var.h"
 
 char ifschar[256];
+#define _INCHLD (1 << 0)
 
+static int run_cmdsub(const cmd_tree *);
 static char **splitnglob(wf *restrict, size_t *restrict);
+int incmdsub = 0;
 
 /** get the pid shell variable */
 #define varpid() (st_strdup(gvar.pid_s))
@@ -103,6 +108,117 @@ is_posparam(const char *var, size_t var_l)
       return 0;
   }
   return 1;
+}
+
+int
+run_cmdsub(const cmd_tree *restrict n)
+{
+  int wstatus, ret, pipefd[2];
+  pid_t pid;
+  static char buf[MINSTACK_S];
+  size_t len;
+
+  if (!n)
+    return -1;
+  pipefd[0] = pipefd[1] = -1;
+  if (pipe(pipefd) < 0) {
+    sherrx(1, "create pipe");
+    ret = -1;
+    goto cleanup;
+  }
+
+  pid = fork();
+  switch (pid) {
+    case -1:
+      warn("fork");
+      ret = -1;
+      goto cleanup;
+    case 0:
+      if (close(pipefd[0]) < 0)
+        perror("close");
+      if (dup2(pipefd[1], STDOUT_FILENO) < 0)
+        warn("dup");
+      if (close(pipefd[1]) < 0)
+        warn("close");
+      cleartraps();
+      signal(SIGINT, SIG_DFL);
+      signal(SIGQUIT, SIG_DFL);
+      if (mflag) {
+        signal(SIGTSTP, SIG_DFL);
+        signal(SIGTTIN, SIG_DFL);
+        signal(SIGTTOU, SIG_DFL);
+      }
+      incmdsub = 1;
+      LSTATUS = run_commands(n, _INCHLD);
+      incmdsub = 0;
+      fflush(NULL);
+      _exit(LSTATUS);
+    default:
+      {
+        int n;
+        len = 0;
+
+        if (close(pipefd[1]) < 0) {
+          sherrx(1, "close pipe");
+          ret = -1;
+          goto cleanup;
+        }
+
+        char *tmp = NULL;
+        size_t tmpcap = 0, tmplen = 0;
+
+        while ((n = read(pipefd[0], buf, sizeof(buf)))) {
+          if (n > 0) {
+            if (tmplen + n > tmpcap) {
+              size_t newcap = tmpcap ? tmpcap * 2 : 65536;
+              while (newcap < tmplen + n)
+                newcap *= 2;
+              char *new = salloc(newcap);
+              if (tmp)
+                memcpy(new, tmp, tmplen);
+              slfree(tmp);
+              tmp = new;
+              tmpcap = newcap;
+            }
+            memcpy(tmp + tmplen, buf, n);
+            tmplen += n;
+            continue;
+          }
+          if (n == 0)
+            break;
+          if (n == -1 && errno == EINTR)
+            continue;
+          if (n == -1 && errno != EINTR) {
+            slfree(tmp);
+            ret = -1;
+            goto cleanup;
+          }
+        }
+
+        while (tmplen > 0 && tmp[tmplen - 1] == '\n')
+          tmplen--;
+        if (stleft <= tmplen + 1)
+          grow_stack(tmplen + 1);
+        memcpy(stnext, tmp, tmplen);
+        stnext[tmplen] = '\0';
+        len = tmplen;
+        stnext += tmplen + 1;
+        stleft -= tmplen + 1;
+        slfree(tmp);
+        ret = len;
+        if (waitpid(pid, &wstatus, 0) > 0)
+          LSTATUS = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+        else
+          LSTATUS = 1;
+      }
+  }
+
+cleanup:
+  if (pipefd[0] >= 0)
+    close(pipefd[0]);
+  if (pipefd[1] >= 0)
+    close(pipefd[1]);
+  return ret;
 }
 
 static char **

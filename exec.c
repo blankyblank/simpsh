@@ -87,11 +87,13 @@ static int run_bg(const cmd_tree *);
 static int run_redir(const cmd_tree *n, int nchld);
 static int run_subsh(const cmd_tree *, int);
 static int run_cmd(const cmd_tree *, int);
+static int runsbltn(const builtin *restrict, char **restrict, wf **restrict);
+static int runshcmd(shfunc *restrict, const builtin *restrict, char **restrict, wf **restrict);
+static int runextcmd(char **restrict, wf **restrict, const cmd_tree *restrict, int);
 static void shexec(char ** restrict, char ** restrict, redir *)
   __attribute__((noreturn));
 int execcmd(char **);
-static int shfexec(char ** restrict, const cmd_tree * restrict,
-                   char ** restrict, redir *);
+static int shfexec(char ** restrict, char ** restrict, const char * restrict, redir *);
 
 static char *
 bg_cmd(const cmd_tree *n)
@@ -115,10 +117,12 @@ static inline int
 restore_fd(fdlist *sfd, size_t sfdc)
 {
   for (ssize_t i = sfdc; i-- > 0;)
-    if (dup2(sfd[i].saved, sfd[i].orig) < 0)
+    if (sfd[i].saved < 0)
+      close(sfd[i].orig);
+    else if (dup2(sfd[i].saved, sfd[i].orig) < 0)
       return sherr(1, "redirection", "dup2");
   for (ssize_t i = sfdc; i-- > 0;)
-    if (close(sfd[i].saved) < 0)
+    if (sfd[i].saved >= 0 && close(sfd[i].saved) < 0)
       return sherr(1, "redirection", "close");
   return 0;
 }
@@ -224,7 +228,7 @@ apply_redir(redir *r)
         /* fall through */
 dupredir:
         DUPFD(fd, r->fd)
-        if (!cached)
+        if (!cached && fd != r->fd)
           CLOSEFD(fd)
         break;
 
@@ -319,12 +323,18 @@ poptmpvars(tmp_var *tmp, size_t vc)
 static inline int
 save_fd(redir *r, fdlist *sfd, size_t * restrict sfdc)
 {
+  int saved;
   redir *t;
   t = r;
   while (t) {
     sfd[*sfdc].orig = t->fd;
-    if ((sfd[(*sfdc)++].saved = dup(t->fd)) < 0) {
-      return sherr(1, "redirection", "save fd failed");
+    if ((saved = dup(t->fd)) < 0) {
+      if (errno == EBADF)
+        sfd[(*sfdc)++].saved = -1;
+      else
+        return sherr(1, "redirection", "save fd failed");
+    } else {
+      sfd[(*sfdc)++].saved = saved;
     }
     t = t->next;
   }
@@ -399,11 +409,10 @@ forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
   posix_spawnattr_t attr;
   sigset_t sd;
   fdlist sfd[FD_MAX];
-  size_t sfdc;
+  size_t sfdc = 0;
   int flags, err;
 
   if (r) {
-    sfdc = 0;
     if (save_fd(r, sfd, &sfdc) || apply_redir(r)) {
       if (sfdc)
         restore_fd(sfd, sfdc);
@@ -482,18 +491,17 @@ shexec(char **restrict args, char **restrict env, redir *r)
 
 /** fork and exec external command */
 static int
-shfexec(char ** restrict argv, const cmd_tree * restrict n, char ** restrict env, redir *r)
+shfexec(char ** restrict argv, char ** restrict env, const char * restrict cmd, redir *r)
 {
   char *fullpath;
 
   /* get full command path */
   fullpath = getpath(argv[0]);
   if (!fullpath) {
-    fprintf(stderr, "%s: %s: command not found\n", SHARGV0,
-            argv[0]); /*NOLINT*/
+    fprintf(stderr, "%s: %s: command not found\n", SHARGV0, argv[0]);
     return 1;
   }
-  return forkexec(fullpath, argv, env, bg_cmd(n), r);
+  return forkexec(fullpath, argv, env, cmd, r);
 }
 
 static inline int
@@ -568,28 +576,166 @@ run_commands(const cmd_tree *n, int nchld)
   return 0;
 }
 
+static int
+runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
+{
+  fdlist sfd[FD_MAX];
+  size_t sfdc = 0;
+  volatile int st = 0;
+  jmploc * volatile svhandler;
+  jmploc jmploc;
+
+  if (predir) {
+    fflush(stdout);
+    if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
+      return 1;
+  }
+  if (vars && vars[0]) {
+    for (size_t i = 0; vars[i]; i++) {
+      char *name, *val;
+      st_read_assn(xpnd(vars[i]), &name, &val);
+      setvar(name, val, 0);
+    }
+  }
+  svhandler = handler;
+  if (sigsetjmp(jmploc.loc, 1)) {
+    handler = svhandler;
+    intsig = 0;
+    st = 128 + SIGINT;
+  } else {
+    handler = &jmploc;
+    st = builtin_launch(b, final);
+    handler = svhandler;
+  }
+  if ((int)st > 0) {
+    if (!iflag && b->fn != returncmd)
+      exit(1);
+  }
+  if (predir) {
+    if (!(b && b->fn == &execcmd && !final[1])) {
+      fflush(NULL);
+      restore_fd(sfd, sfdc);
+    }
+  }
+  return (int)st;
+}
+
+static int
+runshcmd(shfunc *restrict f, const builtin *restrict b, char **restrict final, wf **restrict vars)
+{
+  fdlist sfd[FD_MAX];
+  size_t i, sfdc = 0;
+  volatile size_t vc;
+  jmploc * volatile svhandler;
+  jmploc jmploc;
+  int status;
+
+  if (predir) {
+    fflush(stdout);
+    if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
+      return 1;
+  }
+  if (vars && vars[0]) {
+    static tmp_var tmp[MAX_TMP_VARS];
+    for (vc = 0, i = 0; vars[i]; i++) {
+      char *name, *val;
+      st_read_assn(xpnd(vars[i]), &name, &val);
+      tmp[i] = grabvar(name);
+      vc++;
+      setvar(name, val, 0);
+    }
+    svhandler = handler;
+    if (sigsetjmp(jmploc.loc, 1)) {
+      handler = svhandler;
+      intsig = 0;
+      status = 128 + SIGINT;
+    } else {
+      handler = &jmploc;
+      status = f ? run_func(f->body, final) : builtin_launch(b, final);
+      handler = svhandler;
+    }
+    poptmpvars(tmp, vc);
+  } else {
+    svhandler = handler;
+    if (sigsetjmp(jmploc.loc, 1)) {
+      handler = svhandler;
+      intsig = 0;
+      status = 128 + SIGINT;
+    } else {
+      handler = &jmploc;
+      status = f ? run_func(f->body, final) : builtin_launch(b, final);
+      handler = svhandler;
+    }
+    if (predir) {
+      if (!(b && b->fn == &execcmd && !final[1])) {
+        fflush(NULL);
+        restore_fd(sfd, sfdc);
+      }
+    }
+  }
+  return status;
+}
+
+static int
+runextcmd(char **restrict final, wf **restrict vars, const cmd_tree *restrict n, int inchld)
+{
+  size_t i;
+  volatile size_t vc = 0;
+  char **evars, **env = NULL;
+  jmploc * volatile svhandler;
+  int status;
+
+  svhandler = handler;
+  handler = NULL;
+  if ((vc = CVARC(n))) {
+    evars = st_alloc((vc + 1) * sizeof(char *));
+    for (i = 0; i < vc; i++) {
+      evars[i] = xpnd(vars[i]);
+      evars[vc] = NULL;
+    }
+  } else {
+    evars = NULL;
+  }
+  env = build_env(evars);
+  if (!env)
+    return shwarn("exec", "no environment found");
+  if (inchld & _INCHLD)
+    shexec(final, env, predir);
+  else
+    status = shfexec(final, env, bg_cmd(n), predir);
+  if (evars)
+    slfree(env);
+  handler = svhandler;
+  return status;
+}
+
+
 __attribute__((hot)) static int
 run_cmd(const cmd_tree *n, int inchld)
 {
   int status;
+  size_t i, len;
   char ifl, efl;
   char **final = NULL;
-  char **env = NULL;
-  wf **vars;
-  shvar *v;
-  shfunc *f = NULL;
-  jmploc * volatile svhandler;
-  jmploc jmploc;
   const builtin *volatile b = NULL;
-  size_t i, len;
-  volatile size_t vc;
+  shfunc *f = NULL;
+  shvar *v;
 
   ifl = iflag;
   efl = eflag;
-  vars = CVARS(n);
   gstate.lineno = n->line;
-
-  final = expand_argv(CARGS(n), &len);
+  {
+    jmploc jmp;
+    jmploc * const volatile sv = handler;
+    handler = &jmp;
+    if (sigsetjmp(jmp.loc, 1)) {
+      handler = sv;
+      intsig = 0;
+      return 128 + SIGINT;
+    }
+    final = expand_argv(CARGS(n), &len);
+    handler = sv;
+  }
   if (gstate.nounseterr) {
     gstate.nounseterr = 0;
     if (!ifl)
@@ -604,8 +750,9 @@ run_cmd(const cmd_tree *n, int inchld)
     printf("%s %s\n", ps4, xline);
   }
 
-  if (!final || !final[0]) {
-    if (vars && vars[0]) { /*  if no command only name=value  */
+  if (!final || !final[0]) { /*  if no command only name=value  */
+    if (CVARS(n) && CVARS(n)[0]) {
+      wf **vars = CVARS(n);
       for (i = 0; vars[i]; i++) {
         char *name, *val /*, *evar*/;
         shvar_flags flags;
@@ -625,114 +772,13 @@ run_cmd(const cmd_tree *n, int inchld)
     return 0;
   }
   if ((b = findbuiltin(*final)) && (b->flags & SBLTN)) {
-    fdlist sfd[FD_MAX];
-    size_t sfdc = 0;
-    volatile int st = 0;
-    if (predir) {
-      fflush(stdout);
-      if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
-        return 1;
-    }
-    if (vars && vars[0]) {
-      for (vc = 0, i = 0; vars[i]; i++) {
-        char *name, *val;
-        st_read_assn(xpnd(vars[i]), &name, &val);
-        vc++;
-        setvar(name, val, 0);
-      }
-    }
-    svhandler = handler;
-    if (sigsetjmp(jmploc.loc, 1)) {
-      handler = svhandler;
-      intsig = 0;
-      st = 128 + SIGINT;
-    } else {
-      handler = &jmploc;
-      st = builtin_launch(b, final);
-      handler = svhandler;
-    }
-    if ((int)st > 0) {
-      if (!iflag)
-        exit(1);
-    }
-    if (predir) {
-      if (!(b && b->fn == &execcmd && !final[1])) {
-        fflush(NULL);
-        restore_fd(sfd, sfdc);
-      }
-    }
-    return (int)st;
-  }
-  if ((f = findfunc(final[0])) || b) {
-    fdlist sfd[FD_MAX];
-    size_t sfdc = 0;
-    if (predir) {
-      fflush(stdout);
-      if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
-        return 1;
-    }
-    if (vars && vars[0]) {
-      static tmp_var tmp[MAX_TMP_VARS];
-      for (vc = 0, i = 0; vars[i]; i++) {
-        char *name, *val;
-        st_read_assn(xpnd(vars[i]), &name, &val);
-        tmp[i] = grabvar(name);
-        vc++;
-        setvar(name, val, 0);
-      }
-      svhandler = handler;
-      if (sigsetjmp(jmploc.loc, 1)) {
-        handler = svhandler;
-        intsig = 0;
-        status = 128 + SIGINT;
-      } else {
-        handler = &jmploc;
-        status = f ? run_func(f->body, final) : builtin_launch(b, final);
-        handler = svhandler;
-      }
-      poptmpvars(tmp, vc);
-    } else {
-      svhandler = handler;
-      if (sigsetjmp(jmploc.loc, 1)) {
-        handler = svhandler;
-        intsig = 0;
-        status = 128 + SIGINT;
-      } else {
-        handler = &jmploc;
-        status = f ? run_func(f->body, final) : builtin_launch(b, final);
-        handler = svhandler;
-      }
-      if (predir) {
-        if (!(b && b->fn == &execcmd && !final[1])) {
-          fflush(NULL);
-          restore_fd(sfd, sfdc);
-        }
-      }
-    }
-
-  } else { /* if this is a external command */
-    char **evars;
-    svhandler = handler;
-    handler = NULL;
-    if ((vc = CVARC(n))) {
-      evars = st_alloc((vc + 1) * sizeof(char *));
-      for (i = 0; i < vc; i++) {
-        evars[i] = xpnd(vars[i]);
-        evars[vc] = NULL;
-      }
-    } else {
-      evars = NULL;
-    }
-    env = build_env(evars);
-    if (!env)
-      return shwarn("exec", "no environment found");
-    if (inchld & _INCHLD)
-      shexec(final, env, predir);
-    else
-      status = shfexec(final, n, env, predir);
-    if (evars)
-      slfree(env);
-    handler = svhandler;
+    status = runsbltn(b, final, CVARS(n));
+  } else if ((f = findfunc(final[0]))) {
+    status = runshcmd(f, NULL, final, CVARS(n));
+  } else if (b) {
+    status = runshcmd(NULL, b, final, CVARS(n));
+  } else {
+    status = runextcmd(final, CVARS(n), n, inchld);
   }
   if (CNEG(n))
     status = !status;
@@ -934,7 +980,8 @@ run_bg(const cmd_tree *n)
       if (mflag)
         setpgid(pid, pid);
       j = newjob(pid, bg_cmd(n->left));
-      printf("[%d] %d\n", j->num, pid);
+      if (iflag)
+        printf("[%d] %d\n", j->num, pid);
       return run_commands(n->right, 0);
   }
 }
@@ -1029,94 +1076,6 @@ run_subsh(const cmd_tree *n, int chld)
   }
 }
 
-int
-run_cmdsub(const cmd_tree *restrict n)
-{
-  int wstatus, ret, pipefd[2];
-  pid_t pid;
-  static char buf[MINSTACK_S];
-  size_t len;
-
-  if (!n)
-    return -1;
-  pipefd[0] = pipefd[1] = -1;
-  if (pipe(pipefd) < 0) {
-    sherrx(1, "create pipe");
-    ret = -1;
-    goto cleanup;
-  }
-
-  pid = fork();
-  switch (pid) {
-    case -1:
-      warn("fork");
-      ret = -1;
-      goto cleanup;
-    case 0:
-      if (close(pipefd[0]) < 0)
-        perror("close");
-      if (dup2(pipefd[1], STDOUT_FILENO) < 0)
-        warn("dup");
-      if (close(pipefd[1]) < 0)
-        warn("close");
-      child_setup_fg(0);
-      LSTATUS = run_commands(n, _INCHLD);
-      fflush(NULL);
-      _exit(LSTATUS);
-    default:
-      {
-        int n;
-        len = 0;
-
-        if (close(pipefd[1]) < 0) {
-          sherrx(1, "close pipe");
-          ret = -1;
-          goto cleanup;
-        }
-
-        while ((n = read(pipefd[0], buf, sizeof(buf)))) {
-          if (n > 0) {
-            if (stleft <= (size_t)n)
-              grow_stack(n);
-            memcpy(stnext, buf, n);
-            len += n;
-            stnext += n;
-            stleft -= n;
-            continue;
-          }
-          if (n == 0)
-            break;
-          if (n == -1 && errno == EINTR)
-            continue;
-          if (n == -1 && errno != EINTR) {
-            ret = -1;
-            goto cleanup;
-          }
-        }
-
-        while (len > 0 && *(stnext - 1) == '\n') {
-          stleft++;
-          stnext--;
-          len--;
-        }
-        *stnext = '\0';
-        ret = len;
-
-        if (waitpid(pid, &wstatus, 0) > 0)
-          LSTATUS = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
-        else
-          LSTATUS = 1;
-      }
-  }
-
-cleanup:
-  if (pipefd[0] >= 0)
-    close(pipefd[0]);
-  if (pipefd[1] >= 0)
-    close(pipefd[1]);
-  return ret;
-}
-
 static inline int
 canfakepipe(cmd_tree *n)
 {
@@ -1133,7 +1092,7 @@ run_pipe(const cmd_tree *n)
 {
   cmd_tree **stgs;
   size_t nstg;
-  int status, mfl;
+  int status = 0, mfl;
 
   stgs = CPIPE(n);
   nstg = CPIPEC(n);

@@ -11,6 +11,7 @@ typedef struct {
 } ifssect;
 
 extern char ifschar[256];
+extern int incmdsub;
 
 extern char *exp_tilde(char *restrict, size_t, size_t *restrict, size_t *restrict);
 extern char *homedir(char *);
@@ -18,7 +19,6 @@ extern char *exp_str(char *restrict, size_t, size_t *restrict);
 extern char **expand_argv(wf **, size_t *restrict);
 extern char *expand_ps1(char *);
 extern wf *exp_word(wf *, size_t *restrict);
-// extern char *lookupvar(const char *, size_t);
 
 /* vim: set filetype=c: */
 #endif /* EXPAND_H */

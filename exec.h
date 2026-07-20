@@ -17,7 +17,6 @@
 #define builtin_launch(b, a) (b->fn(a))
 
 extern int run_commands(const cmd_tree *, int);
-extern int run_cmdsub(const cmd_tree *);
 extern int forkexec(char *, char **, char **, const char *, redir *r);
 
 static inline int
