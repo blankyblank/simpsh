@@ -90,6 +90,7 @@ globmatch(const char *restrict p, const char *restrict s, int pfl)
   if ((*p == '*' && p[1] == '\0') || (strcmp(p, s) == 0 || (!*p && !*s)))
     return 1;
 
+retry:
   while (*p) {
     switch (*p) {
       case '*':
@@ -132,10 +133,11 @@ backtrack:
   if (*s) {
     if (!sp)
       return 0;
-    else
-      for (const char *r = sp + 1; *r; r++)
-        if (*r != '*')
-          return 0;
+    if (ss >= send)
+      return 0;
+    p = sp + 1;
+    s = ++ss;
+    goto retry;
   }
   return 1;
 }

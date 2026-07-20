@@ -150,13 +150,11 @@ static void setsignal(int);
 int
 init_traps(void)
 {
-  signame[0] = "EXIT";
-
   for (size_t i = 0; i < NSIG; i++) {
     itoa(i, signum[i]);
     signame[i] = signum[i];
   }
-
+  signame[0] = "EXIT";
   signame[SIGHUP] = "HUP";
   signame[SIGINT] = "INT";
   signame[SIGQUIT] = "QUIT";

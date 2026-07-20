@@ -763,7 +763,7 @@ static int
 lexvnum(int c)
 {
   char *w;
-  flushword((cctx == M_DQUOTE) ? QBRACE_DQ : QBRACE);
+  flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
   stcheck(32), st_putc(c);
   size_t nlen = 1;
   for (;;) {

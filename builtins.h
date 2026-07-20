@@ -8,7 +8,7 @@
 #define BUILTIN_BUCKETS 64
 
 typedef struct {
-  char *name;
+  const char *name;
   int (*fn)(char **);
   unsigned int flags;
 } builtin;
@@ -19,6 +19,7 @@ extern int builtin_tab[BUILTIN_BUCKETS];
 #define SBLTN (1 << 0)
 extern int bltin_atoi(char *, char *, char *);
 extern void init_builtins(void);
+extern int returncmd(char **);
 
 static inline const builtin *
 findbuiltin(const char *args)

@@ -84,7 +84,7 @@ killjob(void)
     if (j->state == JDONE)
       continue;
     oldstate = j->state;
-    while ((pid = waitpid(-j->pgid, &wstatus,
+    while ((pid = waitpid(j->status_pid, &wstatus,
                           WNOHANG | WUNTRACED | WCONTINUED)) > 0) {
       if (pid == j->status_pid)
         j->wstatus = wstatus;
@@ -197,13 +197,13 @@ void
 child_setup_fg(pid_t pgid)
 {
   cleartraps();
+  signal(SIGINT, SIG_DFL);
+  signal(SIGQUIT, SIG_DFL);
   if (mflag) {
-    signal(SIGINT, SIG_DFL);
-    signal(SIGQUIT, SIG_DFL);
     signal(SIGTSTP, SIG_DFL);
     signal(SIGTTIN, SIG_DFL);
     signal(SIGTTOU, SIG_DFL);
-   }
+  }
   if (mflag)
     if (setpgid(0, pgid) < 0)
       warn("simpsh: setpgid");
@@ -423,7 +423,7 @@ waitcmd(char **argv)
           continue;
         case JRUN:
           while (j->nlive > 0) {
-            wpid = (mflag) ? mwait(-wtpid, &wstatus) : waitpid(-wtpid, &wstatus, 0);
+            wpid = (mflag) ? mwait(-wtpid, &wstatus) : waitpid(j->status_pid, &wstatus, 0);
             switch (wpid) {
               case -1:
                 if (errno == ECHILD)
@@ -450,8 +450,7 @@ waitcmd(char **argv)
   for (job *j = job_list; j; j = j->next)
     if (j->nlive > 0)
       while (j->nlive > 0) {
-        wpid = (mflag) ? mwait(-j->pgid, &wstatus) :
-                         waitpid(-j->pgid, &wstatus, 0);
+        wpid = (mflag) ? mwait(-j->pgid, &wstatus) : waitpid(j->status_pid, &wstatus, 0);
         if (wpid > 0)
           j->nlive--;
         else if (wpid < 0 && errno == ECHILD)

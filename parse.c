@@ -528,11 +528,13 @@ parse_case(void)
     for (;;) {
       chkwd = CHKNL | CHKKWD;
       peektok(t, 0);
-      if (t.type == TESAC)
+      if (t.type == TESAC) {
+        tokreset();
         break;
+      }
       if (t.type == TLP) {
         tokreset();
-        t = tokenize(); // XXX: ???
+        t = tokenize();
       }
 
       clauses = st_alloc(sizeof(clause));
@@ -577,8 +579,10 @@ parse_case(void)
         tokreset();
         continue;
       }
-      if (t.type == TESAC)
+      if (t.type == TESAC) {
+        tokreset();
         break;
+      }
       return synexpected(curline, t, TESAC);
     }
   } else {

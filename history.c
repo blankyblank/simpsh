@@ -50,7 +50,7 @@ init_history(void)
   histcur = -1;
   histnum = 1;
 
-  if ((hf = findvar_n(STR("HISTFILE"), sizeof("HISTFILE")))) {
+  if ((hf = findvar_n(STR("HISTFILE"), sizeof("HISTFILE") - 1))) {
     histfile = strdup_(shvar_val(hf));
   } else {
     size_t hflen;
@@ -374,7 +374,7 @@ fccmd(char **argv)
       first = HISTLAST;
     }
     if (last < 0)
-      last = first;
+      last = HISTLAST;
     else if (last >= histcnt)
       last = HISTLAST;
     if (first > last && !(flags & FLAG_r)) {
@@ -402,7 +402,6 @@ fccmd(char **argv)
         }
       }
     }
-    fputc('\n', stdout);
     return 0;
   }
 
@@ -424,9 +423,9 @@ fccmd(char **argv)
       last = HISTLAST;
 
     if (!(flags & FLAG_e)) {
-      if ((fced = findvar_n(STR("FCEDIT"), sizeof("FCEDIT")))) {
+      if ((fced = findvar_n(STR("FCEDIT"), sizeof("FCEDIT") - 1))) {
         editor = shvar_val(fced);
-      } else if ((ed = findvar_n(STR("EDITOR"), sizeof("EDITOR")))) {
+      } else if ((ed = findvar_n(STR("EDITOR"), sizeof("EDITOR") - 1))) {
         editor = shvar_val(ed);
       } else {
         editor = "ed";
@@ -452,6 +451,7 @@ fccmd(char **argv)
         fputc('\n', tmp);
       }
 
+    fflush(tmp);
     switch (pid = fork()) {
       case -1:
         err = 1;
@@ -463,7 +463,6 @@ fccmd(char **argv)
         waitpid(pid, &wstatus, 0);
     }
 
-    fflush(tmp);
     lseek(fd, 0, SEEK_SET);
     setinputf(fd, tmpname, 0);
     simpsh_run();

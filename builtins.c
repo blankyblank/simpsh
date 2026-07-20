@@ -58,7 +58,6 @@ extern int printfcmd(char **);
 static int pwdcmd(char **);
 static int readcmd(char **);
 extern int readonlycmd(char **);
-static int returncmd(char **);
 extern int setcmd(char **);
 static int shiftcmd(char **);
 extern int testcmd(char **);
@@ -819,7 +818,7 @@ rend:
 
 
   line = grab_str(len);
-  ifs = getvar("IFS");
+  ifs = getvar(STR("IFS"));
   if (!ifs) {
     ifs = " \t\n";
     ifsws[0] = ' ';
@@ -877,7 +876,7 @@ rend:
   return status;
 }
 
-static int
+int
 returncmd(char **argv)
 {
   size_t argc = 0;
