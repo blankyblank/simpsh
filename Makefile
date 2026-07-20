@@ -9,7 +9,7 @@ ifneq ($(filter debug valgrind sanitize,$(BUILD)),)
 endif
 
 ifeq ($(BUILD),release)
-	CFLAGS += -march=native
+	CFLAGS += -march=native -fno-plt
 	ifeq ($(CC),gcc)
 		CFLAGS += $(if $(filter gcc,$(CC)),-O2 -flto=auto -s)
 		LDFLAGS += $(if $(filter gcc,$(CC)),-flto=auto)
