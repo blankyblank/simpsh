@@ -16,6 +16,7 @@ tests/script-test.sh
 *.svg
 .project*
 callgrind*
+massif*
 profile
 .cache/
 .ccls-cache
