@@ -585,7 +585,7 @@ runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
   jmploc jmploc;
 
   if (predir) {
-    fflush(stdout);
+    fflush(shstdout);
     if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
       return 1;
   }
@@ -630,7 +630,7 @@ runshcmd(shfunc *restrict f, const builtin *restrict b, char **restrict final, w
   int status;
 
   if (predir) {
-    fflush(stdout);
+    fflush(shstdout);
     if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
       return 1;
   }
@@ -1118,8 +1118,8 @@ run_pipe(const cmd_tree *n)
     }
     status = run_commands(stgs[i], 0);
     if (i < nstg - 1) {
-      fclose(stdout);
-      stdout = stdoutbk;
+      fclose(shstdout);
+      shstdout = stdoutbk;
       lastbuf = outbuf;
       llen = outlen;
     }
