@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "alloc.h"
-#include "error.h"
+#include "errmsg.h"
 #include "input.h"
 #include "lex.h"
 #include "main.h"
@@ -20,6 +20,7 @@
 static redir *heredoc_head;
 static redir **heredoc_tail = &heredoc_head;
 sh_tok tbuf = { .type = TNONE };
+int tokflags;
 
 #define gettok(f, t) (chkwd |= (f), (t) = tokenize())
 #define peektok(t, f) ((tbuf.type == TNONE) ? (chkwd |= (f), tbuf = tokenize()) : tbuf, (t) = tbuf)
@@ -527,6 +528,7 @@ parse_case(void)
     cap = WFCAP;
     for (;;) {
       chkwd = CHKNL | CHKKWD;
+      tbuf.type = TNONE;
       peektok(t, 0);
       if (t.type == TESAC) {
         tokreset();
@@ -574,7 +576,8 @@ parse_case(void)
       else
         tailcl->next = clauses;
       tailcl = clauses;
-      peektok(t, 0);
+      tbuf.type = TNONE;
+      peektok(t, CHKNL | CHKKWD);
       if (t.type == TDSEMI) {
         tokreset();
         continue;

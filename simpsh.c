@@ -2,7 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
-#include <linux/limits.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -15,7 +15,7 @@
 #endif /* ifdef LIBEDIT */
 
 #include "alloc.h"
-#include "error.h"
+#include "errmsg.h"
 #include "exec.h"
 #include "expand.h"
 #include "history.h"
@@ -54,6 +54,8 @@ source_file(const char *path)
   if (fd < 0)
     return;
   setinputf(fd, path, 0);
+  tbuf.type = TNONE;
+  chkwd = 0;
   eval_run();
   RETNOW = 0;
   popinput();
@@ -244,7 +246,7 @@ simpsh_run(void)
     }
     if (!nflag)
       run_commands(c, 0);
-    fflush(stdout);
+    fflush(shstdout);
     if (RETNOW) {
       RETNOW = 0;
       stack_restore(mark);
@@ -279,7 +281,7 @@ sh_interactive(void)
 
 #ifdef LIBEDIT
   if (load_libedit()) {
-    edl = libedit_el_init(SHARGV0, stdin, stdout, stderr);
+    edl = libedit_el_init(SHARGV0, shstdin, shstdout, stderr);
     libedit_el_set(edl, EL_EDITOR, "vi");
     libedit_el_set(edl, EL_SIGNAL, 1);
     libedit_el_set(edl, EL_GETCFN, input_notify);
@@ -313,7 +315,7 @@ sh_interactive(void)
     r = read_cmd(&lines, &llen);
     if (r == 0) {
       if (Iflag && iflag) {
-        clearerr(stdin);
+        clearerr(shstdin);
         if ((write(STDOUT_FILENO, dmsg, strlen(dmsg) + 1)) < 0)
           return sherrx(1, "write");
         stack_restore(mark);
@@ -558,8 +560,8 @@ _lineread_(int ps1)
     char *prompt;
     addeventloop(&el, STDIN_FILENO, POLLIN, stdin_cb, NULL);
     prompt = update_prompt(ps1);
-    fputs(prompt, stdout);
-    fflush(stdout);
+    fputs(prompt, shstdout);
+    fflush(shstdout);
     nxtline = NULL;
     el.running = 1;
     while (el.running) {
@@ -567,8 +569,8 @@ _lineread_(int ps1)
       if (intsig) {
         intsig = 0;
         putchar('\n');
-        fputs(prompt, stdout);
-        fflush(stdout);
+        fputs(prompt, shstdout);
+        fflush(shstdout);
         nxtline = NULL;
         el.running = 1;
         continue;

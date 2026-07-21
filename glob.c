@@ -8,7 +8,7 @@
 
 #include "glob.h"
 #include "alloc.h"
-#include "error.h"
+#include "errmsg.h"
 #include "simd.h"
 
 #define GLOB_CAP 64

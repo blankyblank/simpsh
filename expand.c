@@ -1,6 +1,5 @@
 /* expand.c - variable/string expandsion logic */
 #define _POSIX_C_SOURCE 200809L
-#include <err.h>
 #include <errno.h>
 #include <limits.h>
 #include <stddef.h>
@@ -11,7 +10,7 @@
 #include "alloc.h"
 #include "arith.h"
 #include "env.h"
-#include "error.h"
+#include "errmsg.h"
 #include "exec.h"
 #include "expand.h"
 #include "glob.h"
@@ -199,7 +198,8 @@ run_cmdsub(const cmd_tree *restrict n)
           tmplen--;
         if (stleft <= tmplen + 1)
           grow_stack(tmplen + 1);
-        memcpy(stnext, tmp, tmplen);
+        if (tmp)
+          memcpy(stnext, tmp, tmplen);
         stnext[tmplen] = '\0';
         len = tmplen;
         stnext += tmplen + 1;
@@ -700,7 +700,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
             default:
               break;
           }
-          if (!vlen && val)
+          if (!vlen && val && v)
             vlen = vallen(v);
           goto append;
         }

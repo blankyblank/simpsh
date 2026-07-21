@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "error.h"
+#include "errmsg.h"
 #include "main.h"
 #include "test.h"
 #include "utils.h"
@@ -317,7 +317,7 @@ primary(testvar *tv)
   }
 
   opnd1 = *tv->pos++;
-  if ((op = istestop(*tv->pos, 0)) != TEND) {
+  if (tv->pos < tv->wpend && (op = istestop(*tv->pos, 0)) != TEND) {
     tv->pos++;
     if (tv->pos >= tv->wpend) {
       tv->flags |= terr;

@@ -1,6 +1,5 @@
 /* exec.c - functions surrounding running external programs or builtins */
 #define _POSIX_C_SOURCE 200809L
-#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <spawn.h>
@@ -13,7 +12,7 @@
 #include "alloc.h"
 #include "builtins.h"
 #include "env.h"
-#include "error.h"
+#include "errmsg.h"
 #include "exec.h"
 #include "expand.h"
 #include "glob.h"
@@ -1108,14 +1107,14 @@ run_pipe(const cmd_tree *n)
   size_t outlen, llen = 0;
   for (size_t i = 0; i < nstg; i++) {
     if (i > 0) {
-      stdinbk = stdin;
-      stdin = fmemopen(lastbuf, llen, "r");
+      stdinbk = shstdin;
+      shstdin = fmemopen(lastbuf, llen, "r");
       cleanbuf = lastbuf;
     }
     if (i < nstg - 1) {
-      fflush(stdout);
-      stdoutbk = stdout;
-      stdout = open_memstream(&outbuf, &outlen);
+      fflush(shstdout);
+      stdoutbk = shstdout;
+      shstdout = open_memstream(&outbuf, &outlen);
     }
     status = run_commands(stgs[i], 0);
     if (i < nstg - 1) {
@@ -1125,10 +1124,10 @@ run_pipe(const cmd_tree *n)
       llen = outlen;
     }
     if (i > 0) {
-      fclose(stdin);
+      fclose(shstdin);
       if (cleanbuf)
         free(cleanbuf);
-      stdin = stdinbk;
+      shstdin = stdinbk;
     }
   }
   return status;

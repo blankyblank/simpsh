@@ -11,7 +11,7 @@
 #include "alloc.h"
 #include "arg.h"
 #include "env.h"
-#include "error.h"
+#include "errmsg.h"
 #include "expand.h"
 #include "main.h"
 #include "opts.h"

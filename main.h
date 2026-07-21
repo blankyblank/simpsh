@@ -12,6 +12,7 @@
 
 #include <limits.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -33,13 +34,13 @@ enum {
 };
 
 typedef int8_t i8;
-typedef u_int8_t u8;
+typedef uint8_t u8;
 typedef int16_t i16;
-typedef u_int16_t u16;
+typedef uint16_t u16;
 typedef int32_t i32;
-typedef u_int32_t u32;
+typedef uint32_t u32;
 typedef int64_t i64;
-typedef u_int64_t u64;
+typedef uint64_t u64;
 
 #define MAX_ENV      500
 #define OPTC 19
@@ -95,6 +96,8 @@ extern GSTATE gstate;
 extern const char shname[];
 extern const char shusg[43];
 extern char **environ;
+extern FILE *shstdin;
+extern FILE *shstdout;
 
 #define LSTATUS     (gstate.l_status)
 #define RETVAL      (gstate.ret_val)

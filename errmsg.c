@@ -1,12 +1,27 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include <err.h>
-#include "error.h"
+#include <error.h>
+#include <errno.h>
+
+#include "errmsg.h"
 #include "utils.h"
 
 
 /* error (returns doesn't exit) with simpsh: builtin: message: (errno message),
  * format */
+void
+err(int eval, const char *fmt, ...)
+{
+  warn(fmt);
+  exit(eval);
+}
+
+void
+warn(const char *fmt, ...)
+{
+  fprintf(stderr, "%s: %s\n", fmt, strerror(errno));
+}
+
 int
 sherr(int r, const char *str, const char *msg)
 {

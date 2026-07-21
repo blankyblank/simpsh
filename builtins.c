@@ -21,7 +21,7 @@
 #include "builtins.h"
 #include "env.h"
 #include "exec.h"
-#include "error.h"
+#include "errmsg.h"
 #include "input.h"
 #include "main.h"
 #include "opts.h"
@@ -335,9 +335,9 @@ catcmd(char **argv)
 
   if (argc == 1) {
     buf = salloc(bufsize);
-    while ((n = fread(buf, 1, bufsize, stdin)) > 0)
-      fwrite(buf, 1, n, stdout);
-    if (ferror(stdin)) {
+    while ((n = fread(buf, 1, bufsize, shstdin)) > 0)
+      fwrite(buf, 1, n, shstdout);
+    if (ferror(shstdin)) {
       fprintf(stderr, "cat: Bad file descriptor\n");
       return 1;
     }
@@ -351,8 +351,8 @@ catcmd(char **argv)
     bufsize = st.st_blksize ? st.st_blksize : BUFSIZ;
     buf = salloc(bufsize);
     while ((n = fread(buf, 1, bufsize, f)) > 0)
-      fwrite(buf, 1, n, stdout);
-    // fflush(stdout);
+      fwrite(buf, 1, n, shstdout);
+    // fflush(shstdout);
     fclose(f);
     i++;
   }
@@ -628,14 +628,14 @@ echocmd(char *argv[])
   if (fcntl(STDOUT_FILENO, F_GETFD) < 0)
     return sherr(1, argv0, "could not write to stdout");
   for (size_t i = 0; argv[i]; i++) {
-    if (fputs(argv[i], stdout) == EOF)
+    if (fputs(argv[i], shstdout) == EOF)
       return sherr(1, argv0, "could not write to stdout");
     if (i < argc - 1)
-      if (fputc(' ', stdout) == EOF)
+      if (fputc(' ', shstdout) == EOF)
         return sherr(1, argv0, "could not write to stdout");
   }
   if (!(nf & FLAG_N))
-    if (fputc('\n', stdout) == EOF) {
+    if (fputc('\n', shstdout) == EOF) {
       warn("%s: %s", argv0, "could not write to stdout");
       return 1;
     }
@@ -783,8 +783,8 @@ readcmd(char **argv)
     fflush(stderr);
   }
   stcheck(32);
-  clearerr(stdin);
-  while ((c = fgetc(stdin))) {
+  clearerr(shstdin);
+  while ((c = fgetc(shstdin))) {
     switch (c) {
       case EOF:
         status = 1;
@@ -792,7 +792,7 @@ readcmd(char **argv)
       case '\0':
         continue;
       case '\\':
-        if ((c = fgetc(stdin)) == EOF) {
+        if ((c = fgetc(shstdin)) == EOF) {
           status = 1;
           goto rend;
         }
@@ -1149,18 +1149,18 @@ umaskcmd(char **argv)
     int val[] = { usrp, grpp, othp };
 
     for (int i = 0; i <= 2; i++) {
-      putc(ugo[i], stdout);
-      putc('=', stdout);
+      putc(ugo[i], shstdout);
+      putc('=', shstdout);
       if (val[i] & 4)
-        putc('r', stdout);
+        putc('r', shstdout);
       if (val[i] & 2)
-        putc('w', stdout);
+        putc('w', shstdout);
       if (val[i] & 1)
-        putc('x', stdout);
+        putc('x', shstdout);
       if (i < 2)
-        putc(',', stdout);
+        putc(',', shstdout);
     }
-    putc('\n', stdout);
+    putc('\n', shstdout);
     return 0;
   }
 

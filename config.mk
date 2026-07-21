@@ -34,7 +34,7 @@ PROFFLAGS := -fxray-instrument
 GCOV  :=
 
 ## Compiler flags
-CFLAGS  := --std=c99 -I. -Wall -Wextra -pedantic -pipe $(LIBEDITFLAGS)
+CFLAGS  := --std=c17 -I. -Wall -Wextra -pedantic -pipe $(LIBEDITFLAGS)
 LDFLAGS := -Wl,-z,now
 LDLIBS  := $(LIBEDITLIBS) $(LIBEDIT-STATICLIBS)
 

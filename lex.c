@@ -10,7 +10,7 @@
 #include "alloc.h"
 #include "arith.h"
 #include "env.h"
-#include "error.h"
+#include "errmsg.h"
 #include "input.h"
 #include "lex.h"
 #include "main.h"
@@ -551,26 +551,31 @@ lexcmdsub(void)
       notclosed = 1;
       return SHEOF;
     }
+    stcheck(32);
     switch (cstate) {
       qescape(ch)
     }
     switch (ch) {
       case '\'':
         cstate |= insq;
+        stcheck(32);
         st_putc(ch);
         cmdlen++;
         break;
       case '"':
+        stcheck(32);
         st_putc(ch);
         cmdlen++;
         cstate |= indq;
         break;
       case '\\':
         cstate |= esc;
+        stcheck(32);
         st_putc(ch);
         cmdlen++;
         break;
       case '(':
+        stcheck(32);
         st_putc(ch);
         cmdlen++;
         cmdsubd++;
@@ -580,10 +585,12 @@ lexcmdsub(void)
         if (!cmdsubd) {
           goto end;
         }
+        stcheck(32);
         st_putc(ch);
         cmdlen++;
         break;
       default:
+        stcheck(32);
         st_putc(ch);
         cmdlen++;
         break;

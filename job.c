@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include <asm-generic/errno-base.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -13,7 +12,7 @@
 
 #include "arg.h"
 #include "builtins.h"
-#include "error.h"
+#include "errmsg.h"
 #include "exec.h"
 #include "job.h"
 #include "opts.h"

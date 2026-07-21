@@ -1,6 +1,6 @@
 /* error.h - error message macros/funcs */
-#ifndef ERROR_H
-#define ERROR_H
+#ifndef ERRMSG_H
+#define ERRMSG_H
 #define _POSIX_C_SOURCE 200809L
 
 #include <stddef.h>
@@ -80,5 +80,7 @@ extern int sherr(int r,const char *str,const char *msg);
 extern int shwarn_arg(char *str,const char *arg,const char *msg);
 extern int shwarn(const char *str,const char *msg);
 extern int sherrx(int r, const char *msg);
+extern void warn(const char *, ...);
+__attribute__((noreturn)) void err(int eval, const char *fmt, ...);
 
-#endif /* ERROR_H */
+#endif /* ERRMSG_H */

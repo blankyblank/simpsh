@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "error.h"
+#include "errmsg.h"
 #include "utils.h"
 
 static int rval;
@@ -210,7 +210,7 @@ printint(u64 n, int flags, int w, int prec, char cnv)
     snprintf(out, sizeof(out), fmt, (long long)n);
   else
     snprintf(out, sizeof(out), fmt, n);
-  if (fputs(out, stdout) == EOF)
+  if (fputs(out, shstdout) == EOF)
     rval = 1;
   return rval;
 }
@@ -242,7 +242,7 @@ printfloat(long double n, int flags, int w, int prec, char cnv)
   fmt[pos++] = cnv;
   fmt[pos] = '\0';
   snprintf(out, sizeof(out), fmt, n);
-  if (fputs(out, stdout) == EOF)
+  if (fputs(out, shstdout) == EOF)
     rval = 1;
   return rval;
 }
@@ -269,7 +269,7 @@ printfcmd(char **argv)
         cp++;
         if ((ret = printesc((const char **)&cp, out)) < 0)
           return 0;
-        if (fwrite(out, 1, ret, stdout) < (size_t)ret)
+        if (fwrite(out, 1, ret, shstdout) < (size_t)ret)
           rval = 1;
       } else if (*cp == '%') {
         int w = 0, prec = -1, flags = 0;
@@ -353,13 +353,13 @@ printfcmd(char **argv)
                 slen = (size_t)prec;
               if (w > (int)slen && !(flags & PNEG))
                 for (i = w - (int)slen; i > 0; i--)
-                  if (fputc(' ', stdout) == EOF)
+                  if (fputc(' ', shstdout) == EOF)
                     rval = 1;
-              if (fwrite(s, 1, slen, stdout) < slen)
+              if (fwrite(s, 1, slen, shstdout) < slen)
                 rval = 1;
               if (w > (int)slen && (flags & PNEG))
                 for (i = w - (int)slen; i > 0; i--)
-                  if (fputc(' ', stdout) == EOF)
+                  if (fputc(' ', shstdout) == EOF)
                     rval = 1;
               break;
             }
@@ -369,13 +369,13 @@ printfcmd(char **argv)
               ch = getchr();
               if (w > 1 && !(flags & PNEG))
                 for (i = w - 1; i > 0; i--)
-                  if (fputc(' ', stdout) == EOF)
+                  if (fputc(' ', shstdout) == EOF)
                     rval = 1;
-              if (fputc(ch, stdout) == EOF)
+              if (fputc(ch, shstdout) == EOF)
                 rval = 1;
               if (w > 1 && (flags & PNEG))
                 for (i = w - 1; i > 0; i--)
-                  if (fputc(' ', stdout) == EOF)
+                  if (fputc(' ', shstdout) == EOF)
                     rval = 1;
               break;
             }
@@ -386,26 +386,26 @@ printfcmd(char **argv)
               int cesc = 0;
               b = printstresc(getstr(), &blen, &cesc);
               if (cesc) {
-                fwrite(b, 1, blen, stdout);
+                fwrite(b, 1, blen, shstdout);
                 return 0;
               }
-              if (fwrite(b, 1, blen, stdout) < blen)
+              if (fwrite(b, 1, blen, shstdout) < blen)
                 rval = 1;
               break;
             }
           case '%':
-            if (fputc('%', stdout) == EOF)
+            if (fputc('%', shstdout) == EOF)
               rval = 1;
             break;
           default:
-            if (fputc('%', stdout) == EOF)
+            if (fputc('%', shstdout) == EOF)
               rval = 1;
-            if (fputc(cc, stdout) == EOF)
+            if (fputc(cc, shstdout) == EOF)
               rval = 1;
             break;
         }
       } else {
-        if (fputc(*cp++, stdout) == EOF)
+        if (fputc(*cp++, shstdout) == EOF)
           rval = 1;
       }
     }

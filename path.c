@@ -9,9 +9,8 @@
 
 #include "alloc.h"
 #include "arg.h"
-#include "error.h"
+#include "errmsg.h"
 #include "main.h"
-#include "lex.h"
 #include "expand.h"
 #include "opts.h"
 #include "path.h"

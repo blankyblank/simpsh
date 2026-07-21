@@ -13,7 +13,7 @@
 
 #include "alloc.h"
 #include "arg.h"
-#include "error.h"
+#include "errmsg.h"
 #include "history.h"
 #include "simpsh.h"
 #include "utils.h"
@@ -386,19 +386,19 @@ fccmd(char **argv)
     if (flags & FLAG_r) {
       for (int i = last; i >= first; i--) {
         if (flags & FLAG_n) {
-          fprintf(stdout, "%s\n", shhistory[i]);
+          fprintf(shstdout, "%s\n", shhistory[i]);
         } else {
           int snum = histnum - histcnt + i;
-          fprintf(stdout, "%d\t %s\n", snum, shhistory[i]);
+          fprintf(shstdout, "%d\t %s\n", snum, shhistory[i]);
         }
       }
     } else {
       for (int i = first; i <= last; i++) {
         if (flags & FLAG_n) {
-          fprintf(stdout, "%s\n", shhistory[i]);
+          fprintf(shstdout, "%s\n", shhistory[i]);
         } else {
           int snum = histnum - histcnt + i;
-          fprintf(stdout, "%d\t %s\n", snum, shhistory[i]);
+          fprintf(shstdout, "%d\t %s\n", snum, shhistory[i]);
         }
       }
     }

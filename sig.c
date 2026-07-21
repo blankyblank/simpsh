@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 #include "alloc.h"
-#include "error.h"
+#include "errmsg.h"
 #include "job.h"
 #include "sig.h"
 #include "simpsh.h"

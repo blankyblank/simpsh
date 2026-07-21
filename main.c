@@ -11,7 +11,7 @@
 #include "alloc.h"
 #include "arg.h"
 #include "builtins.h"
-#include "error.h"
+#include "errmsg.h"
 #include "input.h"
 #include "job.h"
 #include "main.h"
@@ -24,6 +24,9 @@ const char shname[] = "simpsh";
 const char shusg[43] = "[-abCefhiImnosvVx] [-o longopt] [-c 'cmd']";
 const char defpathn[80] = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 GSTATE gstate = { .shparm.opt_ind = 1, .shparm.opt_off = -1 };
+FILE *shstdin;
+FILE *shstdout;
+
 
 int builtin_tab[BUILTIN_BUCKETS];
  /* __attribute__((visibility("default"))) */
@@ -134,6 +137,8 @@ main(int argc, char **argv)
     init_job();
   }
 
+  shstdin = stdin;
+  shstdout = stdout;
   SHARGV0 = argv0;
   init_rc(flags);
 

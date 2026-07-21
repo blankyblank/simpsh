@@ -4,7 +4,7 @@
 #include <stddef.h>
  
 #include "arith.h"
-#include "error.h"
+#include "errmsg.h"
 #include "var.h"
 #include "main.h"
 #include "alloc.h"

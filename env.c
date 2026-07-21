@@ -9,7 +9,7 @@
 #include "alloc.h"
 #include "main.h"
 #include "env.h"
-#include "error.h"
+#include "errmsg.h"
 #include "lex.h"
 #include "parse.h"
 #include "utils.h"
