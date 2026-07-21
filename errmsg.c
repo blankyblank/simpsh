@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include <error.h>
 #include <errno.h>
+#include <stdarg.h>
 
 #include "errmsg.h"
 #include "utils.h"
@@ -10,16 +10,24 @@
 /* error (returns doesn't exit) with simpsh: builtin: message: (errno message),
  * format */
 void
-err(int eval, const char *fmt, ...)
+warn(const char *fmt, ...)
 {
-  warn(fmt);
-  exit(eval);
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+  fprintf(stderr, ": %s\n", strerror(errno));
 }
 
 void
-warn(const char *fmt, ...)
+err(int eval, const char *fmt, ...)
 {
-  fprintf(stderr, "%s: %s\n", fmt, strerror(errno));
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+  fprintf(stderr, ": %s\n", strerror(errno));
+  exit(eval);
 }
 
 int
