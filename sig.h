@@ -4,7 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <signal.h>
 #include <unistd.h>
-#include <sys/poll.h>
+#include <poll.h>
 #include <setjmp.h>
 
 #include "opts.h"

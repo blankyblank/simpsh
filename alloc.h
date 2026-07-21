@@ -24,7 +24,7 @@
  * large which can have it's own drawbacks test more sized */
 #define align_mem(n) (((n) + 15) & ~(size_t)15)
 #define MINSTACK_S   align_mem(8192)
-#define PAGE_SIZE    4096
+#define MEMSIZE    4096
 #define MEMMAGIC     0x534C4142
 #define LARGEMAGIC   ((void *)(uintptr_t)0x4C52474C) /* "LARG" */
 #define SLCLASSN     10
@@ -130,10 +130,10 @@ if (stacksl) {
     i = STACK_CLS;
     goto stackskip;
   }
-  if (n + sizeof(slab *) >= PAGE_SIZE) {
+  if (n + sizeof(slab *) >= MEMSIZE) {
   large:
     sz = align_mem(n) + sizeof(slab *) + sizeof(size_t);
-    sz = (sz + PAGE_SIZE- 1) & ~(size_t)(PAGE_SIZE -1);
+    sz = (sz + MEMSIZE - 1) & ~(size_t)(MEMSIZE - 1);
     p = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (p == MAP_FAILED)
       return NULL;
