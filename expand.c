@@ -521,8 +521,6 @@ exp_word(wf *wordf, size_t * restrict rlen)
           cmdsubpos = stnext;
           csmark = stack_mark();
           setinputstrn(f->word, f->len);
-          tokreset();
-          chkwd = 0;
           notclosed = 0;
           cmdsub = parse_list(TEOF);
 

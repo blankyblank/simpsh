@@ -54,8 +54,6 @@ source_file(const char *path)
   if (fd < 0)
     return;
   setinputf(fd, path, 0);
-  tbuf.type = TNONE;
-  chkwd = 0;
   eval_run();
   RETNOW = 0;
   popinput();
@@ -204,13 +202,10 @@ eval_run(void)
     cmd_tree *c;
     stmark mark;
 
-    tokreset();
     mark = stack_mark();
-    chkwd = CHKKWD | CHKALIAS | CHKNL;
     c = parse_list(0);
     if (!c) {
       stack_restore(mark);
-      tokreset();
       break;
     }
     if (!nflag)
@@ -220,7 +215,6 @@ eval_run(void)
       break;
     }
     stack_restore(mark);
-    tokreset();
   }
   return status;
 }
@@ -232,16 +226,13 @@ simpsh_run(void)
     cmd_tree *c;
     stmark mark;
 
-    tokreset();
     mark = stack_mark();
-    chkwd = CHKKWD | CHKALIAS | CHKNL;
 
     if (fchksig)
       dotrap();
     c = parse_list(0);
     if (!c) {
       stack_restore(mark);
-      tokreset();
       break;
     }
     if (!nflag)
@@ -253,7 +244,6 @@ simpsh_run(void)
       break;
     }
     stack_restore(mark);
-    tokreset();
     if (fchksig)
       dotrap();
     if (iflag || mflag)

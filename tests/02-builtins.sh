@@ -100,7 +100,7 @@ fi
 msg_run 'kill -l lists signal names'
 out=$(../simpsh -c 'kill -l')
 if [ -n "$out" ] && echo "$out" | grep -q "INT"; then
-  test_pass "out" "contains INT" ""
+  msg_pass "contains INT"
 else
   test_fail "out" "expected signal list" ""
   exit 1

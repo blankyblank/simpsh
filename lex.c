@@ -706,7 +706,7 @@ static int
 lexvbrace(void)
 {
   char *w;
-  int c;
+  int c, depth = 0;
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
   size_t nlen = 0;
   stcheck(32);
@@ -715,8 +715,21 @@ lexvbrace(void)
       notclosed = 1;
       return SHEOF;
     }
-    if (ch == '}')
-      break;
+    if (ch == '}') {
+      if (!depth)
+        break;
+      depth--;
+      st_putc(ch);
+      nlen++;
+      continue;
+    }
+    if (ch == '$') {
+      int n = shgetchar();
+      if (n == '{')
+        depth++;
+      if (n != SHEOF)
+        shungetc(n);
+    }
     st_putc(ch);
     nlen++;
   }
