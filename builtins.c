@@ -1071,7 +1071,7 @@ ulimitcmd(char **argv)
         continue;
       }
       val /= l->factor;
-      printf("%lu\n", val);
+      printf("%llu\n", (unsigned long long)val);
       continue;
     }
     return 0;
