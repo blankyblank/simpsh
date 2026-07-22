@@ -16,6 +16,7 @@ typedef struct {
 extern const builtin builtins[];
 extern int builtin_tab[BUILTIN_BUCKETS];
 
+#define GETBLKSIZE(f, st) (fstat(fileno(f), &(st)), (st).st_blksize ? (st).st_blksize : BUFSIZ)
 #define SBLTN (1 << 0)
 extern int bltin_atoi(char *, char *, char *);
 extern void init_builtins(void);

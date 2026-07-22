@@ -39,7 +39,7 @@ static int cdcmd(char **);
 static int commandcmd(char **);
 static int continuecmd(char **);
 static int dotcmd(char **);
-static int catcmd(char **);
+extern int catcmd(char **);
 static int echocmd(char **);
 static int evalcmd(char **);
 extern int execcmd(char **);
@@ -60,6 +60,7 @@ static int readcmd(char **);
 extern int readonlycmd(char **);
 extern int setcmd(char **);
 static int shiftcmd(char **);
+extern int tailcmd(char **);
 extern int testcmd(char **);
 static int timescmd(char **);
 extern int trapcmd(char **);
@@ -107,6 +108,7 @@ const builtin builtins[] = {
   { "return",   &returncmd,   SBLTN },
   { "set",      &setcmd,      SBLTN },
   { "shift",    &shiftcmd,    SBLTN },
+  { "tail",     &tailcmd,     0     },
   { "test",     &testcmd,     0     },
   { "times",    &timescmd,    SBLTN },
   { "trap",     &trapcmd,     SBLTN },
@@ -320,42 +322,6 @@ breakcmd(char **argv)
   if (n > LOOPDEPTH)
     n = LOOPDEPTH;
   gstate.loopbreak = n;
-  return 0;
-}
-
-int
-catcmd(char **argv)
-{
-  int n = 0, argc = 0, i = 1, bufsize = BUFSIZ;
-  FILE *f = NULL;
-  struct stat st;
-  char *buf;
-
-  array_len(argv, argc);
-
-  if (argc == 1) {
-    buf = salloc(bufsize);
-    while ((n = fread(buf, 1, bufsize, shstdin)) > 0)
-      fwrite(buf, 1, n, shstdout);
-    if (ferror(shstdin)) {
-      fprintf(stderr, "cat: Bad file descriptor\n");
-      return 1;
-    }
-    return 0;
-  }
-
-  while (i < argc) {
-    if (!(f = fopen(argv[i], "r")))
-      return sherr(1, argv[i], "could not access file");
-    fstat(fileno(f), &st);
-    bufsize = st.st_blksize ? st.st_blksize : BUFSIZ;
-    buf = salloc(bufsize);
-    while ((n = fread(buf, 1, bufsize, f)) > 0)
-      fwrite(buf, 1, n, shstdout);
-    // fflush(shstdout);
-    fclose(f);
-    i++;
-  }
   return 0;
 }
 

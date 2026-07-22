@@ -8,60 +8,72 @@
 
 #include "errmsg.h"
 #include "main.h"
-#include "test.h"
 #include "utils.h"
+
+
+typedef enum { /* clang-format off */
+    TEND = 0,
+    /* unary operators */
+    TSTNZ, TSTZ,            /* -n, -z */
+    TFILAXST, TFILEXST,     /* -a (exists), -e (exists) */
+    TFILREG, TFILID,        /* -f (regular), -d (directory) */
+    TFILBDEV, TFILCDEV,     /* -b (block), -c (char) */
+    TFILFIFO, TFILSOCK,     /* -p (fifo), -S (socket) */
+    TFILSYM,                /* -L/-h (symlink) */
+    TFILRD, TFILWR, TFILEX, /* -r, -w, -x */
+    TFILGZ, TFILTT,         /* -s (size>0), -t (tty) */
+    TFILSETU, TFILSETG, TFILSTCK, /* -u, -g, -k (setuid/gid/sticky) */
+    TFILUID, TFILGID,       /* -O, -G (owner/group) */
+    /* binary operators */
+    TSTEQ, TSTNEQ,          /* =, != */
+    TSTLT, TSTGT,           /* <, > */
+    TINTEQ, TINTNE,         /* -eq, -ne */
+    TINTGT, TINTGE, TINTLT, TINTLE, /* -gt, -ge, -lt, -le */
+    TFILEQ, TFILNT, TFILOT  /* -ef, -nt, -ot */
+} testop; /* clang-format on */
+
+static const testop uops[256] = {
+  ['a'] = TFILAXST, ['b'] = TFILBDEV, ['c'] = TFILCDEV, ['d'] = TFILID,
+  ['e'] = TFILEXST, ['f'] = TFILREG,  ['G'] = TFILGID,  ['g'] = TFILSETG,
+  ['h'] = TFILSYM,  ['k'] = TFILSTCK, ['L'] = TFILSYM,  ['n'] = TSTNZ,
+  ['O'] = TFILUID,  ['p'] = TFILFIFO, ['r'] = TFILRD,   ['s'] = TFILGZ,
+  ['S'] = TFILSOCK, ['t'] = TFILTT,   ['u'] = TFILSETU, ['w'] = TFILWR,
+  ['x'] = TFILEX,   ['z'] = TSTZ,
+};
+
+static const testop bop_pr[256] = {
+  ['e'] = TINTEQ, ['n'] = TINTNE, ['g'] = TINTGT,
+  ['l'] = TINTLT, ['o'] = TFILOT,
+};
+static const testop bop_alt[256] = {
+  ['e'] = TFILEQ,
+  ['n'] = TFILNT,
+  ['g'] = TINTGE,
+  ['l'] = TINTLE,
+};
+static const unsigned char bop_disc[256] = {
+  ['e'] = 'f',
+  ['n'] = 't',
+  ['g'] = 'e',
+  ['l'] = 'e',
+};
+
+typedef struct {
+  int flags;
+  char **pos;
+  char **wpend;
+} testvar;
 
 struct t_op {
 	char	optxt[4];
 	testop	opnum;
 };
 
-static const struct t_op uops [] = {
-	{"-a",	TFILAXST },
-	{"-b",	TFILBDEV },
-	{"-c",	TFILCDEV },
-	{"-d",	TFILID },
-	{"-e",	TFILEXST },
-	{"-f",	TFILREG },
-	{"-G",	TFILGID },
-	{"-g",	TFILSETG },
-	{"-h",	TFILSYM },
-	// {"-H",	TFILCDF },
-	{"-k",	TFILSTCK },
-	{"-L",	TFILSYM },
-	{"-n",	TSTNZ },
-	{"-O",	TFILUID },
-	// {"-o",	TOPTION },
-	{"-p",	TFILFIFO, },
-	{"-r",	TFILRD },
-	{"-s",	TFILGZ },
-	{"-S",	TFILSOCK },
-	{"-t",	TFILTT },
-	{"-u",	TFILSETU },
-	{"-w",	TFILWR },
-	{"-x",	TFILEX },
-	{"-z",	TSTZ },
-	{"",	TEND }
-};
+#define terr (1 << 0)
 
-static const struct t_op bops [] = {
-	{"=",	TSTEQ },
-	{"==",	TSTEQ },
-	{"!=",	TSTNEQ },
-	{"<",	TSTLT },
-	{">",	TSTGT },
-	{"-eq",	TINTEQ },
-	{"-ne",	TINTNE },
-	{"-gt",	TINTGT },
-	{"-ge",	TINTGE },
-	{"-lt",	TINTLT },
-	{"-le",	TINTLE },
-	{"-ef",	TFILEQ },
-	{"-nt",	TFILNT },
-	{"-ot",	TFILOT },
-	{"",	TEND }
-};
-
+testop istestop(const char *, int);
+int testeval(testvar *, testop, const char *, const char *);
+int parse_test(testvar *);
 static int oexpr(testvar *tv);
 static int aexpr(testvar *tv);
 static int nexpr(testvar *tv);
@@ -70,12 +82,30 @@ static int primary(testvar *tv);
 testop
 istestop(const char *s, int isunry)
 {
-  const struct t_op *op;
-  op = isunry ? uops : bops;
-    for (; op->opnum != TEND; op++)
-      if (s[1] == op->optxt[1] && strcmp(s, op->optxt) == 0)
-        return op->opnum;
-  return TEND;
+  if (isunry) {
+    if (s[0] != '-')
+      return TEND;
+    return uops[(unsigned char)s[1]];
+  }
+
+  switch (s[0]) {
+    case '=':
+      return (s[1] == '\0' || (s[1] == '=' && s[2] == '\0')) ? TSTEQ : TEND;
+    case '!':
+      return (s[1] == '=' && s[2] == '\0') ? TSTNEQ : TEND;
+    case '<':
+      return (s[1] == '\0') ? TSTLT : TEND;
+    case '>':
+      return (s[1] == '\0') ? TSTGT : TEND;
+    case '-':
+      testop op = bop_pr[(unsigned char)s[1]];
+      if (op == TEND || s[3])
+        return TEND;
+      testop alt = bop_alt[(unsigned char)s[1]];
+      return (alt && s[2] == bop_disc[(unsigned char)s[2]]) ? alt : op;
+    default:
+      return TEND;
+  }
 }
 
 int
