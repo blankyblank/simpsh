@@ -9,7 +9,7 @@ BINDIR := $(DESTDIR)$(PREFIX)/bin
 BUILD       ?= release
 
 ## dynamic | static | static-musl
-BUILD_LINK  ?= dynamic
+BUILD_LINK  ?= static
 
 ## libedit
 LIBEDITFLAGS := -DLIBEDIT

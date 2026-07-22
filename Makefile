@@ -49,26 +49,22 @@ ifdef GCOV
 	LDFLAGS += --coverage
 endif
 # Link type
-LDFLAGS += $(if $(filter static static-musl,$(BUILD_LINK)),-static)
-ifeq ($(BUILD_LINK),static-musl)
-	CLANG_RESOURCE_DIR := $(shell clang -print-resource-dir)
-	CFLAGS +=  -DMUSL
-endif
+LDFLAGS += $(if $(filter static,$(BUILD_LINK)),-static)
+# CFLAGS +=  -DMUSL
 
-OBJDIR 	 	 := obj
-SRC 	 	   := $(wildcard *.c)
-OBJ 	 	   := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
+OBJDIR := obj
+SRC 	 := $(shell find . -name '*.c')
+OBJ 	 := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
 
-TARGET		   := simpsh
-CFLAGS		   := $(CFLAGS)
+TARGET := simpsh
+CFLAGS := $(CFLAGS)
 
 .PHONY: all clean test install uninstall analyze examine bench parsebench
 
 all: $(TARGET)
-$(OBJDIR)/%.o: %.c | $(OBJDIR)
+$(OBJDIR)/%.o: %.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
-$(OBJDIR):
-	mkdir -p $@
 $(TARGET): $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LDLIBS)
 
@@ -78,7 +74,8 @@ install:
 uninstall:
 	rm -f $(BINDIR)/simpsh
 clean:
-	rm -f simpsh obj/*.o
+	rm -f simpsh
+	rm -rf $(OBJDIR)
 analyze:
 	scan-build --force-analyze-debug-code --use-cc=$(CC) -enable-checker core -enable-checker unix  -analyze-headers -o reports make clean all
 examine:
