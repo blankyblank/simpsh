@@ -20,7 +20,7 @@ else
   test_pass "_suc_s" "exit status is" "0"
 fi
 
-msg_run 'wait for background job'
+msg_run 'wait for bg job: "sleep 0.1 & wait; echo done"'
 out=$(../simpsh -c 'sleep 0.1 & wait; echo done')
 if [ "$out" = "done" ]; then
   test_pass "out" "matches" "done"
@@ -29,7 +29,7 @@ else
   exit 1
 fi
 
-msg_run 'wait exit status'
+msg_run 'wait exit status: "(exit 3) & wait $!; echo $?"'
 out=$(../simpsh -c '(exit 3) & wait $!; echo $?')
 if [ "$out" = "3" ]; then
   test_pass "out" "matches" "3"
