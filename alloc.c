@@ -1,5 +1,6 @@
 /*  alloc.c - stack arena allocator and otther malloc functions */
 #define _POSIX_C_SOURCE 200809L
+#include <malloc.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -149,6 +150,8 @@ stack_clear(void)
 void
 init_stack(void)
 {
+  mallopt(M_ARENA_MAX, 1); // these two seem fine for now
+  mallopt(M_TRIM_THRESHOLD, 128);
   memset(stackbase.buf, 0, sizeof(stackbase.buf));
   current = &stackbase;
   stnext = stackbase.buf;

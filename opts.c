@@ -57,16 +57,6 @@ const char shoptch[OPTC] = {
 
 static int setopts(char *, int, char *);
 
-#ifndef MUSL
-void
-getbuildinfo(void) {
-  printf("%s build info:\n"
-         "build date: %s %s\n"
-         "ansi C standard conformance: %ld\n",
-         shname, __DATE__, __TIME__, __STDC_ISO_10646__);
-}
-#endif /* ifndef MUSL */
-
 static int
 setopts(char *arg, int n, char *argv0)
 {

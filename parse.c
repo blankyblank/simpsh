@@ -147,9 +147,7 @@ get_assn(wf **args, wf *** restrict sh_vars)
   return ac;
 }
 
-/* TODO:
- * fix cascading errors, to stop error message once one syntax error is found.
- */
+/* TODO: fix cascading errors, to stop error message once one syntax error is found. */
 
 __attribute__((hot)) cmd_tree *
 parse_list(int multi)

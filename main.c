@@ -27,7 +27,6 @@ GSTATE gstate = { .shparm.opt_ind = 1, .shparm.opt_off = -1 };
 FILE *shstdin;
 FILE *shstdout;
 
-
 int builtin_tab[BUILTIN_BUCKETS];
  /* __attribute__((visibility("default"))) */
 /** shell entry point */
@@ -39,7 +38,6 @@ main(int argc, char **argv)
   char *oarg;
 
   init_opts();
-
   flags = 0;
   ARGBEGIN
   {
@@ -101,10 +99,6 @@ main(int argc, char **argv)
       break;
     case 'V':
       Vflag = 1;
-#ifndef MUSL
-      getbuildinfo();
-#endif /* ifndef MUSL */
-      exit(0);
       break;
     case 'x':
       xflag = 1;
@@ -126,7 +120,7 @@ main(int argc, char **argv)
 
   /* all the set up functions for the shell */
   if (iflag)
-    setlocale(LC_ALL, "");
+    setlocale(LC_ALL, "C");
   init_stack();
   init_env();
   init_input();

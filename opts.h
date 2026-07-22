@@ -26,9 +26,5 @@ extern void init_opts(void);
 extern void freeshargv(void);
 extern int chkopt(char *);
 
-#ifndef MUSL
-extern void getbuildinfo(void);
-#endif /* ifndef MUSL */
-
 #endif /* OPTS_H */
 

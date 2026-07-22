@@ -2,12 +2,10 @@
 #ifndef SIMP_H
 #define SIMP_H
 
-#define _POSIX_C_SOURCE 200809L
 #include <fcntl.h>
 #include <sys/mman.h>
 
 #include "input.h"
-#include "main.h"
 
 /* functions for shell */
 extern char *lineread(int);

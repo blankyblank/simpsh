@@ -9,6 +9,7 @@
 
 /* simd integer. long long */
 typedef __m128i sint;
+
 /* simd optimized scan to end of word */
 static inline size_t
 sscnword(const char *buf, size_t len)
