@@ -103,4 +103,12 @@ int_cb(void *data)
   drain_intp();
 }
 
+static inline void
+unblocksigs(void)
+{
+  sigset_t set;
+  sigfillset(&set);
+  sigprocmask(SIG_UNBLOCK, &set, NULL);
+}
+
 #endif /* SIG_H */

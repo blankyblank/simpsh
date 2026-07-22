@@ -83,7 +83,7 @@ killjob(void)
     if (j->state == JDONE)
       continue;
     oldstate = j->state;
-    while ((pid = waitpid(j->status_pid, &wstatus,
+    while ((pid = waitpid(mflag ? -j->pgid : j->status_pid, &wstatus,
                           WNOHANG | WUNTRACED | WCONTINUED)) > 0) {
       if (pid == j->status_pid)
         j->wstatus = wstatus;

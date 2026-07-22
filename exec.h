@@ -47,8 +47,13 @@ fgwait(job *j)
 
   ttyreclaim();
   j->flags &= ~(JFG | JCHANGED);
-  wsig = WIFSIGNALED(j->wstatus) ? WTERMSIG(j->wstatus) : 0;
-  wstatus = WIFEXITED(j->wstatus) ? WEXITSTATUS(j->wstatus) : 1;
+  wsig = 0;
+  if (WIFSIGNALED(j->wstatus)) {
+    wsig = WTERMSIG(j->wstatus);
+    wstatus = 128 + wsig;
+  } else {
+    wstatus = WEXITSTATUS(j->wstatus);
+  }
   rmjob(j);
   if (wsig == SIGINT)
     putchar('\n');

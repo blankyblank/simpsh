@@ -374,9 +374,12 @@ fgwait_simple(pid_t pid, const char *cmd)
           return 128 + WSTOPSIG(wstatus);
         }
         ttyreclaim();
-        if (WIFSIGNALED(wstatus) && WTERMSIG(wstatus) == SIGINT)
-          putchar('\n');
-        return WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+        if (WIFSIGNALED(wstatus)) {
+          if (WTERMSIG(wstatus) == SIGINT)
+            putchar('\n');
+          return 128 + WTERMSIG(wstatus);
+        }
+        return WEXITSTATUS(wstatus);
     }
   }
 }
@@ -398,7 +401,8 @@ _wait_(pid_t pid)
       }
     }
   }
-  return WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
+  return WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) :
+           (WIFSIGNALED(wstatus) ? 128 + WTERMSIG(wstatus) : 1);
 }
 
 int
@@ -597,10 +601,12 @@ runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
     }
   }
   svhandler = handler;
-  if (sigsetjmp(jmploc.loc, 1)) {
+  if (sigsetjmp(jmploc.loc, 0)) {
     handler = svhandler;
     intsig = 0;
+    unblocksigs();
     st = 128 + SIGINT;
+    putchar('\n');
   } else {
     handler = &jmploc;
     st = builtin_launch(b, final);
@@ -644,10 +650,12 @@ runshcmd(shfunc *restrict f, const builtin *restrict b, char **restrict final, w
       setvar(name, val, 0);
     }
     svhandler = handler;
-    if (sigsetjmp(jmploc.loc, 1)) {
+    if (sigsetjmp(jmploc.loc, 0)) {
       handler = svhandler;
       intsig = 0;
+      unblocksigs();
       status = 128 + SIGINT;
+      putchar('\n');
     } else {
       handler = &jmploc;
       status = f ? run_func(f->body, final) : builtin_launch(b, final);
@@ -656,10 +664,12 @@ runshcmd(shfunc *restrict f, const builtin *restrict b, char **restrict final, w
     poptmpvars(tmp, vc);
   } else {
     svhandler = handler;
-    if (sigsetjmp(jmploc.loc, 1)) {
+    if (sigsetjmp(jmploc.loc, 0)) {
       handler = svhandler;
       intsig = 0;
+      unblocksigs();
       status = 128 + SIGINT;
+      putchar('\n');
     } else {
       handler = &jmploc;
       status = f ? run_func(f->body, final) : builtin_launch(b, final);
@@ -727,9 +737,11 @@ run_cmd(const cmd_tree *n, int inchld)
     jmploc jmp;
     jmploc * const volatile sv = handler;
     handler = &jmp;
-    if (sigsetjmp(jmp.loc, 1)) {
+    if (sigsetjmp(jmp.loc, 0)) {
       handler = sv;
       intsig = 0;
+      putchar('\n');
+      unblocksigs();
       return 128 + SIGINT;
     }
     final = expand_argv(CARGS(n), &len);
@@ -858,6 +870,7 @@ run_for(const cmd_tree *n)
       break;
     if (intsig) {
       intsig = 0;
+      putchar('\n');
       return LOOPERR;
     }
     f = stack_mark();
@@ -890,6 +903,7 @@ run_while(const cmd_tree *n)
       break;
     if (intsig) {
       intsig = 0;
+      putchar('\n');
       return LOOPERR;
     }
     w = stack_mark();
@@ -1078,6 +1092,10 @@ run_subsh(const cmd_tree *n, int chld)
 static inline int
 canfakepipe(cmd_tree *n)
 {
+  if (n->type == REDIR)
+    n = n->left;
+  if (n->type != CMD)
+    return 0;
   char *b = CARGS(n)[0]->word;
   size_t l = CARGS(n)[0]->len;
   if (findbuiltin(b) &&
