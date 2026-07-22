@@ -1,4 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
+#define _XOPEN_SOURCE 700
+
 #include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -168,6 +170,172 @@ getpath(char *file)
   return fullpath;
 }
 
+  /*
+   * INFO:
+   *     we collaps any // to a single /, for .. when encountered
+   *     we move back a path segment (between slashes /here/)
+   *     for . we collapse it like the // case. we get rid of any 
+   *     trailing / also we get rid of any . in the beginning
+   *     like ./dir 
+   *     we are modifying the string in place using res as the result
+   *     buffer chars are getting copied to (and overwriting things we
+   *     want to get rid of) and src is the pointer we copy from. it moves
+   *     up when we need to skip something while res stays in place, or res
+   *     moves back when we get rid of a segment.
+   */
+
+/**  normalize path to set PWD variable with logical path  */
+static char *
+pwdpath(char *path) {
+  char *res = path, *src = path;
+
+  while (*src) {
+    switch (*src) {
+      case '/':
+        if ((res != path && *(res - 1) == '/') || *(src + 1) == '\0')
+          src++;
+        else
+          *res++ = *src++;
+        break;
+      case '.':
+        if (*(src + 1) && (*(src + 2) == '/' || *(src + 2) == '\0'))
+          if (res > path + 1) {
+            if (res > path + 1 && *(res - 1) == '/')
+              res--;
+            while (res > path && *(res - 1) != '/')
+              res--;
+            if (res > path + 1)
+              res--;
+            src += 2;
+          } else {
+            src += 2;
+          }
+        else if (*(src + 1) == '/')
+          src += 2;
+        else if (*(src + 1) == '\0')
+          src++;
+        else
+          *res++ = *src++;
+        break;
+      default:
+        *res++ = *src++;
+        break;
+    }
+  }
+
+  *res = '\0';
+  return path;
+}
+
+int
+cdcmd(char **argv)
+{
+  unsigned int prnt, argc = 0;
+  char *bargv0, *dir, *end, *pwdval;
+  char flag = '\0', respath[PATH_MAX];
+  const char *dest;
+  shvar *pwd, *oldpwd, *cdpth;
+  size_t destlen = 0;
+
+  prnt = 0;
+  array_len(argv, argc);
+  bargv0 = argv[0];
+  ARGBEGIN
+  {
+    case 'L':
+      flag = FLAG_L;
+      break;
+    case 'P':
+      flag = FLAG_P;
+      break;
+    default:
+      bad_opt(argv0, ARGC());
+      return 1;
+  }
+  ARGEND;
+  if (argc > 1)
+    return shwarn(bargv0, "Too many arguments"); /*NOLINT*/
+
+  oldpwd = findvar(STR("OLDPWD"));
+  pwd = findvar(STR("PWD"));
+  if (pwd)
+    pwdval = shvar_val(pwd);
+  else
+    pwdval = getcwd(respath, PATH_MAX);
+  cdpth = findvar(STR("CDPATH"));
+  if (cdpth) {
+    if (*argv && argv[0][0] != '/' &&
+        !(argv[0][0] == '-' && argv[0][1] == '\0') &&
+        !(argv[0][0] == '.' && argv[0][1] == '\0') &&
+        !(argv[0][0] == '.' && argv[0][1] == '/') &&
+        !(argv[0][0] == '.' && argv[0][1] == '.')) {
+      if ((dest = chkpath(shvar_val(cdpth), *argv, X_OK, 1))) {
+        if (!(dest[0] == '.' && dest[1] == '/'))
+          prnt = 1;
+      } else {
+        dest = *argv;
+      }
+    } else {
+      dest = *argv;
+    }
+  } else {
+    dest = *argv;
+  }
+
+  if (!dest) {
+    dir = gvar.home;
+    destlen = gvar.homelen;
+  } else if (*dest == '-' && dest[1] == '\0') {
+    if (!oldpwd)
+      return shwarn(bargv0, "OLDPWD not set"); /*NOLINT*/
+    dir = shvar_val(oldpwd);
+    destlen = oldpwd->flen;
+    prnt = 1;
+  } else {
+    dir = (char *)dest;
+    destlen = strlen(dir);
+  }
+
+  if (flag == FLAG_P) {
+    if (destlen >= PATH_MAX)
+      nts(respath, destlen - 1);
+    if (!realpath(dir, respath))
+      return sherr(1, bargv0, dir);
+    if (chdir(respath) < 0)
+      return sherr(1, bargv0, dir);
+    if (prnt) {
+      printf("%s\n", respath);
+    }
+    if (getcwd(respath, PATH_MAX))
+      return 1;
+  } else {
+    size_t plen, dlen;
+    if (chdir(dir) < 0)
+      return sherr(1, bargv0, dir);
+    if (prnt == 1) {
+      printf("%s\n", dir);
+    }
+    dlen = strlen(dir);
+    if (dir != NULL && dir[0] == '/') {
+      memcpy(respath, dir, dlen);
+      respath[dlen] = '\0';
+    } else {
+      if (!pwdval)
+        return 1;
+      plen = strlen(pwdval);
+      end = mempcpy_(respath, pwdval, plen);
+      *end++ = '/';
+      end = mempcpy_(end, dir, dlen);
+      *end = '\0';
+    }
+    if (!pwdpath(respath))
+      return shwarn(bargv0, "path normalization failure"); /*NOLINT*/
+  }
+  setvar(STR("OLDPWD"), pwdval, VEXPRT);
+  setvar(STR("PWD"), respath, VEXPRT);
+  return 0;
+}
+
 int
 hashcmd(char **argv)
 {
@@ -210,7 +378,58 @@ hashcmd(char **argv)
     }
     return 0;
   }
-
   return 1;
 }
 
+int
+pwdcmd(char **argv)
+{
+  int argc = 0;
+  (void)argc;
+  char flag = '\0';
+  char pwdbuf[PATH_MAX + 1];
+
+  ARGBEGIN
+  {
+    case 'L':
+      flag = FLAG_L;
+      break;
+    case 'P':
+      flag = FLAG_P;
+      break;
+    default:
+      bad_opt(argv0, ARGC());
+      return 1;
+  }
+  ARGEND;
+
+  if (flag != FLAG_P) {
+    char *pwd = getvar(STR("PWD"));
+    struct stat sbuf, cwdsbuf;
+
+    if (!pwd) {
+      goto physical;
+    }
+    if (stat(pwd, &sbuf) < 0) {
+      goto physical;
+    }
+    if (stat(".", &cwdsbuf) < 0) {
+      warn("pwd");
+      return 1;
+    }
+    if ((sbuf.st_ino != cwdsbuf.st_ino || sbuf.st_dev != cwdsbuf.st_dev))
+      goto physical;
+
+    printf("%s\n", pwd);
+    return 0;
+  }
+
+physical:
+  if (getcwd(pwdbuf, PATH_MAX + 1)) {
+    printf("%s\n", pwdbuf);
+    return 0;
+  } else {
+    warn("pwd");
+    return 1;
+  }
+}
