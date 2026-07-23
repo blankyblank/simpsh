@@ -67,6 +67,8 @@ static const char ifusg[] = "COMMANDS; then COMMANDS; [elif COMMANDS; then COMMA
 static const char killusg[] = "[ -s sigspec | -signum | -signame ] [ pid | job ] ... or \n" " kill -l [exitstatus]...";
 static const char setusg[] = "[-abCefhiImnsuvVx] [-o option] [-- args]";
 static const char untilusg[] = "COMMANDS; do COMMANDS-2; done";
+static const char ulimitusg[] = "[-aHS] [-c core] [-d data] [-f blocks] "
+  "[-l locked] [-m memory] [-n nofiles] [-p processes] [-s stack] [-t time] [limit]";
 static const char whileusg[] = "COMMANDS; do COMMANDS-2; done";
 
 static const char dothelp[] =
@@ -528,53 +530,269 @@ static const char bracehelp[] =
   "\n"
   "Exit Status:\n"
   "    Returns the exit status of the last command executed.";
+
+static const char commandhelp[] =
+  "command [-pvV] name [argument]\n"
+  "\n"
+  "    Execute a command, bypassing shell functions and aliases.\n"
+  "\n"
+  "    With -p, uses the default PATH. With -v, prints a description\n"
+  "    of NAME. With -V, prints all matching descriptions.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns the exit status of the executed command, or 126/127\n"
+  "    on failure.";
+
+static const char evalhelp[] =
+  "eval [arg ...]\n"
+  "\n"
+  "    Read and execute arguments as shell input.\n"
+  "\n"
+  "    The arguments are concatenated into a single string, parsed,\n"
+  "    and executed as shell commands.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns the exit status of the last command executed.";
+
+static const char getoptshelp[] =
+  "getopts optstring name [arg ...]\n"
+  "\n"
+  "    Parse positional parameters with option flags.\n"
+  "\n"
+  "    OPTSTRING contains the option letters to be recognized. Each\n"
+  "    time it is called, the next option is assigned to NAME and\n"
+  "    its argument (if any) to OPTARG. OPTIND is updated.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 if an option was found, 1 if no more options, 2\n"
+  "    on error.";
+
+static const char killhelp[] =
+  "kill [-s sigspec | -signum | -signame] [pid | job] ...\n"
+  "kill -l [exitstatus]\n"
+  "\n"
+  "    Send signals to processes, or list signal names.\n"
+  "\n"
+  "    With -l, prints signal names. Otherwise, sends the specified\n"
+  "    signal (default SIGTERM) to each given PID or job.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 unless an invalid option or signal is given.";
+
+static const char printhelp[] =
+  "printf format [argument ...]\n"
+  "\n"
+  "    Format and print arguments according to FORMAT.\n"
+  "\n"
+  "    Supports standard printf format specifiers and escape\n"
+  "    sequences. %%b interprets backslash escapes in arguments,\n"
+  "    %%q produces shell-quoted output.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, non-zero on error.";
+
+static const char shifthelp[] =
+  "shift [n]\n"
+  "\n"
+  "    Shift positional parameters to the left.\n"
+  "\n"
+  "    Discards the first N (default 1) positional parameters. The\n"
+  "    remaining parameters are renumbered starting from $1.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 unless N is greater than the number of positional\n"
+  "    parameters.";
+
+static const char timeshelp[] =
+  "\n"
+  "\n"
+  "    Print shell and child process times.\n"
+  "\n"
+  "    Displays the user and system CPU time consumed by the shell\n"
+  "    and its children.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Always returns 0.";
+
+static const char traphelp[] =
+  "trap [-lp] [arg] [signal ...]\n"
+  "\n"
+  "    Trap signals and run commands on receipt.\n"
+  "\n"
+  "    With no arguments, prints trapped signals. With -l, prints\n"
+  "    signal names and numbers. With -p, prints trap actions.\n"
+  "    Otherwise, ARG is a command triggered by each SIGNAL. If\n"
+  "    ARG is omitted or empty, the signal is reset to its default.\n"
+  "    Use ERR as a special signal for command failure traps.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 unless an invalid option is given.";
+
+static const char typehelp[] =
+  "type name [name ...]\n"
+  "\n"
+  "    Display how each NAME would be interpreted.\n"
+  "\n"
+  "    Shows whether each NAME is a shell keyword, alias, function,\n"
+  "    builtin, or external command, and its location if applicable.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 if all names are found, 1 otherwise.";
+
+static const char ulimithelp[] =
+  "ulimit [-aHS] [-c core] [-d data] [-f blocks]\n"
+  "  [-l locked] [-m memory] [-n nofiles] [-p processes]\n"
+  "  [-s stack] [-t time] [limit]\n"
+  "\n"
+  "    Set or display resource limits.\n"
+  "\n"
+  "    Without arguments, prints the current soft limit for all\n"
+  "    resources. With -a, prints all limits. -H sets the hard\n"
+  "    limit, -S sets the soft limit (default). If LIMIT is given,\n"
+  "    the specified resource limit is set.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, 1 on error.";
+
+static const char waitforhelp[] =
+  "wait [id ...]\n"
+  "\n"
+  "    Wait for background processes to complete.\n"
+  "\n"
+  "    Waits for each specified process ID or job to finish. Without\n"
+  "    arguments, waits for all background processes.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns the exit status of the last waited-for process.";
+
+#ifdef ENABLE_BASENAME
+static const char basenamehelp[] =
+  "basename name [suffix]\n"
+  "\n"
+  "    Print the final component of a pathname.\n"
+  "\n"
+  "    Strips leading directory components. If SUFFIX is given and\n"
+  "    matches the end of NAME, it is also stripped.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Always returns 0.";
+#endif /* ENABLE_BASENAME */
+
+#ifdef ENABLE_CAT
+static const char cathelp[] =
+  "cat [file ...]\n"
+  "\n"
+  "    Concatenate files and write to standard output.\n"
+  "\n"
+  "    Reads each FILE in order and writes its contents to stdout.\n"
+  "    If no files are given, reads from stdin.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, 1 on error.";
+#endif /* ENABLE_CAT */
+
+#ifdef ENABLE_DIRNAME
+static const char dirnamehelp[] =
+  "dirname name\n"
+  "\n"
+  "    Print the directory component of a pathname.\n"
+  "\n"
+  "    Strips the last component from NAME and prints the remaining\n"
+  "    directory path.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Always returns 0.";
+#endif /* ENABLE_DIRNAME */
+
+#ifdef ENABLE_HEAD
+static const char headhelp[] =
+  "head [-n count] [file ...]\n"
+  "\n"
+  "    Print the first lines of files.\n"
+  "\n"
+  "    Writes the first COUNT (default 10) lines of each FILE to\n"
+  "    stdout. If no FILE is given, reads from stdin.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, 1 on error.";
+#endif /* ENABLE_HEAD */
+
+#ifdef ENABLE_TAIL
+static const char tailhelp[] =
+  "tail [-f] [-n count] [file ...]\n"
+  "\n"
+  "    Print the last lines of files.\n"
+  "\n"
+  "    Writes the last COUNT (default 10) lines of each FILE to\n"
+  "    stdout. With -f, follows new data as it is appended. If no\n"
+  "    FILE is given, reads from stdin.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, 1 on error.";
+#endif /* ENABLE_TAIL */
+
 /* clang-format off */
 const builtinhelp helpmsgs[] = {
-  [DOTH] =      { ".",        "filename [arguments]", dothelp         },
-  [LBRACKH] =   { "[",        "arg... ]",              testhelp        },
-  [COLONH] =    { ":",        " ",                     truehelp        },
-  [ALIASH] =    { "alias",    "[name[=value] ... ]",   aliashelp       },
-  [BGH] =       { "bg",       "[job]",                 bghelp          },
-  [BREAKH] =    { "break",    "[n]",                   breakhelp       },
-  [CASEH] =     { "case",     caseusg,                 casehelp        },
-  [CDH] =       { "cd",       "[-LP] dir",             cdhelp          },
-  [COMMANDH] =  { "command",  "(placeholder)",         "(placeholder)" },
-  [CONTINUEH] = { "continue", "[n]",                   continuehelp    },
-  [ECHOH] =     { "echo",     "[-n] arg",              echohelp        },
-  [EVALH] =     { "eval",     "[arg ..]",              "(placeholder)" },
-  [EXECH] =     { "exec",     execusg,                 exechelp        },
-  [EXITH] =     { "exit",     "[n]",                   exithelp        },
-  [EXPORTH] =   { "export",   "[-fn] [name[=value]]",  exporthelp      },
-  [FALSEH] =    { "false",    " ",                     falsehelp       },
-  [FORH] =      { "for",      forusg,                  forhelp         },
-  [FGH] =       { "fg",       "[job]",                 fghelp          },
-  [GETOPTSH] =  { "getpopts", "(placeholder)",         "(placeholder)" },
-  [HASHH] =     { "hash",     "[-r] [pathname][name]", hashhelp        },
-  [HELPH] =     { "help",     "[builtin]",             helphelp        },
-  [IFH] =       { "if",       ifusg,                   ifhelp          },
-  [JOBSH] =     { "jobs",     "[job]",                 jobshelp        },
-  [KILLH] =     { "kill",     killusg,                 "(placeholder)" },
-  [LOCALH] =    { "local",    "name[=value]",          localhelp       },
-  [PWDH] =      { "pwd",      "[-LP]",                 pwdhelp         },
-  [PRINTFH] =   { "printf",   "format [arg...]",       "(placeholder)" },
-  [READH] =     { "read",     "[-p prompt][-r] var",   readhelp        },
-  [READONLYH] = { "readonly", "name[=value]",          readonlyhelp    },
-  [RETURNH] =   { "return",   "[n]",                   returnhelp      },
-  [SETH] =      { "set",      setusg,                  sethelp         },
-  [SHIFTH] =    { "shift",    "(placeholder)",         "(placeholder)" },
-  [TESTH] =     { "test",     "[expr]",                testhelp        },
-  [TIMESH] =    { "times",    "(placeholder)",         "(placeholder)" },
-  [TRAPH] =     { "trap",     "(placeholder)",         "(placeholder)" },
-  [TRUEH] =     { "true",     " ",                     truehelp        },
-  [TYPEH] =     { "type",     "(placeholder)",         "(placeholder)" },
-  [ULIMITH] =   { "ulimit",   "(placeholder)",         "(placeholder)" },
-  [UMASKH] =    { "umask",    "[-s] mode",             umaskhelp       },
-  [UNTILH] =    { "until",    untilusg,                untilhelp       },
-  [UNALIASH] =  { "unalias",  "name",                  unaliashelp     },
-  [UNSETH] =    { "unset",    "[-fv] name",            unsethelp       },
-  [WAITH] =     { "wait",     "(placeholder)",         "(placeholder)" },
-  [WHILEH] =    { "while",    whileusg,                whilehelp       },
-  [BRACEH] =    { " { ",      "COMMANDS ;}",           bracehelp       },
+  [DOTH] =      { ".",        "filename [arguments]",   dothelp         },
+  [LBRACKH] =   { "[",        "arg... ]",               testhelp        },
+  [COLONH] =    { ":",        " ",                      truehelp        },
+  [ALIASH] =    { "alias",    "[name[=value] ... ]",    aliashelp       },
+  [BGH] =       { "bg",       "[job]",                  bghelp          },
+  [BREAKH] =    { "break",    "[n]",                    breakhelp       },
+  [CASEH] =     { "case",     caseusg,                  casehelp        },
+  [CDH] =       { "cd",       "[-LP] dir",              cdhelp          },
+  [COMMANDH] =  { "command",  "[-pvV] name [argument]", commandhelp     },
+  [CONTINUEH] = { "continue", "[n]",                    continuehelp    },
+  [ECHOH] =     { "echo",     "[-n] arg",               echohelp        },
+  [EVALH] =     { "eval",     "[arg ..]",               evalhelp        },
+  [EXECH] =     { "exec",     execusg,                  exechelp        },
+  [EXITH] =     { "exit",     "[n]",                    exithelp        },
+  [EXPORTH] =   { "export",   "[-fn] [name[=value]]",   exporthelp      },
+  [FALSEH] =    { "false",    " ",                      falsehelp       },
+  [FORH] =      { "for",      forusg,                   forhelp         },
+  [FGH] =       { "fg",       "[job]",                  fghelp          },
+  [GETOPTSH] =  { "getopts",  "optstring name [arg]",   getoptshelp     },
+  [HASHH] =     { "hash",     "[-r] [pathname][name]",  hashhelp        },
+  [HELPH] =     { "help",     "[builtin]",              helphelp        },
+  [IFH] =       { "if",       ifusg,                    ifhelp          },
+  [JOBSH] =     { "jobs",     "[job]",                  jobshelp        },
+  [KILLH] =     { "kill",     killusg,                  killhelp        },
+  [LOCALH] =    { "local",    "name[=value]",           localhelp       },
+  [PWDH] =      { "pwd",      "[-LP]",                  pwdhelp         },
+  [PRINTFH] =   { "printf",   "format [arg...]",        printhelp       },
+  [READH] =     { "read",     "[-p prompt][-r] var",    readhelp        },
+  [READONLYH] = { "readonly", "name[=value]",           readonlyhelp    },
+  [RETURNH] =   { "return",   "[n]",                    returnhelp      },
+  [SETH] =      { "set",      setusg,                   sethelp         },
+  [SHIFTH] =    { "shift",    "[n]",                    shifthelp       },
+  [TESTH] =     { "test",     "[expr]",                 testhelp        },
+  [TIMESH] =    { "times",    " ",                      timeshelp       },
+  [TRAPH] =     { "trap",     "[-lp] [arg] [signal]",   traphelp        },
+  [TRUEH] =     { "true",     " ",                      truehelp        },
+  [TYPEH] =     { "type",     "name [name ...]",        typehelp        },
+  [ULIMITH] =   { "ulimit",   ulimitusg,                ulimithelp      },
+  [UMASKH] =    { "umask",    "[-S] mode",              umaskhelp       },
+  [UNTILH] =    { "until",    untilusg,                 untilhelp       },
+  [UNALIASH] =  { "unalias",  "name",                   unaliashelp     },
+  [UNSETH] =    { "unset",    "[-fv] name",             unsethelp       },
+  [WAITH] =     { "wait",     "[id ...]",               waitforhelp     },
+  [WHILEH] =    { "while",    whileusg,                 whilehelp       },
+  [BRACEH] =    { " { ",      "COMMANDS ;}",            bracehelp       },
+#ifdef ENABLE_BASENAME
+  [BASENAMEH] = { "basename", "name [suffix]",          basenamehelp    },
+#endif
+#ifdef ENABLE_CAT
+  [CATH] =      { "cat",      "[file ...]",             cathelp         },
+#endif
+#ifdef ENABLE_DIRNAME
+  [DIRNAMEH] =  { "dirname",  "name",                   dirnamehelp     },
+#endif
+#ifdef ENABLE_HEAD
+  [HEADH] =     { "head",     "[-n count] [file ...]",  headhelp        },
+#endif
+#ifdef ENABLE_TAIL
+  [TAILH] =     { "tail",     "[-f] [-n count] [file]", tailhelp        },
+#endif
 }; /* clang-format on */
 
 int

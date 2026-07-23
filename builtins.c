@@ -32,15 +32,12 @@
 
 /* builtins */
 extern int aliascmd(char **);
-extern int basenamecmd(char **);
 extern int bgcmd(char **);
 static int breakcmd(char **);
 extern int cdcmd(char **);
 static int commandcmd(char **);
 static int continuecmd(char **);
-extern int dirnamecmd(char **);
 static int dotcmd(char **);
-extern int catcmd(char **);
 static int echocmd(char **);
 static int evalcmd(char **);
 extern int execcmd(char **);
@@ -51,7 +48,6 @@ extern int fccmd(char **);
 extern int fgcmd(char **);
 extern int getoptscmd(char **);
 extern int hashcmd(char **);
-extern int headcmd(char **);
 extern int helpcmd(char **);
 extern int jobscmd(char **);
 extern int killcmd(char **);
@@ -62,7 +58,6 @@ static int readcmd(char **);
 extern int readonlycmd(char **);
 extern int setcmd(char **);
 static int shiftcmd(char **);
-extern int tailcmd(char **);
 extern int testcmd(char **);
 static int timescmd(char **);
 extern int trapcmd(char **);
@@ -74,6 +69,24 @@ static int umaskcmd(char **);
 extern int unsetcmd(char **);
 extern int waitcmd(char **);
 
+/* extra builtins (no fork+exec = fast) */
+#ifdef ENABLE_BASENAME
+extern int basenamecmd(char **);
+#endif /* ENABLE_BASENAME */
+#ifdef ENABLE_CAT
+extern int catcmd(char **);
+#endif /* ENABLE_CAT */
+#ifdef ENABLE_DIRNAME
+extern int dirnamecmd(char **);
+#endif /* ENABLE_DIRNAME */
+#ifdef ENABLE_HEAD
+extern int headcmd(char **);
+#endif /* ENABLE_HEAD */
+#ifdef ENABLE_TAIL
+extern int tailcmd(char **);
+#endif /* ENABLE_TAIL */
+
+
 static int classify_cmd(char *, int, int);
 
 /* the array of builtin commands */
@@ -82,14 +95,20 @@ const builtin builtins[] = {
   { "[",        &testcmd,     0     },
   { ":",        &truecmd,     0     },
   { "alias",    &aliascmd,    0     },
+#ifdef ENABLE_BASENAME
   { "basename", &basenamecmd, 0     },
+#endif  /* ENABLE_BASENAME */
   { "bg",       &bgcmd,       0     },
   { "break",    &breakcmd,    SBLTN },
+#ifdef ENABLE_CAT
   { "cat",      &catcmd,      0     },
+#endif  /* ENABLE_CAT */
   { "cd",       &cdcmd,       0     },
   { "command",  &commandcmd,  0     },
   { "continue", &continuecmd, SBLTN },
+#ifdef ENABLE_DIRNAME
   { "dirname",  &dirnamecmd,  0     },
+#endif  /* ENABLE_DIRNAME */
   { "echo",     &echocmd,     0     },
   { "eval",     &evalcmd,     SBLTN },
   { "exec",     &execcmd,     SBLTN },
@@ -100,7 +119,9 @@ const builtin builtins[] = {
   { "fg",       &fgcmd,       0     },
   { "getopts",  &getoptscmd,  0     },
   { "hash",     &hashcmd,     0     },
+#ifdef ENABLE_HEAD
   { "head",     &headcmd,     0     },
+#endif  /* ENABLE_HEAD */
   { "help",     &helpcmd,     0     },
   { "jobs",     &jobscmd,     0     },
   { "kill",     &killcmd,     0     },
@@ -112,7 +133,9 @@ const builtin builtins[] = {
   { "return",   &returncmd,   SBLTN },
   { "set",      &setcmd,      SBLTN },
   { "shift",    &shiftcmd,    SBLTN },
+#ifdef ENABLE_TAIL
   { "tail",     &tailcmd,     0     },
+#endif  /* ENABLE_TAIL */
   { "test",     &testcmd,     0     },
   { "times",    &timescmd,    SBLTN },
   { "trap",     &trapcmd,     SBLTN },

@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../errmsg.h"
-#include "../utils.h"
+#include "errmsg.h"
+#include "utils.h"
 
 static int rval;
 static char **garv;

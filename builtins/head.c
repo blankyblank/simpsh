@@ -1,10 +1,10 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 
-#include "../arg.h"
-#include "../builtins.h"
-#include "../utils.h"
-#include "../errmsg.h"
+#include "arg.h"
+#include "builtins.h"
+#include "utils.h"
+#include "errmsg.h"
 
 void print_lines(FILE *fp, int ln);
 

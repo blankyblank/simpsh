@@ -8,10 +8,10 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "../alloc.h"
-#include "../arg.h"
-#include "../errmsg.h"
-#include "../utils.h"
+#include "alloc.h"
+#include "arg.h"
+#include "errmsg.h"
+#include "utils.h"
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 

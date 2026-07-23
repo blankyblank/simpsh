@@ -13,18 +13,14 @@ BUILD_LINK  ?= static
 
 ## libedit
 LIBEDITFLAGS := -DLIBEDIT
-ifeq ($(BUILD_LINK),static)
-  LIBEDITLIBS := -ledit -lncurses
-  LIBEDITFLAGS += -DSTATICLIBEDIT
-else
-  LDLIBS += -ldl
-endif
+
+## extra builtins
+EXTRAS := basename cat dirname head tail
 
 ## sanitizer flags: use with the sanitize build target
 ASANFLAGS := -fsanitize=address,undefined
 ## clang extras: -fsanitize=implicit-conversion | -fsanitize=integer
 ASANFLAGS += $(if $(filter clang,$(CC)),-fsanitize=integer)
-# ASANFLAGS += -fsanitize=cfi -fvisibility=hidden -O2 -flto
 
 ## valgrind profiling i.e. callgrind/cachegrind
 # PROFFLAGS := -DDEBUG -DENABLE_VALGRIND -fxray-instrument

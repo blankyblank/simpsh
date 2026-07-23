@@ -8,6 +8,13 @@ ifneq ($(filter debug valgrind sanitize,$(BUILD)),)
 	CFLAGS += $(if $(filter clang,$(CC)),-glldb -fstandalone-debug)
 endif
 
+ifeq ($(BUILD_LINK),static)
+  LIBEDITLIBS := -ledit -lncurses
+  LIBEDITFLAGS += -DSTATICLIBEDIT
+else
+  LDLIBS += -ldl
+endif
+
 ifeq ($(BUILD),release)
 	CFLAGS += -march=native -fno-plt
 	ifeq ($(CC),gcc)
@@ -53,7 +60,9 @@ LDFLAGS += $(if $(filter static,$(BUILD_LINK)),-static)
 # CFLAGS +=  -DMUSL
 
 OBJDIR := obj
-SRC 	 := $(shell find . -name '*.c')
+SRC 	 := $(wildcard *.c)
+SRC		 += $(foreach b,$(EXTRAS),builtins/$(b).c)
+CFLAGS += $(foreach b,$(EXTRAS),-DENABLE_$(shell echo $(b) | tr a-z A-Z))
 OBJ 	 := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
 
 TARGET := simpsh

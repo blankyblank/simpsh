@@ -57,6 +57,21 @@ typedef enum {
   WAITH,
   WHILEH,
   BRACEH,
+#ifdef ENABLE_BASENAME
+  BASENAMEH,
+#endif /* ENABLE_BASENAME */
+#ifdef ENABLE_CAT
+  CATH,
+#endif /* ENABLE_CAT */
+#ifdef ENABLE_DIRNAME
+  DIRNAMEH,
+#endif /* ENABLE_DIRNAME */
+#ifdef ENABLE_HEAD
+  HEADH,
+#endif /* ENABLE_HEAD */
+#ifdef ENABLE_TAIL
+  TAILH,
+#endif /* ENABLE_TAIL */
   HELPCNT
 } helpnum;
 
