@@ -77,6 +77,7 @@ typedef enum {
   WFSINGLE = 1 << 0,
   WFDOUBLE = 1 << 1,
   WFCMDSUB = 1 << 2,
+  WFREDIRFD = 1 << 3,
 } wf_flags;
 
 /**

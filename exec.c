@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "alloc.h"
+#include "arith.h"
 #include "builtins.h"
 #include "env.h"
 #include "errmsg.h"
@@ -653,7 +654,6 @@ runshcmd(shfunc *restrict f, const builtin *restrict b, char **restrict final, w
     if (sigsetjmp(jmploc.loc, 0)) {
       handler = svhandler;
       intsig = 0;
-      unblocksigs();
       status = 128 + SIGINT;
       putchar('\n');
     } else {
@@ -766,16 +766,31 @@ run_cmd(const cmd_tree *n, int inchld)
       wf **vars = CVARS(n);
       for (i = 0; vars[i]; i++) {
         char *name, *val /*, *evar*/;
-        shvar_flags flags;
+        shvflags flags;
         char *evar;
-        evar = xpnd(vars[i]);
-        st_read_assn(evar, &name, &val);
-        v = findvar(name);
-        if (v)
-          flags = v->flags;
-        else
-          flags = 0;
-        setvar(name, val, flags);
+        wf *w = vars[i];
+        if (w && w->qs == QNONE && w->next && !w->next->next && w->next->qs == QARITH && w->len && w->word[w->len-1] == '=') {
+          char valbuf[32], nbuf[64];
+          size_t nlen, vlen;
+          name = w->word;
+          nlen = w->len - 1;
+          i64 ival = arith_eval(w->next->word, w->next->len);
+          vlen = lltoa(ival, valbuf);
+          valbuf[vlen] = '\0';
+          memcpy(nbuf, w->word, nlen);
+          nbuf[nlen] = '\0';
+          shvar *v = findvar(nbuf);
+          setvar_i(nbuf, valbuf, ival, (v ? v->flags : 0));
+        } else {
+          evar = xpnd(vars[i]);
+          st_read_assn(evar, &name, &val);
+          v = findvar(name);
+          if (v)
+            flags = v->flags;
+          else
+            flags = 0;
+          setvar(name, val, flags);
+        }
       }
     }
     if (predir)

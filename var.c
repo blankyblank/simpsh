@@ -126,7 +126,7 @@ cmpvar(const void *restrict va, const void *restrict vb)
 }
 
 void
-printvars(const char *prfx, shvar_flags mask)
+printvars(const char *prfx, shvflags mask)
 {
   shvar **enva;
   shvar *v;
@@ -209,7 +209,7 @@ findvar_n(const char *restrict name, size_t nlen)
 
 /** set variable value */
 void
-setvar(const char *restrict name, const char *restrict val, shvar_flags flags)
+setvar(const char *restrict name, const char *restrict val, shvflags flags)
 {
   if (aflag)
     flags |= VEXPRT;

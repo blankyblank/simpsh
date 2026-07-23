@@ -6,20 +6,21 @@
 
 #include "main.h"
 
-typedef int shvar_flags;
+typedef int shvflags;
 typedef struct shvar shvar;
 struct shvar {
   char *var;                  /* Name=value */
-  shvar_flags flags;          /* VEXPRT | VREADONLY | VUNSET */
+  shvflags flags;          /* VEXPRT | VREADONLY | VUNSET | VINT */
   u16 nlen;                   /* name lenght */
   unsigned int flen;          /* full length */
   void (*func)(const char *); /* callback func */
+  i64 ival;                   /* integer value for numeric variables */
 };
 
 typedef struct tmp_var {
   char *name;
   char *val;
-  shvar_flags oldflags;
+  shvflags oldflags;
   int set; /* was it already set? */
 } tmp_var;
 
@@ -30,7 +31,7 @@ typedef struct tmp_var {
 
 typedef struct {
   const char *text; /* "NAME=default" */
-  shvar_flags flags;
+  shvflags flags;
   void (*func)(const char *);
 } varinit;
 
@@ -58,6 +59,7 @@ enum {
   VREADONLY = 1 << 1,
   VUNSET = 1 << 2,
   VNOCB = 1 << 3,
+  VINT = 1 << 4,
 };
 
 #define TOMBSTONE    ((char *)1)
@@ -80,11 +82,11 @@ extern const char oerrn[16];
 extern GVAR gvar;
 extern char **build_env(char **);
 extern void init_env(void);
-extern void setvar(const char * restrict, const char * restrict, shvar_flags);
+extern void setvar(const char * restrict, const char * restrict, shvflags);
 extern tmp_var grabvar(char *);
 extern shvar *findvar_n(const char *restrict, size_t);
 extern void rmvar(const char *);
-extern void printvars(const char *,shvar_flags);
+extern void printvars(const char *,shvflags);
 
 static inline char *
 getvar(const char *vt)
@@ -94,6 +96,17 @@ getvar(const char *vt)
   if ((v = findvar(vt)))
     var = shvar_val(v);
   return var;
+}
+
+static inline void
+setvar_i(const char * name, const char *val, i64 ival, shvflags flags)
+{ // TODO: make setvar return newly created var
+  setvar(name, val, flags);
+  shvar *v = findvar(name);
+  if (v) {
+    v->ival = ival;
+    v->flags |= VINT;
+  }
 }
 
 #endif /* VAR_H */

@@ -218,31 +218,21 @@ parse_simple_cmd(size_t neg)
       case TWORD:
         {
           wf *name = tbuf.cmd;
+          redir *r;
           gettok(0);
-          // assert(t.cmd);
-          if (tbuf.type == TREDIR) {
-            int allnum = 1;
-            for (wf *p = name; p; p = p->next)
-              for (size_t i = 0; i < p->len; i++)
-                if (p->word[i] < '0' || p->word[i] > '9') {
-                  allnum = 0;
-                  goto numchkdone;
-                }
-numchkdone:
-            if (allnum) {
-              int fd;
-              redir *r;
-              fd = 0;
-              for (size_t i = 0; i < name->len; i++)
-                fd = fd * 10 + (name->word[i] - '0');
-              if (!(r = parse_redir(tbuf, fd)))
-                return syntxerr(curline, "missing filename for", tbuf.type);
-              *tail = r;
-              tail = &r->next;
-              gettok(0);
-              continue;
-            }
+
+          if (tbuf.type == TREDIR && (name->flags & WFREDIRFD)) {
+            int fd = 0;
+            for (size_t i = 0; i < name->len; i++)
+              fd = fd * 10 + (name->word[i] - '0');
+            if (!(r = parse_redir(tbuf, fd)))
+              return syntxerr(curline, "missing filename for", tbuf.type);
+            *tail = r;
+            tail = &r->next;
+            gettok(0);
+            continue;
           }
+
           if (name->flags & WFCMDSUB)
             cmdflags |= NECMDSUB;
           if (wc + 1 >= cap) {

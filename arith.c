@@ -372,7 +372,7 @@ led(i64 left)
         return 0;
       }
       lltoa(rhs, valbuf);
-      setvar(name, valbuf, 0);
+      setvar_i(name, valbuf, rhs, 0);
       return rhs;
     default:
       atok = A_EOF;
@@ -552,6 +552,8 @@ lookupavar(void)
   rvar = findvar_n(aname, anlen);
   if (!rvar)
     return 0;
+  if (rvar->flags & VINT)
+    return rvar->ival;
   if (atoll_(shvar_val(rvar), &res) < 0)
     return 0;
   return res;

@@ -20,6 +20,7 @@
 wf *wf_chunk = NULL;
 static wf *head = NULL;
 static wf *tail = NULL;
+static int wfredir = 0;
 static size_t wflen;
 unsigned int wf_chunk_left = 0;
 int alias_depth = 0;
@@ -293,6 +294,18 @@ get_wf(int c)
       case C_RB:
       case C_LT:
       case C_GT:
+        if (wflen > 0 && cctx == M_NORMAL) {
+          char *p = stnext - wflen;
+          int allnum = 1;
+          for (size_t i = 0; i < wflen; i++)
+            if (!isdigit_(p[i])) {
+              allnum = 0;
+              break;
+            }
+          if (allnum)
+            wfredir = 1;
+        }
+        /* fall through */
       case C_SPACE:
       case C_NL:
         if (cctx == M_NORMAL) {
@@ -399,6 +412,10 @@ tokenize(void)
         sh_tok t = tokword(f, &wd);
         if (t.type == TCONT)
           continue;
+        if (wfredir) {
+          t.cmd->flags |= WFREDIRFD;
+          wfredir = 0;
+        }
         return t;
 
         /* AHEAD OF TIME SCAN */

@@ -102,7 +102,7 @@ istestop(const char *s, int isunry)
       if (op == TEND || s[3])
         return TEND;
       testop alt = bop_alt[(unsigned char)s[1]];
-      return (alt && s[2] == bop_disc[(unsigned char)s[2]]) ? alt : op;
+      return (alt && s[2] == bop_disc[(unsigned char)s[1]]) ? alt : op;
     default:
       return TEND;
   }
