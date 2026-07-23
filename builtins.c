@@ -32,11 +32,13 @@
 
 /* builtins */
 extern int aliascmd(char **);
+extern int basenamecmd(char **);
 extern int bgcmd(char **);
 static int breakcmd(char **);
 extern int cdcmd(char **);
 static int commandcmd(char **);
 static int continuecmd(char **);
+extern int dirnamecmd(char **);
 static int dotcmd(char **);
 extern int catcmd(char **);
 static int echocmd(char **);
@@ -49,6 +51,7 @@ extern int fccmd(char **);
 extern int fgcmd(char **);
 extern int getoptscmd(char **);
 extern int hashcmd(char **);
+extern int headcmd(char **);
 extern int helpcmd(char **);
 extern int jobscmd(char **);
 extern int killcmd(char **);
@@ -79,12 +82,14 @@ const builtin builtins[] = {
   { "[",        &testcmd,     0     },
   { ":",        &truecmd,     0     },
   { "alias",    &aliascmd,    0     },
+  { "basename", &basenamecmd, 0     },
   { "bg",       &bgcmd,       0     },
   { "break",    &breakcmd,    SBLTN },
   { "cat",      &catcmd,      0     },
   { "cd",       &cdcmd,       0     },
   { "command",  &commandcmd,  0     },
   { "continue", &continuecmd, SBLTN },
+  { "dirname",  &dirnamecmd,  0     },
   { "echo",     &echocmd,     0     },
   { "eval",     &evalcmd,     SBLTN },
   { "exec",     &execcmd,     SBLTN },
@@ -95,6 +100,7 @@ const builtin builtins[] = {
   { "fg",       &fgcmd,       0     },
   { "getopts",  &getoptscmd,  0     },
   { "hash",     &hashcmd,     0     },
+  { "head",     &headcmd,     0     },
   { "help",     &helpcmd,     0     },
   { "jobs",     &jobscmd,     0     },
   { "kill",     &killcmd,     0     },

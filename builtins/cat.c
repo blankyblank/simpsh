@@ -13,7 +13,7 @@ catcmd(char **argv)
   int n = 0, argc = 0, i = 1, bufsize = BUFSIZ;
   FILE *f = NULL;
   struct stat st;
-  char *buf;
+  char *buf = NULL;
 
   array_len(argv, argc);
 
@@ -23,6 +23,8 @@ catcmd(char **argv)
       fwrite(buf, 1, n, shstdout);
     if (ferror(shstdin))
       return sherr(1, argv[0], "Bad file descriptor\n");
+    if (buf)
+      slfree(buf);
     return 0;
   }
 
@@ -36,5 +38,7 @@ catcmd(char **argv)
     fclose(f);
     i++;
   }
+  if (buf)
+    slfree(buf);
   return 0;
 }
