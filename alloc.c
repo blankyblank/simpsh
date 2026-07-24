@@ -23,13 +23,6 @@
  *      write optimized code like dash.
  */
 
-/*
- * NOTE:
- *      we need to have the - 16, because we are using simd which loads 16 bytes
- * of data. if we don't keep that padding it goes past the buffer boundry and
- * causes a segfault.
- */
-
 #define ul unsigned long
 stackseg stackbase;
 stackseg *current = &stackbase;
@@ -69,7 +62,7 @@ stack_restore(stmark m)
 {
   while (current != &stackbase && current != m.current) {
     stackseg *tmp = current->prev;
-    slfree(current);
+    sfree(current);
     current = tmp;
   }
   current = m.current;
@@ -138,7 +131,7 @@ stack_clear(void)
   stackseg *tmp;
   while (current->prev != NULL) {
     tmp = current->prev;
-    slfree(current);
+    sfree(current);
     current = tmp;
   }
   current = &stackbase;

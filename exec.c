@@ -713,7 +713,7 @@ runextcmd(char **restrict final, wf **restrict vars, const cmd_tree *restrict n,
   else
     status = shfexec(final, env, bg_cmd(n), predir);
   if (evars)
-    slfree(env);
+    sfree(env);
   handler = svhandler;
   return status;
 }
@@ -756,7 +756,7 @@ run_cmd(const cmd_tree *n, int inchld)
 
   if (xflag) {
     char *xline, *ps4;
-    ps4 = getvar(STR("PS4"));
+    ps4 = getvar("PS4");
     xline = join_strn(final, &len);
     printf("%s %s\n", ps4, xline);
   }
@@ -1283,9 +1283,9 @@ execcmd(char **argv)
 
 fail:
   if (env) {
-    slfree(env);
+    sfree(env);
   }
-  slfree(fullpath);
+  sfree(fullpath);
   return sherrx(1, argv[0]);
 }
 

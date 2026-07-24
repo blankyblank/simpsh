@@ -40,7 +40,7 @@ init_history(void)
   char *histsize_s;
   shvar *hf;
 
-  if ((histsize_s = getvar(STR("HISTSIZE"))))
+  if ((histsize_s = getvar("HISTSIZE")))
     histsize = atoi_(histsize_s);
   else
    histsize = HISTORY_SIZE;
@@ -50,7 +50,7 @@ init_history(void)
   histcur = -1;
   histnum = 1;
 
-  if ((hf = findvar_n(STR("HISTFILE"), sizeof("HISTFILE") - 1))) {
+  if ((hf = findvar_n("HISTFILE", sizeof("HISTFILE") - 1))) {
     histfile = strdup_(shvar_val(hf));
   } else {
     size_t hflen;
@@ -138,7 +138,7 @@ hist_add(const char *cmd)
   if (histcnt < histsize) {
     shhistory[histcnt++] = flattenhist(cmd);
   } else {
-    slfree(shhistory[0]);
+    sfree(shhistory[0]);
     memmove(shhistory, shhistory + 1, (histsize - 1) * sizeof(char *));
     shhistory[histsize - 1] = flattenhist(cmd);
   }
@@ -175,7 +175,7 @@ gethistline(FILE *f)
   }
 
   if (!n && c == EOF) {
-    slfree(buf);
+    sfree(buf);
     return NULL;
   }
   buf[n] = '\0';
@@ -193,7 +193,7 @@ hist_load(void)
   while ((line = gethistline(histfd))) {
     if (line[0])
       hist_add(line);
-    slfree(line);
+    sfree(line);
   }
   histnum = histcnt + 1;
   fclose(histfd);
@@ -203,8 +203,8 @@ void
 hist_cleanup(void)
 {
   for (int i = 0; i < histcnt; i++)
-    slfree(shhistory[i]);
-  slfree(shhistory);
+    sfree(shhistory[i]);
+  sfree(shhistory);
   shhistory = NULL;
   histcnt = 0;
   histcur = -1;
@@ -423,9 +423,9 @@ fccmd(char **argv)
       last = HISTLAST;
 
     if (!(flags & FLAG_e)) {
-      if ((fced = findvar_n(STR("FCEDIT"), sizeof("FCEDIT") - 1))) {
+      if ((fced = findvar_n("FCEDIT", sizeof("FCEDIT") - 1))) {
         editor = shvar_val(fced);
-      } else if ((ed = findvar_n(STR("EDITOR"), sizeof("EDITOR") - 1))) {
+      } else if ((ed = findvar_n("EDITOR", sizeof("EDITOR") - 1))) {
         editor = shvar_val(ed);
       } else {
         editor = "ed";
@@ -513,7 +513,7 @@ cleanup:
     }
     status = histexec(cmd);
     if (suballoc) {
-      slfree(cmd);
+      sfree(cmd);
     }
     return status;
   }

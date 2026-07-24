@@ -121,7 +121,7 @@ tree_dup(cmd_tree *s)
       CELSE(n) = tree_dup(CELSE(s));
       break;
     default:
-      slfree(n);
+      sfree(n);
       return NULL;
     case CMD:
       cnt = 0;
@@ -149,9 +149,9 @@ free_wf(wf *f)
 {
   if (!f)
     return;
-  slfree(f->word);
+  sfree(f->word);
   free_wf(f->next);
-  slfree(f);
+  sfree(f);
 }
 
 static inline void
@@ -162,7 +162,7 @@ free_redir(redir *r)
     tmp = r;
     r = r->next;
     free_wf(tmp->name);
-    slfree(tmp);
+    sfree(tmp);
   }
   return;
 }
@@ -177,37 +177,37 @@ free_tree(cmd_tree *n)
     case OP:
       free_tree(n->left);
       free_tree(n->right);
-      slfree(n);
+      sfree(n);
       break;
     case SUBSHELL:
       free_tree(n->left);
-      slfree(n);
+      sfree(n);
       break;
     case FUNC:
       free_wf(CARGS(n)[0]);
-      slfree(CARGS(n));
+      sfree(CARGS(n));
       free_tree(n->left);
-      slfree(n);
+      sfree(n);
       break;
     case REDIR:
       free_redir(CREDR(n));
       free_tree(n->left);
-      slfree(n);
+      sfree(n);
       break;
     case WHILE:
       free_tree(n->left);
       free_tree(n->right);
-      slfree(n);
+      sfree(n);
       break;
     case FOR:
       free_tree(n->right);
       if (CFOR(n).words) {
         for (size_t i = 0; CFOR(n).words[i]; i++)
           free_wf(CFOR(n).words[i]);
-        slfree(CFOR(n).words);
+        sfree(CFOR(n).words);
       }
       free_wf(CFOR(n).name);
-      slfree(n);
+      sfree(n);
       break;
     case CASE:
       free_wf(CCASE(n).word);
@@ -215,33 +215,33 @@ free_tree(cmd_tree *n)
         clause *next = c->next;
         for (size_t i = 0; c->ptrn[i]; i++)
           free_wf(c->ptrn[i]);
-        slfree(c->ptrn);
+        sfree(c->ptrn);
         free_tree(c->body);
-        slfree(c);
+        sfree(c);
         c = next;
       }
-      slfree(n);
+      sfree(n);
       break;
     case IF:
       free_tree(n->left);
       free_tree(n->right);
       free_tree(CELSE(n));
-      slfree(n);
+      sfree(n);
       break;
     case BRACE:
       free_tree(n->left);
-      slfree(n);
+      sfree(n);
       break;
     case CMD:
       for (size_t i = 0; CARGS(n)[i]; i++)
         free_wf(CARGS(n)[i]);
-      slfree(CARGS(n));
+      sfree(CARGS(n));
       if (CVARS(n)) {
         for (size_t i = 0; CVARS(n)[i]; i++)
           free_wf(CVARS(n)[i]);
-        slfree(CVARS(n));
+        sfree(CVARS(n));
       }
-      slfree(n);
+      sfree(n);
       break;
     default:
       return;
@@ -274,7 +274,7 @@ setfunc(const char *restrict name, cmd_tree *restrict body)
   f = findfunc(name);
   if (f) {
     free_tree(f->body);
-    slfree(f->name);
+    sfree(f->name);
     f->name = strdup_(name);
     f->body = tree_dup(body);
   } else {
@@ -314,7 +314,7 @@ setalias(const char *restrict name, const char *restrict val)
   alias *a;
 
   if ((a = findalias(name))) {
-    slfree(a->value);
+    sfree(a->value);
     a->value = strdup_(val);
   } else {
     if (!(a = salloc(sizeof(alias))))
@@ -342,9 +342,9 @@ rmfunc(const char *name)
     if (f->name[0] == name[0])
       if (strcmp(f->name, name) == 0) {
         *prev = f->next;
-        slfree(f->name);
+        sfree(f->name);
         free_tree(f->body);
-        slfree(f);
+        sfree(f);
         return;
       }
     prev = &f->next;
@@ -367,9 +367,9 @@ rmalias(const char *name)
     if (a->name[0] == name[0])
       if (strcmp(a->name, name) == 0) {
         *prev = a->next;
-        slfree(a->name);
-        slfree(a->value);
-        slfree(a);
+        sfree(a->name);
+        sfree(a->value);
+        sfree(a);
         return;
       }
     prev = &a->next;
@@ -406,8 +406,8 @@ aliascmd(char **args)
     n = strndup_(args[1], strlen(args[1]) - strlen(delem));
     v = strdup_(delem + 1);
     setalias(n, v);
-    slfree(n);
-    slfree(v);
+    sfree(n);
+    sfree(v);
   }
 
   return 0;

@@ -310,10 +310,10 @@ freeptr(char **args)
   if (args != NULL) {
     size_t i = 0;
     while (args[i] != NULL) {
-      slfree(args[i]);
+      sfree(args[i]);
       i++;
     }
-    slfree(args);
+    sfree(args);
   }
 }
 

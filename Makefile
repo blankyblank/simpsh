@@ -9,8 +9,8 @@ ifneq ($(filter debug valgrind sanitize,$(BUILD)),)
 endif
 
 ifeq ($(BUILD_LINK),static)
-  LIBEDITLIBS := -ledit -lncurses
-  LIBEDITFLAGS += -DSTATICLIBEDIT
+  CFLAGS += -DSTATICLIBEDIT
+  LDLIBS := -ledit -lncurses
 else
   LDLIBS += -ldl
 endif

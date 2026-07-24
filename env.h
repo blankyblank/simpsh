@@ -2,10 +2,8 @@
 #ifndef ENV_H
 #define ENV_H
 
-#include <stdlib.h>
 
 #include "alloc.h"
-#include "main.h"
 #include "lex.h"
 #include "parse.h"
 

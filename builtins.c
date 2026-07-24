@@ -76,6 +76,9 @@ extern int basenamecmd(char **);
 #ifdef ENABLE_CAT
 extern int catcmd(char **);
 #endif /* ENABLE_CAT */
+#ifdef ENABLE_CUT
+extern int cutcmd(char **);
+#endif /* ENABLE_CUT */
 #ifdef ENABLE_DIRNAME
 extern int dirnamecmd(char **);
 #endif /* ENABLE_DIRNAME */
@@ -106,6 +109,9 @@ const builtin builtins[] = {
   { "cd",       &cdcmd,       0     },
   { "command",  &commandcmd,  0     },
   { "continue", &continuecmd, SBLTN },
+#ifdef ENABLE_CUT
+  { "cut",      &cutcmd,      0     },
+#endif  /* ENABLE_CUT */
 #ifdef ENABLE_DIRNAME
   { "dirname",  &dirnamecmd,  0     },
 #endif  /* ENABLE_DIRNAME */
@@ -230,7 +236,7 @@ classify_cmd(char *s, int vrb, int def)
         return 0;
       }
     }
-    if ((e = chkpath((def) ? defpath : getvar(STR("PATH")), s, X_OK, 0))) {
+    if ((e = chkpath((def) ? defpath : getvar("PATH"), s, X_OK, 0))) {
       printf("%s is %s\n", s, e);
       return 0;
     }
@@ -260,7 +266,7 @@ classify_cmd(char *s, int vrb, int def)
       return 0;
     }
   }
-  if ((e = chkpath((def) ? defpath : getvar(STR("PATH")), s, X_OK, 0))) {
+  if ((e = chkpath((def) ? defpath : getvar("PATH"), s, X_OK, 0))) {
     printf("%s\n", e);
     return 0;
   }
@@ -336,7 +342,7 @@ commandcmd(char **argv)
   if ((b = findbuiltin(argv[0]))) {
     return builtin_launch(b, argv);
   }
-  if ((path = (def) ? defpath : getvar(STR("PATH"))))
+  if ((path = (def) ? defpath : getvar("PATH")))
     path = defpath;
   if (!(fpath = chkpath(path, argv[0], X_OK, 0)))
     return shwarn(argv[0], "command not found");
@@ -393,7 +399,7 @@ dotcmd(char **argv)
     file = argv[1];
   } else {
     char *fpath, *path;
-    if ((path = getvar(STR("PATH"))))
+    if ((path = getvar("PATH")))
       fpath = chkpath(path, argv[1], R_OK, 0);
     else
       fpath = chkpath(defpath, argv[1], R_OK, 0);
@@ -433,7 +439,7 @@ dotcmd(char **argv)
 
   if (ALLOCED)
     freeshargv();
-  slfree(SHARGV0);
+  sfree(SHARGV0);
   popframe();
   return LSTATUS;
 }
@@ -591,7 +597,7 @@ rend:
 
 
   line = grab_str(len);
-  ifs = getvar(STR("IFS"));
+  ifs = getvar("IFS");
   if (!ifs) {
     ifs = " \t\n";
     ifsws[0] = ' ';
@@ -693,7 +699,7 @@ shiftcmd(char **argv)
 
   if (ALLOCED)
     for (int i = 0; i < n; i++)
-      slfree(SHARGV[i]);
+      sfree(SHARGV[i]);
   memmove(SHARGV, SHARGV + n, (SHARGC - n) * sizeof(char *));
   for (int i = SHARGC - n; i < SHARGC; i++)
     SHARGV[i] = NULL;

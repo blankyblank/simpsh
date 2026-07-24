@@ -2,6 +2,8 @@
 #ifndef PARSE_H
 #define PARSE_H
 
+#include "lex.h"
+
 typedef struct redir redir;
 struct redir {
   redir *next;

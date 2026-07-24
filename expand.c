@@ -175,7 +175,7 @@ run_cmdsub(const cmd_tree *restrict n)
               char *new = salloc(newcap);
               if (tmp)
                 memcpy(new, tmp, tmplen);
-              slfree(tmp);
+              sfree(tmp);
               tmp = new;
               tmpcap = newcap;
             }
@@ -188,7 +188,7 @@ run_cmdsub(const cmd_tree *restrict n)
           if (n == -1 && errno == EINTR)
             continue;
           if (n == -1 && errno != EINTR) {
-            slfree(tmp);
+            sfree(tmp);
             ret = -1;
             goto cleanup;
           }
@@ -204,7 +204,7 @@ run_cmdsub(const cmd_tree *restrict n)
         len = tmplen;
         stnext += tmplen + 1;
         stleft -= tmplen + 1;
-        slfree(tmp);
+        sfree(tmp);
         ret = len;
         if (waitpid(pid, &wstatus, 0) > 0)
           LSTATUS = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
@@ -807,7 +807,7 @@ expand_argv(wf **args, size_t *restrict t)
       }
       shvar *ifs;
       int ifsc = 0;
-      if ((ifs = findvar_n(STR("IFS"), 3))) {
+      if ((ifs = findvar_n("IFS", 3))) {
         if (ifs->var)
           ifsc = (int)*shvar_val(ifs);
       } else {

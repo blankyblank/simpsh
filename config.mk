@@ -32,5 +32,5 @@ GCOV  :=
 ## Compiler flags
 CFLAGS  := --std=c23 -I. -Wall -Wextra -pedantic -pipe $(LIBEDITFLAGS)
 LDFLAGS := -Wl,-z,now
-LDLIBS  := $(LIBEDITLIBS) $(LIBEDIT-STATICLIBS)
+LDLIBS  := $(LIBEDITLIBS)
 

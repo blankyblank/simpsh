@@ -68,7 +68,7 @@ typedef struct stackseg stackseg;
 struct stackseg {
   stackseg *prev;
   char _pad[8];
-  char buf[MINSTACK_S + 16];
+  char buf[MINSTACK_S];
 };
 
 typedef struct {
@@ -180,7 +180,7 @@ stackskip:
 }
 
 static inline void
-slfree(void *p)
+sfree(void *p)
 {
   if (!p)
     return;
@@ -229,16 +229,16 @@ srealloc(void *p, size_t s)
     p = salloc(s);
     return p;
   } else if (p && !s) {
-    slfree(p);
+    sfree(p);
     return NULL;
   } else if (!p && !s) {
     return NULL;
   } else {
     char *t = strdup_((char *)p);
-    slfree(p);
+    sfree(p);
     p = salloc(s);
     p = strdup_(p);
-    slfree(t);
+    sfree(t);
     return p;
   }
 }

@@ -46,7 +46,6 @@ typedef uint64_t u64;
 #define OPTC 19
 #define SHOPTC 16 /* short option count */
 #define defpath      "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-#define STR(s)       ((const char[16]) { s })
 #define doexpect(x)   __builtin_expect(!!(x), 1)
 #define dontexpect(x) __builtin_expect(!!(x), 0)
 

@@ -75,9 +75,9 @@ enum {
 #define vallen(v)    ((v)->flen - (v)->nlen - 2)
 #define findvar(v)   findvar_n(v, strlen(v))
 
-extern const char oinn[16];
-extern const char oargn[16];
-extern const char oerrn[16];
+extern const char oinn[];
+extern const char oargn[];
+extern const char oerrn[];
 
 extern GVAR gvar;
 extern char **build_env(char **);

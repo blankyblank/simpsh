@@ -41,8 +41,8 @@ setchash(const char *restrict n, const char *restrict p)
       return;
 
   if (chashn >= CHASH_MAX) {
-    slfree(chash[CHASH_MAX - 1].name);
-    slfree(chash[CHASH_MAX - 1].path);
+    sfree(chash[CHASH_MAX - 1].name);
+    sfree(chash[CHASH_MAX - 1].path);
     chashn = CHASH_MAX - 1;
   }
     memmove(&chash[1], &chash[0], chashn * sizeof(cmdent));
@@ -57,8 +57,8 @@ rmchash(const char *unused)
 {
   (void)unused;
   for (size_t i = 0; i < chashn; i++) {
-    slfree(chash[i].name);
-    slfree(chash[i].path);
+    sfree(chash[i].name);
+    sfree(chash[i].path);
   }
   chashn = 0;
 }
@@ -157,7 +157,7 @@ getpath(char *file)
   if (hflag && (fullpath = findchash(file)))
     return st_strdup(fullpath);
 
-  const char *path = getvar(STR("PATH"));
+  const char *path = getvar("PATH");
   if (path)
     fullpath = chkpath(path, file, X_OK, 0);
   else
@@ -256,13 +256,13 @@ cdcmd(char **argv)
   if (argc > 1)
     return shwarn(bargv0, "Too many arguments"); /*NOLINT*/
 
-  oldpwd = findvar(STR("OLDPWD"));
-  pwd = findvar(STR("PWD"));
+  oldpwd = findvar("OLDPWD");
+  pwd = findvar("PWD");
   if (pwd)
     pwdval = shvar_val(pwd);
   else
     pwdval = getcwd(respath, PATH_MAX);
-  cdpth = findvar(STR("CDPATH"));
+  cdpth = findvar("CDPATH");
   if (cdpth) {
     if (*argv && argv[0][0] != '/' &&
         !(argv[0][0] == '-' && argv[0][1] == '\0') &&
@@ -331,8 +331,8 @@ cdcmd(char **argv)
     if (!pwdpath(respath))
       return shwarn(bargv0, "path normalization failure"); /*NOLINT*/
   }
-  setvar(STR("OLDPWD"), pwdval, VEXPRT);
-  setvar(STR("PWD"), respath, VEXPRT);
+  setvar("OLDPWD", pwdval, VEXPRT);
+  setvar("PWD", respath, VEXPRT);
   return 0;
 }
 
@@ -367,7 +367,7 @@ hashcmd(char **argv)
     return 0;
   } else {
     const char *path, *fpath;
-    if (!(path = getvar(STR("PATH"))))
+    if (!(path = getvar("PATH")))
       path = defpath;
     for (size_t i = 0; i < argc; i++) {
       if (!(fpath = chkpath(path, argv[i], X_OK, 0))) {
@@ -404,7 +404,7 @@ pwdcmd(char **argv)
   ARGEND;
 
   if (flag != FLAG_P) {
-    char *pwd = getvar(STR("PWD"));
+    char *pwd = getvar("PWD");
     struct stat sbuf, cwdsbuf;
 
     if (!pwd) {

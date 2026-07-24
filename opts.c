@@ -160,8 +160,8 @@ freeshargv(void)
 {
   if (ALLOCED) {
     for (int i = 0; i < SHARGC; i++)
-      slfree(SHARGV[i]);
-    slfree(SHARGV);
+      sfree(SHARGV[i]);
+    sfree(SHARGV);
   }
   SHARGV = NULL;
   SHARGC = 0;
@@ -242,15 +242,15 @@ setcmd(char **argv)
     SHARGC = pcnt;
   } else {
     if (pos)
-      slfree(pos);
+      sfree(pos);
   }
   return 0;
 
 err:
   if (pos) {
     for (int j = 0; j < pcnt; j++)
-      slfree(pos[j]);
-    slfree(pos);
+      sfree(pos[j]);
+    sfree(pos);
   }
   return 1;
 }
@@ -333,7 +333,7 @@ checkopts(char *optstr, char **argv, char *o, int opterr)
     *o = c;
     return 0;
   }
-  setvar(STR("OPTARG"), "", 0);
+  setvar("OPTARG", "", 0);
   if (!*(p + OPTOFF))
     OPTOFF = -1;
   *o = c;

@@ -361,7 +361,7 @@ cleartraps(void)
   while (tm) {
     int i = __builtin_ctzll(tm);
     tm &= tm - i;
-    slfree(trap[i]);
+    sfree(trap[i]);
     trap[i] = NULL;
     if (i && sigmode[i] != S_HIGN)
       sigaction(i, &dfl, NULL);
@@ -514,7 +514,7 @@ trapcmd(char **argv)
           continue;
 
         if (trap[n])
-          slfree(trap[n]), trapm &= ~(1ULL << n);
+          sfree(trap[n]), trapm &= ~(1ULL << n);
         if (!act || (act[0] == '-' && act[1] == '\0'))
           trap[n] = NULL, trapm &= ~(1ULL << n);
         else if (act[0] == '\0')

@@ -65,8 +65,8 @@ rmjob(job *j)
     p = &(*p)->next;
   if (*p)
     *p = n;
-  slfree(j->cmd);
-  slfree(j);
+  sfree(j->cmd);
+  sfree(j);
   return n;
 }
 

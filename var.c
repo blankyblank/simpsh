@@ -10,28 +10,27 @@
 
 #include "alloc.h"
 #include "arg.h"
+#include "main.h"
 #include "env.h"
 #include "errmsg.h"
 #include "expand.h"
-#include "main.h"
 #include "opts.h"
 #include "path.h"
-#include "simd.h"
 #include "utils.h"
 #include "var.h"
 
 #define INTSIZE 24
 
 /* string literals */
-const char oinn[16] = "OPTIND";
-const char oargn[16] = "OPTARG";
-const char oerrn[16] = "OPTERR";
-static const char oinvn[16] = "OPTIND=1";
-static const char oerrvn[16] = "OPTERR=1";
-static const char ifsvn[16] = "IFS= \t\n";
-static const char ps1vn[16] = "PS1=$ ";
-static const char ps2vn[16] = "PS2=> ";
-static const char ps4vn[16] = "PS4=+ ";
+const char oinn[] = "OPTIND";
+const char oargn[] = "OPTARG";
+const char oerrn[] = "OPTERR";
+static const char oinvn[] = "OPTIND=1";
+static const char oerrvn[] = "OPTERR=1";
+static const char ifsvn[] = "IFS= \t\n";
+static const char ps1vn[] = "PS1=$ ";
+static const char ps2vn[] = "PS2=> ";
+static const char ps4vn[] = "PS4=+ ";
 
 /* shell variables */
 static shvar var_tab_init[VAR_BUCKETS_INIT];
@@ -96,7 +95,7 @@ resize_var_tab(void)
   }
 
   if (VARTAB != var_tab_init)
-    slfree(VARTAB);
+    sfree(VARTAB);
   VARTAB = n;
   VARTAB_SIZE = ns;
   memset(VARCACHE, 0, sizeof(VARCACHE));
@@ -175,7 +174,7 @@ findvar_n(const char *restrict name, size_t nlen)
   unsigned int ci, bucket;
   shvar *v, *cv, *end;
 
-  if (nlen == 6 && smemcmp(name, STR("LINENO"), nlen)) {
+  if (nlen == 6 && !memcmp(name, "LINENO", nlen)) {
     size_t ll = lltoa(gstate.lineno, gvar.linebuf + 7);
     gvar.linebuf[6] = '=';
     gvar.linebuf[7  + ll] = '\0';
@@ -189,7 +188,7 @@ findvar_n(const char *restrict name, size_t nlen)
   ci = bucket & (VAR_CACHE_S - 1);
   cv = VARCACHE[ci];
   if (cv && cv->var && cv->var != TOMBSTONE && cv->nlen == nlen &&
-      smemcmp(cv->var, name, nlen)) {
+      !memcmp(cv->var, name, nlen)) {
     return cv;
   }
 
@@ -198,7 +197,7 @@ findvar_n(const char *restrict name, size_t nlen)
   for (;;) {
     if (!v->var)
       return NULL;
-    if (v->var != TOMBSTONE && v->nlen == nlen && smemcmp(v->var, name, nlen)) {
+    if (v->var != TOMBSTONE && v->nlen == nlen && !memcmp(v->var, name, nlen)) {
       VARCACHE[ci] = v;
       return v;
     }
@@ -234,7 +233,7 @@ setvar(const char *restrict name, const char *restrict val, shvflags flags)
     if (v->var == TOMBSTONE) {
       if (!n)
         n = v;
-    } else if (v->nlen == nlen && smemcmp(v->var, name, nlen)) {
+    } else if (v->nlen == nlen && !memcmp(v->var, name, nlen)) {
       if (v->flags & VREADONLY)
         return;
       if (v->flen >= flen) {
@@ -251,7 +250,7 @@ setvar(const char *restrict name, const char *restrict val, shvflags flags)
           memcpy(nvar + nlen + 1, val, vlen + 1);
         else
           nvar[nlen + 1] = '\0';
-        slfree(v->var);
+        sfree(v->var);
         v->var = nvar;
         v->nlen = nlen;
         v->flen = flen;
@@ -288,7 +287,7 @@ setvar(const char *restrict name, const char *restrict val, shvflags flags)
     v = VARTAB + hash_n(name, nlen, VARTAB_SIZE);
     for (;;) {
       if (v->var && v->var != TOMBSTONE && v->nlen == nlen &&
-          smemcmp(v->var, name, nlen)) {
+          !memcmp(v->var, name, nlen)) {
         break;
       }
       if (++v >= end)
@@ -319,8 +318,8 @@ rmvar(const char *name)
     if (!v->var)
       return;
     if (v->var != TOMBSTONE && v->nlen == nlen &&
-        smemcmp(v->var, name, nlen)) {
-      slfree(v->var);
+        !memcmp(v->var, name, nlen)) {
+      sfree(v->var);
       v->var = TOMBSTONE;
       v->nlen = 0;
       v->flags = 0;
@@ -396,7 +395,7 @@ rebuild_env(char **sh_env)
       namelen = v->nlen;
       skip = 0;
       for (size_t s = 0; s < sh_c; s++) {
-        if (namelen == tmplen[s] && smemcmp(v->var, tmpname[s], namelen)) {
+        if (namelen == tmplen[s] && !memcmp(v->var, tmpname[s], namelen)) {
           shadowed[skipc++] = v->var;
           skip = 1;
           break;
@@ -465,7 +464,7 @@ build_env(char **sh_env)
 
   env = rebuild_env(NULL);
   if (env) {
-    slfree(env_cache);
+    sfree(env_cache);
     env_cache = env;
     env_dirty = 0;
   }
@@ -512,20 +511,20 @@ init_env(void)
     char *name, *val;
     read_assn(environ[i], &name, &val);
     setvar(name, val, VEXPRT);
-    slfree(name);
-    slfree(val);
+    sfree(name);
+    sfree(val);
   }
   shvar *ifs;
   int shlvl;
   char *shlvl_s, pwd[PATH_MAX];
 
-  if ((ifs = findvar_n(STR("IFS"), 3)))
+  if ((ifs = findvar_n("IFS", 3)))
     ifsupdt(shvar_val(ifs));
 
   if (!getcwd(pwd, PATH_MAX))
     shwarn("getcwd", "couldn't get PWD");
   else
-    setvar(STR("PWD"), pwd, VEXPRT);
+    setvar("PWD", pwd, VEXPRT);
 
   gvar.pid_s = salloc(INTSIZE);
   gvar.bgpid_s = salloc(INTSIZE);
@@ -536,15 +535,15 @@ init_env(void)
   shpid = getpid();
   lltoa(shpid, gvar.pid_s);
   lltoa(shppid, gvar.ppid_s);
-  setvar(STR("PPID"), gvar.ppid_s, VREADONLY);
+  setvar("PPID", gvar.ppid_s, VREADONLY);
 
-  shlvl_s = getvar(STR("SHLVL"));
+  shlvl_s = getvar("SHLVL");
   shlvl = (shlvl_s) ? atoi_(shlvl_s) : 0;
   shlvl++;
   lltoa(shlvl, shlvl_s);
-  setvar(STR("SHLVL"), shlvl_s, VEXPRT);
+  setvar("SHLVL", shlvl_s, VEXPRT);
 
-  if ((gvar.home = getenv(STR("HOME"))))
+  if ((gvar.home = getenv("HOME")))
     gvar.homelen = strlen(gvar.home);
 }
 
@@ -582,8 +581,8 @@ exportcmd(char **argv)
       }
       read_assn(argv[i], &name, &val);
       setvar(name, val,  VEXPRT);
-      slfree(name);
-      slfree(val);
+      sfree(name);
+      sfree(val);
     }
   }
   env_dirty = 1;
@@ -652,8 +651,8 @@ readonlycmd(char **argv)
     } else {
       read_assn(argv[i], &name, &val);
       setvar(name, val, VREADONLY);
-      slfree(name);
-      slfree(val);
+      sfree(name);
+      sfree(val);
     }
   }
   env_dirty = 1;

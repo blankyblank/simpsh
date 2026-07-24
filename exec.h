@@ -7,10 +7,7 @@
 #include <signal.h>
 
 #include "job.h"
-#include "main.h"
-#include "lex.h"
 #include "parse.h"
-#include "opts.h"
 #include "sig.h"
 
 

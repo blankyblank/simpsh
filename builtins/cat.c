@@ -24,7 +24,7 @@ catcmd(char **argv)
     if (ferror(shstdin))
       return sherr(1, argv[0], "Bad file descriptor\n");
     if (buf)
-      slfree(buf);
+      sfree(buf);
     return 0;
   }
 
@@ -39,6 +39,6 @@ catcmd(char **argv)
     i++;
   }
   if (buf)
-    slfree(buf);
+    sfree(buf);
   return 0;
 }

@@ -9,7 +9,6 @@
 #include "alloc.h"
 #include "input.h"
 #include "lex.h"
-#include "simpsh.h"
 
 static char basebuf[BASEBUFSIZE];
 static shinput base_shinput;

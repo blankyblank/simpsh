@@ -92,6 +92,8 @@ next_tok(void)
   size_t skip;
   char c;
 
+  /* TODO: decide if i want to keep simd function
+   * or move to scalar */
   if (alen > 0) {
     skip = sskipspace(ap, alen);
     ap += skip;
