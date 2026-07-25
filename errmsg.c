@@ -704,6 +704,31 @@ static const char dirnamehelp[] =
   "    Always returns 0.";
 #endif /* ENABLE_DIRNAME */
 
+#ifdef ENABLE_CUT
+static const char cutusg[] = "[-b list] [-c list] [-d delim] [-f list] [-s] [file ...]";
+static const char cuthelp[] =
+  "cut -b list [-d delim] [-s] [file ...]\n"
+  "cut -c list [file ...]\n"
+  "cut -f list [-d delim] [-s] [file ...]\n"
+  "\n"
+  "    Cut out selected portions of each line.\n"
+  "\n"
+  "    -b list       Select only these bytes.\n"
+  "    -c list       Select only these characters.\n"
+  "    -d delim      Use DELIM instead of TAB for field delimiter.\n"
+  "    -f list       Select only these fields.\n"
+  "    -s            Suppress lines with no delimiter (with -f only).\n"
+  "\n"
+  "    LIST is a comma-separated list of numbers or ranges:\n"
+  "      N       byte/character/field number N\n"
+  "      N-M     from N to M inclusive\n"
+  "      N-      from N to end of line\n"
+  "      -M      from start to M inclusive\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, 1 on error.";
+#endif /* ENABLE_CUT */
+
 #ifdef ENABLE_HEAD
 static const char headhelp[] =
   "head [-n count] [file ...]\n"
@@ -783,6 +808,9 @@ const builtinhelp helpmsgs[] = {
 #endif
 #ifdef ENABLE_CAT
   [CATH] =      { "cat",      "[file ...]",             cathelp         },
+#endif
+#ifdef ENABLE_CUT
+  [CUTH] =      { "cut",      cutusg,                   cuthelp         },
 #endif
 #ifdef ENABLE_DIRNAME
   [DIRNAMEH] =  { "dirname",  "name",                   dirnamehelp     },

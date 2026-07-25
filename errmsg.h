@@ -63,6 +63,9 @@ typedef enum {
 #ifdef ENABLE_CAT
   CATH,
 #endif /* ENABLE_CAT */
+#ifdef ENABLE_CUT
+  CUTH,
+#endif /* ENABLE_CUT */
 #ifdef ENABLE_DIRNAME
   DIRNAMEH,
 #endif /* ENABLE_DIRNAME */

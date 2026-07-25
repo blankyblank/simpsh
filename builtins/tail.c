@@ -75,9 +75,9 @@ ARGNUM:
     if (!(fp = fline(ln, file)))
       return 1;
     if (argc > 1)
-      fprintf(shstdout,"%s==> %s <==\n", (i > 0) ? "\n" : "", file);
+      fprintf(shout,"%s==> %s <==\n", (i > 0) ? "\n" : "", file);
     while ((n = fread(buf, 1, BUFSIZ, fp)) > 0)
-      fwrite(buf, 1, n, shstdout);
+      fwrite(buf, 1, n, shout);
     if (ferror(fp))
       return sherr(1, tailn, "Bad file descriptor");
     fclose(fp);
@@ -173,11 +173,11 @@ ftail(int ln, char **files, size_t argc)
       if (fp) {
         while ((n = fread(buf, 1, BUFSIZ, fp)) > 0) {
           if (argc > 1)
-            fprintf(shstdout, "\n==> %s <==\n", fe[i].name);
-          fwrite(buf, 1, n, shstdout);
+            fprintf(shout, "\n==> %s <==\n", fe[i].name);
+          fwrite(buf, 1, n, shout);
         }
         fe[i].pos = ftell(fp);
-        fflush(shstdout);
+        fflush(shout);
         if (ferror(fp))
           return 1;
       }
@@ -201,7 +201,7 @@ sttail(int ln)
   for (int in = 0; in < ln; ++in)
     rng[in] = NULL;
   m = stack_mark();
-  while ((n = fread(buf + off, 1, sizeof(buf) - off, shstdin)) > 0) {
+  while ((n = fread(buf + off, 1, sizeof(buf) - off, shin)) > 0) {
     char *p = buf;
     char *end = buf + off + n;
 
@@ -218,7 +218,7 @@ sttail(int ln)
       p = nl + 1;
     }
   }
-  if (ferror(shstdin))
+  if (ferror(shin))
     return sherr(1, tailn, "Bad file descriptor");
   if (off) {
     rng[c] = st_strndup(buf, off);
@@ -227,7 +227,7 @@ sttail(int ln)
 
   s = (cnt < ln) ? 0 : c;
   for (int i = 0; i < ((cnt < ln) ? cnt : ln); i++) {
-    fwrite(rng[(s + i) % ln], 1, strlen(rng[(s + i) % ln]), shstdout);
+    fwrite(rng[(s + i) % ln], 1, strlen(rng[(s + i) % ln]), shout);
   }
 
   stack_restore(m);

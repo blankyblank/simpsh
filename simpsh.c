@@ -237,7 +237,7 @@ simpsh_run(void)
     }
     if (!nflag)
       run_commands(c, 0);
-    fflush(shstdout);
+    fflush(shout);
     if (RETNOW) {
       RETNOW = 0;
       stack_restore(mark);
@@ -271,7 +271,7 @@ sh_interactive(void)
 
 #ifdef LIBEDIT
   if (load_libedit()) {
-    edl = libedit_el_init(SHARGV0, shstdin, shstdout, stderr);
+    edl = libedit_el_init(SHARGV0, shin, shout, stderr);
     libedit_el_set(edl, EL_EDITOR, "vi");
     libedit_el_set(edl, EL_SIGNAL, 1);
     libedit_el_set(edl, EL_GETCFN, input_notify);
@@ -305,7 +305,7 @@ sh_interactive(void)
     r = read_cmd(&lines, &llen);
     if (r == 0) {
       if (Iflag && iflag) {
-        clearerr(shstdin);
+        clearerr(shin);
         if ((write(STDOUT_FILENO, dmsg, strlen(dmsg) + 1)) < 0)
           return sherrx(1, "write");
         stack_restore(mark);
@@ -550,8 +550,8 @@ _lineread_(int ps1)
     char *prompt;
     addeventloop(&el, STDIN_FILENO, POLLIN, stdin_cb, NULL);
     prompt = update_prompt(ps1);
-    fputs(prompt, shstdout);
-    fflush(shstdout);
+    fputs(prompt, shout);
+    fflush(shout);
     nxtline = NULL;
     el.running = 1;
     while (el.running) {
@@ -559,8 +559,8 @@ _lineread_(int ps1)
       if (intsig) {
         intsig = 0;
         putchar('\n');
-        fputs(prompt, shstdout);
-        fflush(shstdout);
+        fputs(prompt, shout);
+        fflush(shout);
         nxtline = NULL;
         el.running = 1;
         continue;

@@ -19,9 +19,9 @@ catcmd(char **argv)
 
   if (argc == 1) {
     buf = salloc(bufsize);
-    while ((n = fread(buf, 1, bufsize, shstdin)) > 0)
-      fwrite(buf, 1, n, shstdout);
-    if (ferror(shstdin))
+    while ((n = fread(buf, 1, bufsize, shin)) > 0)
+      fwrite(buf, 1, n, shout);
+    if (ferror(shin))
       return sherr(1, argv[0], "Bad file descriptor\n");
     if (buf)
       sfree(buf);
@@ -34,7 +34,7 @@ catcmd(char **argv)
     bufsize = GETBLKSIZE(f, st);
     buf = salloc(bufsize);
     while ((n = fread(buf, 1, bufsize, f)) > 0)
-      fwrite(buf, 1, n, shstdout);
+      fwrite(buf, 1, n, shout);
     fclose(f);
     i++;
   }

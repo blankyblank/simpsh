@@ -3,10 +3,9 @@
 
 #include "arg.h"
 #include "builtins.h"
+#include "lineio.h"
 #include "utils.h"
 #include "errmsg.h"
-
-void print_lines(FILE *fp, int ln);
 
 int
 headcmd(char *argv[])
@@ -14,6 +13,7 @@ headcmd(char *argv[])
   int ln = 10, status = 0;
   char *f, *arg;
   size_t argc = 0;
+  lr_t lr;
 
   array_len(argv, argc);
   ARGBEGIN
@@ -40,40 +40,36 @@ ARGNUM:
     for (size_t i = 0; i < argc; i++) {
       FILE *fp;
       f = *argv++;
-      if (!(fp = fopen(f, "r"))) {
+      if (!(fp = lropen(&lr, f))) {
         status = sherr(1, f, "could not access file");
         continue;
       }
       if (argc > 1)
-        fprintf(shstdout,"%s==> %s <==\n", (i > 0) ? "\n" : "", f);
-      print_lines(fp, ln);
+        fprintf(shout,"%s==> %s <==\n", (i > 0) ? "\n" : "", f);
+      while (ln > 0) {
+        char *line;
+        size_t len;
+        if (!(line = lrread(&lr, &len)))
+          break;
+        fwrite(line, 1, len, shout);
+        fputc('\n', shout);
+        ln--;
+      }
       fclose(fp);
     }
     return status;
   }
-  print_lines(shstdin, ln);
-  return status;
-}
 
-void
-print_lines(FILE *fp, int ln)
-{
-  char buf[BUFSIZ];
+  lr.fp = shin;
+  lr.pos = lr.end = 0;
   while (ln > 0) {
-    size_t n = fread(buf, 1, sizeof(buf), fp);
-    if (n == 0)
+    char *line;
+    size_t len;
+    if (!(line = lrread(&lr, &len)))
       break;
-    char *p = buf, *end = buf + n;
-    while (p < end && ln > 0) {
-      char *nl = memchr(p, '\n', end - p);
-      if (nl) {
-        fwrite(p, 1, nl - p + 1, shstdout);
-        p = nl + 1;
-        ln--;
-      } else {
-        fwrite(p, 1, end - p, shstdout);
-        p = end;
-      }
-    }
+    fwrite(line, 1, len, shout);
+    fputc('\n', shout);
+    ln--;
   }
+  return status;
 }

@@ -590,7 +590,7 @@ runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
   jmploc jmploc;
 
   if (predir) {
-    fflush(shstdout);
+    fflush(shout);
     if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
       return 1;
   }
@@ -637,7 +637,7 @@ runshcmd(shfunc *restrict f, const builtin *restrict b, char **restrict final, w
   int status;
 
   if (predir) {
-    fflush(shstdout);
+    fflush(shout);
     if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
       return 1;
   }
@@ -1140,27 +1140,27 @@ run_pipe(const cmd_tree *n)
   size_t outlen, llen = 0;
   for (size_t i = 0; i < nstg; i++) {
     if (i > 0) {
-      stdinbk = shstdin;
-      shstdin = fmemopen(lastbuf, llen, "r");
+      stdinbk = shin;
+      shin = fmemopen(lastbuf, llen, "r");
       cleanbuf = lastbuf;
     }
     if (i < nstg - 1) {
-      fflush(shstdout);
-      stdoutbk = shstdout;
-      shstdout = open_memstream(&outbuf, &outlen);
+      fflush(shout);
+      stdoutbk = shout;
+      shout = open_memstream(&outbuf, &outlen);
     }
     status = run_commands(stgs[i], 0);
     if (i < nstg - 1) {
-      fclose(shstdout);
-      shstdout = stdoutbk;
+      fclose(shout);
+      shout = stdoutbk;
       lastbuf = outbuf;
       llen = outlen;
     }
     if (i > 0) {
-      fclose(shstdin);
+      fclose(shin);
       if (cleanbuf)
         free(cleanbuf);
-      shstdin = stdinbk;
+      shin = stdinbk;
     }
   }
   return status;

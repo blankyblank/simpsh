@@ -460,14 +460,14 @@ echocmd(char *argv[])
   if (fcntl(STDOUT_FILENO, F_GETFD) < 0)
     return sherr(1, argv0, "could not write to stdout");
   for (size_t i = 0; argv[i]; i++) {
-    if (fputs(argv[i], shstdout) == EOF)
+    if (fputs(argv[i], shout) == EOF)
       return sherr(1, argv0, "could not write to stdout");
     if (i < argc - 1)
-      if (fputc(' ', shstdout) == EOF)
+      if (fputc(' ', shout) == EOF)
         return sherr(1, argv0, "could not write to stdout");
   }
   if (!(nf & FLAG_N))
-    if (fputc('\n', shstdout) == EOF) {
+    if (fputc('\n', shout) == EOF) {
       warn("%s: %s", argv0, "could not write to stdout");
       return 1;
     }
@@ -562,8 +562,8 @@ readcmd(char **argv)
     fflush(stderr);
   }
   stcheck(32);
-  clearerr(shstdin);
-  while ((c = fgetc(shstdin))) {
+  clearerr(shin);
+  while ((c = fgetc(shin))) {
     switch (c) {
       case EOF:
         status = 1;
@@ -571,7 +571,7 @@ readcmd(char **argv)
       case '\0':
         continue;
       case '\\':
-        if ((c = fgetc(shstdin)) == EOF) {
+        if ((c = fgetc(shin)) == EOF) {
           status = 1;
           goto rend;
         }
@@ -928,18 +928,18 @@ umaskcmd(char **argv)
     int val[] = { usrp, grpp, othp };
 
     for (int i = 0; i <= 2; i++) {
-      putc(ugo[i], shstdout);
-      putc('=', shstdout);
+      putc(ugo[i], shout);
+      putc('=', shout);
       if (val[i] & 4)
-        putc('r', shstdout);
+        putc('r', shout);
       if (val[i] & 2)
-        putc('w', shstdout);
+        putc('w', shout);
       if (val[i] & 1)
-        putc('x', shstdout);
+        putc('x', shout);
       if (i < 2)
-        putc(',', shstdout);
+        putc(',', shout);
     }
-    putc('\n', shstdout);
+    putc('\n', shout);
     return 0;
   }
 

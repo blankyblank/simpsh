@@ -95,8 +95,8 @@ extern GSTATE gstate;
 extern const char shname[];
 extern const char shusg[43];
 extern char **environ;
-extern FILE *shstdin;
-extern FILE *shstdout;
+extern FILE *shin;
+extern FILE *shout;
 
 #define LSTATUS     (gstate.l_status)
 #define RETVAL      (gstate.ret_val)
