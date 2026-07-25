@@ -9,13 +9,13 @@ BINDIR := $(DESTDIR)$(PREFIX)/bin
 BUILD       ?= release
 
 ## dynamic | static | static-musl
-BUILD_LINK  ?= static
+BUILD_LINK  ?= dynamic
 
 ## libedit
 LIBEDITFLAGS := -DLIBEDIT
 
 ## extra builtins
-EXTRAS := basename cat dirname head tail
+EXTRAS := basename cat cut dirname head tail
 
 ## sanitizer flags: use with the sanitize build target
 ASANFLAGS := -fsanitize=address,undefined
