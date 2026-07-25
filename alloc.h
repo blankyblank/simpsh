@@ -22,7 +22,7 @@
 
 /* so far 8000 for minstack_s seems pretty good for performance, but it seems
  * large which can have it's own drawbacks test more sized */
-#define align_mem(n) (((n) + 15) & ~(size_t)15)
+#define align_mem(n) (((n) + (_Alignof(max_align_t) - 1)) & ~(size_t)(_Alignof(max_align_t) - 1))
 #define MINSTACK_S   align_mem(8192)
 #define MEMSIZE    4096
 #define MEMMAGIC     0x534C4142
@@ -222,25 +222,34 @@ strndup_(const char *restrict s, size_t n)
   return dup;
 }
 
-static inline void*
+static inline void *
 srealloc(void *p, size_t s)
 {
-  if (s && !p) {
-    p = salloc(s);
-    return p;
-  } else if (p && !s) {
+  if (!p && !s)
+    return NULL;
+  if (s && !p)
+    return salloc(s);
+  if (p && !s) {
     sfree(p);
     return NULL;
-  } else if (!p && !s) {
-    return NULL;
-  } else {
-    char *t = strdup_((char *)p);
-    sfree(p);
-    p = salloc(s);
-    p = strdup_(p);
-    sfree(t);
-    return p;
   }
+  void *magic;
+  size_t o;
+  char *n;
+
+  magic = *(void **)((char *)p - sizeof(slab *));
+  if (magic == LARGEMAGIC) {
+    size_t *base = (size_t *)((char *)p - sizeof(slab *) - sizeof(size_t));
+    o = *base - sizeof(slab *) - sizeof(size_t);
+  } else {
+    slab *sp = magic;
+    o = sp->stsz - sizeof(slab *);
+  }
+  n = salloc(s);
+  if (n)
+    memcpy(n, p, o < s ? o : s);
+  sfree(p);
+  return n;
 }
 
 static inline void *
