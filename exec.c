@@ -55,11 +55,6 @@ struct redirtable {
   int flags;
   mode_t mode;
 };
-struct fdcachetable {
-  const char *path;
-  int fd;
-  size_t len;
-};
 
 static const struct redirtable redir_tab[] = {
   [RDIN] = { O_RDONLY },
@@ -69,8 +64,6 @@ static const struct redirtable redir_tab[] = {
   [RDRW] = { O_RDWR | O_CREAT, OPENRW },
 };
 redir *predir = NULL;
-static struct fdcachetable fdcache[FD_CACHE_MAX];
-static int fdc_cnt;
 
 static void poptmpvars(tmp_var *, size_t);
 static int save_fd(redir *, fdlist *, size_t * restrict);
@@ -128,51 +121,6 @@ restore_fd(fdlist *sfd, size_t sfdc)
 }
 
 static int
-findcachefd(wf *r)
-{
-  if (r->len < 8)
-    return -1;
-  for (int i = 0; i < fdc_cnt; i++)
-    if (r->word[1] == fdcache[i].path[1] && memcmp(r->word, fdcache[i].path, fdcache[i].len) == 0)
-      return fdcache[i].fd;
-  return -1;
-}
-
-static int
-fdcacheadd(wf *r, int fd)
-{
-  if (fdc_cnt >= FD_CACHE_MAX)
-    return 0;
-  fdcache[fdc_cnt].path = strdup_(r->word);
-  fdcache[fdc_cnt].len = r->len;
-  fdcache[fdc_cnt++].fd = fd;
-  fcntl(fd, F_SETFD, FD_CLOEXEC);
-  return 1;
-}
-
-static int
-cancachefd(wf *r)
-{
-  if (r->len < 8)
-    return 0;
-  if (r->word[0] != '/' || r->word[1] != 'd' || r->word[2] != 'e')
-    return 0;
-  static const struct {
-    const char *s;
-    size_t len;
-  } fdnames[] = {
-    { "/dev/null",   sizeof("/dev/null") - 1   },
-    { "/dev/tty",    sizeof("/dev/tty") - 1    },
-    { "/dev/zero",   sizeof("/dev/zero") - 1   },
-    { "/dev/random", sizeof("/dev/random") - 1 }
-  };
-  for (int i = 0; i < (int)arsz(fdnames); i++)
-    if (!memcmp(r->word, fdnames[i].s, fdnames[i].len))
-      return 1;
-  return 0;
-}
-
-static int
 apply_redir(redir *r)
 {
   int qs;
@@ -187,41 +135,14 @@ apply_redir(redir *r)
       case RDCLOB:
       case RDRW:
         flags = redir_tab[r->type].flags;
-        if ((fd = findcachefd(r->name)) >= 0)
-          goto dupredir;
-        if (cancachefd(r->name)) {
-          flags = O_RDWR, cached = 1;
-          OPENFD(name, flags, fd)
-          fdcacheadd(r->name, fd);
-          goto dupredir;
-        }
         OPENFD(name, flags, fd)
         goto dupredir;
         break;
       case RDOUT:
         if (Cflag) {
-          if ((fd = findcachefd(r->name)) >= 0) {
-            cached = 1;
-            goto dupredir;
-          } else if (cancachefd(r->name)) {
-            flags = O_RDWR, cached = 1;
-            OPENFD(name, flags, fd);
-            fdcacheadd(r->name, fd);
-            goto dupredir;
-          }
           if ((fd = open(name, O_WRONLY | O_CREAT | O_TRUNC | O_EXCL, OPENRW)) < 0)
             return sherr(1, name, "open");
         } else {
-          flags = redir_tab[r->type].flags;
-          if ((fd = findcachefd(r->name)) >= 0) {
-            cached = 1;
-            goto dupredir;
-          } else if (cancachefd(r->name)) {
-            flags = O_RDWR, cached = 1;
-            OPENFD(name, flags, fd);
-            fdcacheadd(r->name, fd);
-            goto dupredir;
-          }
           OPENFD(name, O_WRONLY | O_CREAT | O_TRUNC, fd)
         }
         goto dupredir;
