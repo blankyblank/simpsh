@@ -21,3 +21,14 @@ if [ "$out2" != true ]; then
 else
   test_pass  "out2" "matches" "true"
 fi
+
+msg_run '|| and && test 2: "true && echo true || echo false"'
+out2=$(../simpsh -c 'true &&
+  echo true ||
+echo false')
+if [ "$out2" != true ]; then
+  test_fail "out2" "expected" "true"
+  exit 1
+else
+  test_pass  "out2" "matches" "true"
+fi

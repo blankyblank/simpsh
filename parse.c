@@ -293,7 +293,7 @@ parse_andor(void)
     if (tbuf.type != TAND && tbuf.type != TOR)
       return l;
     token op = tbuf.type;
-    gettok(CHKALIAS | CHKKWD);
+    gettok(CHKALIAS | CHKKWD | CHKNL);
     if (!(r = parse_pipe()))
       return NULL;
     if (eflag) {
