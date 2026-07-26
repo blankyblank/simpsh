@@ -22,13 +22,13 @@ else
   test_pass  "out2" "matches" "true"
 fi
 
-msg_run '|| and && test 2: "true && echo true || echo false"'
-out2=$(../simpsh -c 'true &&
+msg_run '|| and && line continuation test: "true && echo true || echo false"'
+out3=$(../simpsh -c 'true &&
   echo true ||
-echo false')
-if [ "$out2" != true ]; then
-  test_fail "out2" "expected" "true"
+  echo false')
+if [ "$out3" != true ]; then
+  test_fail "out3" "expected" "true"
   exit 1
 else
-  test_pass  "out2" "matches" "true"
+  test_pass  "out3" "matches" "true"
 fi
