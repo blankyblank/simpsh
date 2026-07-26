@@ -2,7 +2,7 @@
 
 a simple (mostly) shell.
 
-This is still a WIP, there are things that aren't implemented yet, and there are definitely stil bugs.
+This is still a WIP, there are things that aren't implemented yet, and there are definitely still bugs.
 
 As I get closer to finishing the initial features needed for the shell. I expect to go through and hunt for bugs.
 and places things aren't stable.
