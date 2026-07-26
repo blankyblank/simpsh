@@ -72,6 +72,9 @@ typedef enum {
 #ifdef ENABLE_HEAD
   HEADH,
 #endif /* ENABLE_HEAD */
+#ifdef ENABLE_SLEEP
+  SLEEPH,
+#endif /* ENABLE_SLEEP */
 #ifdef ENABLE_TAIL
   TAILH,
 #endif /* ENABLE_TAIL */

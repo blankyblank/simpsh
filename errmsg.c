@@ -742,6 +742,21 @@ static const char headhelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_HEAD */
 
+#ifdef ENABLE_SLEEP
+static const char sleephelp[] =
+  "sleep [n[.n][smhd]] ...\n"
+  "\n"
+  "    Suspend execution for at least the given time.\n"
+  "\n"
+  "    Each argument is a non-negative number, optionally followed by\n"
+  "    a suffix: s (seconds, default), m (minutes), h (hours), or\n"
+  "    d (days).  A fractional part is allowed (e.g., 1.5h).  When\n"
+  "    multiple arguments are given, their durations are added.\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, 1 on error.";
+#endif /* ENABLE_SLEEP */
+
 #ifdef ENABLE_TAIL
 static const char tailhelp[] =
   "tail [-f] [-n count] [file ...]\n"
@@ -817,6 +832,9 @@ const builtinhelp helpmsgs[] = {
 #endif
 #ifdef ENABLE_HEAD
   [HEADH] =     { "head",     "[-n count] [file ...]",  headhelp        },
+#endif
+#ifdef ENABLE_SLEEP
+  [SLEEPH] =     { "sleep",   "[n[.n][smhd]]",          sleephelp       },
 #endif
 #ifdef ENABLE_TAIL
   [TAILH] =     { "tail",     "[-f] [-n count] [file]", tailhelp        },

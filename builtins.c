@@ -85,6 +85,9 @@ extern int dirnamecmd(char **);
 #ifdef ENABLE_HEAD
 extern int headcmd(char **);
 #endif /* ENABLE_HEAD */
+#ifdef ENABLE_SLEEP
+extern int sleepcmd(char **);
+#endif /* ENABLE_SLEEP */
 #ifdef ENABLE_TAIL
 extern int tailcmd(char **);
 #endif /* ENABLE_TAIL */
@@ -139,6 +142,9 @@ const builtin builtins[] = {
   { "return",   &returncmd,   SBLTN },
   { "set",      &setcmd,      SBLTN },
   { "shift",    &shiftcmd,    SBLTN },
+#ifdef ENABLE_SLEEP
+  { "sleep",    &sleepcmd,    0     },
+#endif  /* ENABLE_SLEEP */
 #ifdef ENABLE_TAIL
   { "tail",     &tailcmd,     0     },
 #endif  /* ENABLE_TAIL */
