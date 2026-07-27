@@ -50,7 +50,7 @@ vardash(size_t *o)
   char *buf = st_alloc(32);
   int p = 0;
   for (int i = 0; i < SHOPTC; i++) {
-    if (SHOPTS[i])
+    if (GETSHOPT(i))
       buf[p++] = shoptch[i];
   }
   buf[p] = '\0', *o = p;

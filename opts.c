@@ -136,12 +136,12 @@ listopts(int m)
   if (m) {
     puts("Current Shell Option Settings");
     for (size_t i = 0; i < OPTC; i++) {
-      printf("%-12s\t\t\t\t%s\n",shoptname[i], onoff[(int)SHOPTS[i]]);
+      printf("%-12s\t\t\t\t%s\n",shoptname[i], onoff[GETSHOPT(i)]);
     }
   } else {
     for (size_t i = 0; i < OPTC; i++) {
       char s;
-      s = (SHOPTS[i]) ? '-' : '+';
+      s = (GETSHOPT(i)) ? '-' : '+';
       printf("set %co %s\n", s, shoptname[i]);
     }
   }
@@ -150,8 +150,7 @@ listopts(int m)
 void
 init_opts(void)
 {
-  for (int i = 0; i < OPTC; i++)
-    SHOPTS[i] = 0;
+  SHOPTS = 0;
   hflag = 1;
 }
 
@@ -224,7 +223,10 @@ setcmd(char **argv)
       idx = chkopt(o);
       if (idx < 0)
         return 1;
-      SHOPTS[idx] = minus;
+      if  (minus)
+        SETSHOPT(idx);
+      else
+        CLRSHOPT(idx);
       continue;
     }
 

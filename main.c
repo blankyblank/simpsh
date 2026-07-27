@@ -20,6 +20,7 @@
 #include "simpsh.h"
 #include "var.h"
 
+int fakectx = 0;
 const char shname[] = "simpsh";
 const char shusg[43] = "[-abCefhiImnosvVx] [-o longopt] [-c 'cmd']";
 const char defpathn[80] = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
@@ -82,7 +83,7 @@ main(int argc, char **argv)
       oarg = EARGF(usage(shname, shusg));
       i = chkopt(oarg);
       if (i >= 0)
-        SHOPTS[i] = 1;
+        SETSHOPT(i);
       else {
         fprintf(stderr, "%s: -o: %s: invalid option name\n", argv0, oarg);
         exit(1);

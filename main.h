@@ -16,6 +16,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "opts.h"
+
 enum {
   FLAG_L = 1 << 0,
   FLAG_N = 1 << 1,
@@ -43,8 +45,6 @@ typedef int64_t i64;
 typedef uint64_t u64;
 
 #define MAX_ENV      500
-#define OPTC 19
-#define SHOPTC 16 /* short option count */
 #define defpath      "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 #define doexpect(x)   __builtin_expect(!!(x), 1)
 #define dontexpect(x) __builtin_expect(!!(x), 0)
@@ -85,11 +85,12 @@ typedef struct {
   int lineno;
   int bgpgid;
   int funcdepth;
-  char shopts[OPTC];
+  shopt shopts;
   struct stackframe stackframes[64];
   int stackdepth;
 } GSTATE;
 
+extern int fakectx;
 extern const char defpathn[80];
 extern GSTATE gstate;
 extern const char shname[];
@@ -98,17 +99,17 @@ extern char **environ;
 extern FILE *shin;
 extern FILE *shout;
 
-#define LSTATUS     (gstate.l_status)
-#define RETVAL      (gstate.ret_val)
-#define RETNOW      (gstate.ret_now)
-#define LOOPDEPTH   (gstate.loop_depth)
-#define SHOPTS      (gstate.shopts)
-#define SHARGV        (gstate.shparm.argv)
-#define SHARGC        (gstate.shparm.argc)
-#define SHARGV0       (gstate.shparm.argv0)
-#define ALLOCED     (gstate.shparm.alloced)
-#define OPTIND      (gstate.shparm.opt_ind)
-#define OPTOFF      (gstate.shparm.opt_off)
+#define LSTATUS   (gstate.l_status)
+#define RETVAL    (gstate.ret_val)
+#define RETNOW    (gstate.ret_now)
+#define LOOPDEPTH (gstate.loop_depth)
+#define SHOPTS    (gstate.shopts.bits)
+#define SHARGV    (gstate.shparm.argv)
+#define SHARGC    (gstate.shparm.argc)
+#define SHARGV0   (gstate.shparm.argv0)
+#define ALLOCED   (gstate.shparm.alloced)
+#define OPTIND    (gstate.shparm.opt_ind)
+#define OPTOFF    (gstate.shparm.opt_off)
 
 static inline void
 pushframe(void)

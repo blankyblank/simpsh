@@ -1,6 +1,5 @@
 #ifndef SIG_H
 #define SIG_H
-/* clang-format off */
 #define _POSIX_C_SOURCE 200809L
 #include <signal.h>
 #include <unistd.h>
@@ -12,10 +11,9 @@
 
 #define EVMAX 16
 #ifndef NSIG
-#define NSIG 64
+  #define NSIG 64
 #endif /* NSIG */
 #define signal(sig, handler) __signal(sig, handler)
-/* clang-format on */
 
 typedef struct {
   int fd;

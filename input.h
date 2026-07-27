@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <unistd.h>
+
+#include "main.h"
 #include "opts.h"
 #include "simd.h"
 

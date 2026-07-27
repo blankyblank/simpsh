@@ -57,24 +57,24 @@ enum qs {
 
 /* clang-format off */
 static const unsigned char nchars[256] = {
-  [' '] = C_SPACE,
+  [' ']  = C_SPACE,
   ['\t'] = C_SPACE,
   ['\n'] = C_NL,
-  ['#'] = C_COMMENT,
+  ['#']  = C_COMMENT,
   ['\''] = C_SQUOTE,
-  ['"'] = C_DQUOTE,
+  ['"']  = C_DQUOTE,
   ['\\'] = C_BSLASH,
-  ['$'] = C_DOLLAR,
-  ['&'] = C_AMP,
-  ['|'] = C_PIPE,
-  [';'] = C_SEMI,
-  ['('] = C_LP,
-  [')'] = C_RP,
-  ['{'] = C_LB,
-  ['}'] = C_RB,
-  ['<'] = C_LT,
-  ['>'] = C_GT,
-  ['`'] = C_BTICK,
+  ['$']  = C_DOLLAR,
+  ['&']  = C_AMP,
+  ['|']  = C_PIPE,
+  [';']  = C_SEMI,
+  ['(']  = C_LP,
+  [')']  = C_RP,
+  ['{']  = C_LB,
+  ['}']  = C_RB,
+  ['<']  = C_LT,
+  ['>']  = C_GT,
+  ['`']  = C_BTICK,
 }; /* everything else is 0 = C_WORD */
 
 static const unsigned char dqchars[256] = {
