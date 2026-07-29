@@ -25,6 +25,7 @@
 #include "main.h"
 #include "opts.h"
 #include "path.h"
+#include "pipe.h"
 #include "simd.h"
 #include "simpsh.h"
 #include "utils.h"
@@ -303,7 +304,7 @@ breakcmd(char **argv)
 
   if (n > LOOPDEPTH)
     n = LOOPDEPTH;
-  gstate.loopbreak = n;
+  LOOPBREAK = n;
   return 0;
 }
 
@@ -383,7 +384,7 @@ continuecmd(char **argv)
 
   if (n > LOOPDEPTH)
     n = LOOPDEPTH;
-  gstate.loopcontinue = n;
+  LOOPCONT = n;
   return 0;
 }
 
@@ -436,7 +437,7 @@ dotcmd(char **argv)
     SHARGV[SHARGC] = NULL;
     ALLOCED = 1;
   }
-  RETNOW = LOOPDEPTH = gstate.loopbreak = gstate.loopcontinue = 0;
+  RETNOW = LOOPDEPTH = LOOPBREAK = LOOPCONT = 0;
 
   eval_run();
   RETNOW = 0;
@@ -515,6 +516,11 @@ exitcmd(char **argv)
     exnum = bltin_atoi(argv[1], argv[0], "a numeric argument is required");
     if (exnum < 0)
       return 1;
+  }
+  if (fakectx) {
+    RETVAL = exnum;
+    RETNOW = 1;
+    return exnum;
   }
   slclear();
   exit(exnum);
@@ -688,6 +694,8 @@ shiftcmd(char **argv)
   int argc = 0;
   int n = 0;
   array_len(argv, argc);
+  if (fakectx)
+    svfkargv(fkstate);
 
   if (argc == 1) {
     n = 1;
@@ -766,14 +774,21 @@ typecmd(char **argv)
   return status;
 }
 
-typedef struct {
-  const char *name;
-  int resource; /* cmd to get/set */
-  int factor; /* multiply by to get rlim_{cur,max} values */
-  char option; /* option character (-d, -f, ...) */
-} limit;
 #define SOFT 1 << 0
 #define HARD 1 << 1
+
+const limit limits[] = {
+  { "time(cpu-seconds)",    RLIMIT_CPU,     1,    't'  },
+  { "file(blocks)",         RLIMIT_FSIZE,   512,  'f'  },
+  { "coredump(blocks)",     RLIMIT_CORE,    512,  'c'  },
+  { "data(kbytes)",         RLIMIT_DATA,    1024, 'd'  },
+  { "stack(kbytes)",        RLIMIT_STACK,   1024, 's'  },
+  { "lockedmem(kbytes)",    RLIMIT_MEMLOCK, 1024, 'l'  },
+  { "memory(kbytes)",       RLIMIT_RSS,     1024, 'm'  },
+  { "nofiles(descriptors)", RLIMIT_NOFILE,  1,    'n'  },
+  { "processes",            RLIMIT_NPROC,   1,    'p'  },
+  { NULL,                   0,              0,    '\0' },
+};
 
 int
 ulimitcmd(char **argv)
@@ -783,19 +798,6 @@ ulimitcmd(char **argv)
   size_t optc = 0;
   const limit *l;
   char *opt = st_alloc(10 * sizeof(char));
-
-  static const limit limits[] = {
-    { "time(cpu-seconds)",    RLIMIT_CPU,     1,    't'  },
-    { "file(blocks)",         RLIMIT_FSIZE,   512,  'f'  },
-    { "coredump(blocks)",     RLIMIT_CORE,    512,  'c'  },
-    { "data(kbytes)",         RLIMIT_DATA,    1024, 'd'  },
-    { "stack(kbytes)",        RLIMIT_STACK,   1024, 's'  },
-    { "lockedmem(kbytes)",    RLIMIT_MEMLOCK, 1024, 'l'  },
-    { "memory(kbytes)",       RLIMIT_RSS,     1024, 'm'  },
-    { "nofiles(descriptors)", RLIMIT_NOFILE,  1,    'n'  },
-    { "processes",            RLIMIT_NPROC,   1,    'p'  },
-    { NULL,                   0,              0,    '\0' },
-  };
 
   array_len(argv, argc);
   ARGBEGIN
@@ -887,6 +889,8 @@ ulimitcmd(char **argv)
       return shwarn_arg(argv0, s, "unknown option");
 
     getrlimit(l->resource, &lim);
+    if (fakectx)
+      savefkulimit(fkstate, l->resource, lim.rlim_cur, lim.rlim_max);
     if (ltype & HARD)
       lim.rlim_max = (val == RLIM_INFINITY) ? val : val * l->factor;
     else
@@ -958,6 +962,8 @@ umaskcmd(char **argv)
         return shwarn_arg(argv0, argv[0], "octal number out of range");
       val = (val << 3) | (c - '0');
     }
+    if (fakectx)
+      svfkumask(fkstate);
     umask(val);
     return 0;
   }
@@ -1034,6 +1040,8 @@ umaskcmd(char **argv)
     if (*c == '\0')
       break;
   }
+  if (fakectx)
+    svfkumask(fkstate);
   umask((~mask) & 0777);
   return 0;
 }

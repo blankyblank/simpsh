@@ -16,6 +16,7 @@
 #include "expand.h"
 #include "opts.h"
 #include "path.h"
+#include "pipe.h"
 #include "utils.h"
 #include "var.h"
 
@@ -210,6 +211,9 @@ findvar_n(const char *restrict name, size_t nlen)
 void
 setvar(const char *restrict name, const char *restrict val, shvflags flags)
 {
+  if (fakectx) {
+    svfkvar(fkstate, name);
+  }
   if (aflag)
     flags |= VEXPRT;
   shvar *v, *n, *end;
@@ -306,6 +310,8 @@ callback:
 void
 rmvar(const char *name)
 {
+  if (fakectx)
+    svfkvar(fkstate, name);
   size_t ci;
   shvar *v, *end;
   size_t nlen;

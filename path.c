@@ -16,6 +16,7 @@
 #include "expand.h"
 #include "opts.h"
 #include "path.h"
+#include "pipe.h"
 #include "utils.h"
 #include "var.h"
 
@@ -301,6 +302,8 @@ cdcmd(char **argv)
       nts(respath, destlen - 1);
     if (!realpath(dir, respath))
       return sherr(1, bargv0, dir);
+    if (fakectx)
+      svfkcwd(fkstate);
     if (chdir(respath) < 0)
       return sherr(1, bargv0, dir);
     if (prnt) {
@@ -310,6 +313,8 @@ cdcmd(char **argv)
       return 1;
   } else {
     size_t plen, dlen;
+    if (fakectx)
+      svfkcwd(fkstate);
     if (chdir(dir) < 0)
       return sherr(1, bargv0, dir);
     if (prnt == 1) {

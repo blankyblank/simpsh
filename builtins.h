@@ -14,8 +14,16 @@ typedef struct {
   unsigned int flags;
 } builtin;
 
+typedef struct {
+  const char *name;
+  int resource; /* cmd to get/set */
+  int factor;   /* multiply by to get rlim_{cur,max} values */
+  char option;  /* option character (-d, -f, ...) */
+} limit;
+
 extern const builtin builtins[];
 extern int builtin_tab[BUILTIN_BUCKETS];
+extern const limit limits[];
 
 #define GETBLKSIZE(f, st) (fstat(fileno(f), &(st)), (st).st_blksize ? (st).st_blksize : BUFSIZ)
 #define SBLTN (1 << 0)

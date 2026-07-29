@@ -350,10 +350,8 @@ mwait(pid_t pid, int *wstatus)
   pid_t rpid;
   while ((rpid = waitpid(pid, wstatus, WNOHANG)) == 0) {
     runeventloop(&el, -1);
-    if (intsig) {
-      intsig = 0;
-      kill(abs(pid), SIGINT);
-    }
+    intsigchk(pid);
+    sigquitchk(pid);
   }
   return rpid;
 }

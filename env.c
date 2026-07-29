@@ -8,6 +8,7 @@
 
 #include "alloc.h"
 #include "main.h"
+#include "pipe.h"
 #include "env.h"
 #include "errmsg.h"
 #include "lex.h"
@@ -313,6 +314,8 @@ setalias(const char *restrict name, const char *restrict val)
 {
   alias *a;
 
+  if (fakectx)
+    svfkalias(fkstate, name);
   if ((a = findalias(name))) {
     sfree(a->value);
     a->value = strdup_(val);
@@ -360,6 +363,8 @@ rmalias(const char *name)
   alias **prev;
   alias *a;
 
+  if (fakectx)
+    svfkalias(fkstate, name);
   i = hash(name, ENV_BUCKETS);
   prev = &alias_tab[i];
   a = alias_tab[i];

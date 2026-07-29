@@ -29,6 +29,18 @@
   (c == '&' || c == '|' || c == ';' || c == '(' || c == ')' || c == '{' || \
    c == '}' || c == '<' || c == '>')
 
+#define DUPFD(s, d) \
+  if (dup2((s), (d)) < 0) { \
+    return sherrx(1, "dup fd"); \
+  }
+#define OPENFD(f, m, n) \
+  if ((n = open((f), (m), 0666)) < 0) { \
+    return sherrx(1, "open fd"); \
+  }
+#define CLOSEFD(f) \
+  if (close(f) < 0) { \
+    return sherrx(1, "close fd"); \
+  }
 
 /* project specific replacements */
 

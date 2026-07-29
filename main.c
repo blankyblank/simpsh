@@ -20,11 +20,10 @@
 #include "simpsh.h"
 #include "var.h"
 
-int fakectx = 0;
 const char shname[] = "simpsh";
 const char shusg[43] = "[-abCefhiImnosvVx] [-o longopt] [-c 'cmd']";
 const char defpathn[80] = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-GSTATE gstate = { .shparm.opt_ind = 1, .shparm.opt_off = -1 };
+GSTATE gstate = { .shparm.optind = 1, .shparm.optoff = -1 };
 FILE *shin;
 FILE *shout;
 

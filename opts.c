@@ -11,6 +11,7 @@
 #include "input.h"
 #include "main.h"
 #include "opts.h"
+#include "pipe.h"
 #include "utils.h"
 #include "var.h"
 
@@ -173,6 +174,8 @@ setcmd(char **argv)
   size_t argc = 0;
   array_len(argv, argc);
 
+  if (fakectx)
+    svfkopts(fkstate);
   if (argc < 2) {
     printvars("", 0);
     return 0;
@@ -238,6 +241,8 @@ setcmd(char **argv)
     if (!pos)
       pos = salloc(argc * sizeof(char *));
     pos[pcnt] = NULL;
+    if (fakectx)
+      svfkargv(fkstate);
     freeshargv();
     ALLOCED = 1;
     SHARGV = pos;

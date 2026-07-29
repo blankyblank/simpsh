@@ -10,8 +10,18 @@
 #include "parse.h"
 #include "sig.h"
 
-
 #define builtin_launch(b, a) (b->fn(a))
+#define intsigchk(pid) \
+  if (intsig) { \
+    intsig = 0; \
+    kill((pid), SIGINT); \
+  }
+
+#define sigquitchk(pid) \
+  if (chksig[SIGQUIT]) { \
+    chksig[SIGQUIT] = 0; \
+    kill((pid), SIGQUIT); \
+  }
 
 extern int run_commands(const cmd_tree *, int);
 extern int forkexec(char *, char **, char **, const char *, redir *r);
@@ -23,10 +33,8 @@ fgwait(job *j)
 
   while (j->state == JRUN) {
     runeventloop(&el, -1);
-    if (intsig) {
-      intsig = 0;
-      kill(-j->pgid, SIGINT);
-    }
+    intsigchk(-j->pgid);
+    sigquitchk(-j->pgid);
     killjob();
   }
 
