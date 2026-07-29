@@ -919,7 +919,7 @@ char *
 exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
 {
   size_t i = 0, vlen, end, tlen = 0;
-  char buf[32], *val;
+  char buf[32], *val, _buf[24];
 
   while (i < slen) {
     size_t s = i;
@@ -939,7 +939,6 @@ exp_str(char *restrict str, size_t slen, size_t *restrict outlen)
         break;
       case '?':
         {
-          char _buf[24];
           vlen = lltoa(LSTATUS, _buf);
           val = _buf;
           end = i + 2;

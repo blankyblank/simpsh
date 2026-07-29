@@ -20,19 +20,20 @@ typedef struct editline EditLine;
 typedef int (*el_rfunc_t)(EditLine *, wchar_t *);
 
 #define EL_PROMPT 0
+#define H_SETSIZE 1
 #define EL_EDITOR 2
 #define EL_SIGNAL 3
-#define EL_BIND   4
-#define EL_ADDFN  9
-#define EL_HIST   10
-#define EL_GETCFN 13
-#define H_SETSIZE 1
 #define H_FIRST   3
+#define EL_BIND   4
 #define H_LAST    4
 #define H_PREV    5
 #define H_NEXT    6
 #define H_CURR    8
+#define EL_ADDFN  9
+#define EL_HIST   10
 #define H_END     12
+#define EL_GETCFN 13
+#define EL_REFRESH 20
 
 #define DLSYM_FN(h, var, name) *(void **)&(var) = dlsym((h), (name))
 static EditLine *(*libedit_el_init)(const char *, FILE *, FILE *, FILE *);

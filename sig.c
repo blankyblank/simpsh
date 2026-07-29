@@ -15,6 +15,7 @@
 #include "alloc.h"
 #include "errmsg.h"
 #include "job.h"
+#include "pipe.h"
 #include "sig.h"
 #include "simpsh.h"
 #include "utils.h"
@@ -27,10 +28,10 @@ jmploc *volatile handler;
 
 const char *signame[NSIG + 1];
 eventloop el;
-static unsigned long trapm = 0;
+unsigned long trapm = 0;
 int tty_fd = -1;
 int selfpipe[2] = { -1, -1 };
-int intpipe[2] = { -1, -1 };
+int sigpipe[2] = { -1, -1 };
 
 #define init_eventloop(e) ((e)->nsrc = 0, (e)->running = 1)
 static void restoreterm(void) { tcsetattr(tty_fd, TCSADRAIN, &sh_termios); }
@@ -45,16 +46,15 @@ init_sig(void)
       fcntl(selfpipe[1], F_SETFD, FD_CLOEXEC);
       fcntl(selfpipe[1], F_SETFL, fcntl(selfpipe[1], F_GETFL) | O_NONBLOCK);
     }
-    if (pipe(intpipe) == 0) {
-      fcntl(intpipe[0], F_SETFD, FD_CLOEXEC);
-      fcntl(intpipe[0], F_SETFL, fcntl(intpipe[0], F_GETFL) | O_NONBLOCK);
-      fcntl(intpipe[1], F_SETFD, FD_CLOEXEC);
-      fcntl(intpipe[1], F_SETFL, fcntl(intpipe[1], F_GETFL) | O_NONBLOCK);
+    if (pipe(sigpipe) == 0) {
+      fcntl(sigpipe[0], F_SETFD, FD_CLOEXEC);
+      fcntl(sigpipe[0], F_SETFL, fcntl(sigpipe[0], F_GETFL) | O_NONBLOCK);
+      fcntl(sigpipe[1], F_SETFD, FD_CLOEXEC);
+      fcntl(sigpipe[1], F_SETFL, fcntl(sigpipe[1], F_GETFL) | O_NONBLOCK);
     }
-
     init_eventloop(&el);
     addeventloop(&el, selfpipe[0], POLLIN, chld_cb, NULL);
-    addeventloop(&el, intpipe[0], POLLIN, int_cb, NULL);
+    addeventloop(&el, sigpipe[0], POLLIN, int_cb, NULL);
   }
   init_traps();
 }
@@ -142,10 +142,9 @@ runeventloop(eventloop *el, int cont)
 }
 
 static char signum[NSIG][8];
-static char *trap[NSIG];                /* trap command strings */
-static unsigned char sigmode[NSIG];     /* S_DFL, S_CATCH, S_IGN, S_HARD_IGN */
+char *trap[NSIG];                   /* trap command strings */
+static unsigned char sigmode[NSIG]; /* S_DFL, S_CATCH, S_IGN, S_HARD_IGN */
 static const int sigprobe[] = { SIGCHLD, SIGINT, SIGHUP, SIGTERM, SIGQUIT };
-static void setsignal(int);
 
 int
 init_traps(void)
@@ -202,11 +201,12 @@ init_traps(void)
     setsignal(SIGHUP);
     setsignal(SIGTERM);
     setsignal(SIGQUIT);
+    setsignal(SIGWINCH);
   }
   return 1;
 }
 
-static void
+void
 setsignal(int n)
 {
   int set;
@@ -229,10 +229,9 @@ setsignal(int n)
       case SIGINT:
       case SIGTERM:
       case SIGHUP:
-        set = iflag ? S_CATCH : S_DFL;
-        break;
       case SIGQUIT:
-        set = iflag ? S_IGN : S_DFL;
+      case SIGWINCH:
+        set = iflag ? S_CATCH : S_DFL;
         break;
       default:
         set = S_DFL;
@@ -263,8 +262,8 @@ trapsig(int n)
     if (n == SIGCHLD && mflag)
       if (write(selfpipe[1], "\1", 1) < 0)
         return;
-    if (n == SIGINT && mflag)
-      if (write(intpipe[1], "\1", 1) < 0)
+    if ((n == SIGINT || n == SIGQUIT) && mflag)
+      if (write(sigpipe[1], "\1", 1) < 0)
         return;
     return;
   } else {
@@ -275,9 +274,16 @@ trapsig(int n)
             return;
         ndnotify = 1;
         break;
+      case SIGQUIT:
+        if (mflag)
+          if (write(sigpipe[1], "\1", 1) < 0)
+            return;
+        if (iflag && !trap[SIGQUIT] && handler)
+          siglongjmp(handler->loc, 1);
+        break;
       case SIGINT:
         if (mflag)
-          if (write(intpipe[1], "\1", 1) < 0)
+          if (write(sigpipe[1], "\1", 1) < 0)
             return;
         intsig = 1;
         if (iflag && !trap[SIGINT] && handler)
@@ -290,6 +296,11 @@ trapsig(int n)
         for (job *j = job_list; j; j = j->next)
           kill(-j->pgid, SIGHUP);
         _exit(0);
+        break;
+      case SIGWINCH:
+        if (mflag)
+          if (write(sigpipe[1], "\1", 1) < 0)
+            return;
         break;
       default:
         break;
@@ -513,6 +524,8 @@ trapcmd(char **argv)
         if (strcmp(signame[n], "KILL") == 0 || strcmp(signame[n], "STOP") == 0)
           continue;
 
+        if (fakectx)
+          svfktraps(fkstate, n);
         if (trap[n])
           sfree(trap[n]), trapm &= ~(1ULL << n);
         if (!act || (act[0] == '-' && act[1] == '\0'))

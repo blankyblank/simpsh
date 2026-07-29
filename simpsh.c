@@ -257,6 +257,8 @@ simpsh_run(void)
     }
     if (intsig)
       intsig = 0;
+    if (chksig[SIGQUIT])
+      chksig[SIGQUIT] = 0;
   }
 }
 
@@ -273,7 +275,6 @@ sh_interactive(void)
   if (load_libedit()) {
     edl = libedit_el_init(SHARGV0, shin, shout, stderr);
     libedit_el_set(edl, EL_EDITOR, "vi");
-    libedit_el_set(edl, EL_SIGNAL, 1);
     libedit_el_set(edl, EL_GETCFN, input_notify);
     libedit_el_set(edl, EL_PROMPT, prompt_fn);
     libedit_el_set(
@@ -291,11 +292,10 @@ sh_interactive(void)
     /* service events between sub-commands within same command list */
     runeventloop(&el, 0);
     killjob();
-    if (ndnotify || !bflag) {
+    if (ndnotify) {
       ndnotify = 0;
       jobnotify();
     }
-    ndnotify = 0;
     if (intsig) {
       intsig = 0;
       putchar('\n');
@@ -352,7 +352,10 @@ need_more(const char *lines, size_t llen)
   nctx ctx = NCTX_NORMAL;
   int depth = 0, last = 0, prev = 0;
   int boundary = 1, kdepth = 0;
-  size_t i;
+  int heredoc = 0, heredocln = 0;
+  const char *eofdelim = NULL;
+  size_t dlen = 0, i;
+  ptrdiff_t prevnl = -1;
 
   for (i = 0; i < llen; i++) {
     int c = (unsigned char)lines[i];
@@ -379,17 +382,47 @@ need_more(const char *lines, size_t llen)
             depth = 1;
           }
         } else {
-          if (c == '\n' || c == ' ' || c == '\t')
+          if (c == '\n' || c == ' ' || c == '\t') {
+            if (c == '\n') {
+              if (heredoc && heredocln) {
+                size_t lstart = (prevnl == -1) ? 0 : prevnl + 1;
+                if ((i - lstart) == dlen && !memcmp(lines + lstart, eofdelim, dlen))
+                  heredoc = 0;
+              }
+              if (heredoc && !heredocln)
+                heredocln = 1;
+              prevnl = i;
+            }
             boundary = 1;
-          else if (c == '&')
+          } else if (c == '&')
             boundary = 1;
+
+          if (c == '<' && next == '<') {
+            i += 2;
+            while (i < llen && (lines[i] == ' ' || lines[i] == '\t'))
+              i++;
+            if (i < llen && lines[i] == '-')
+              i++;
+            while (i < llen && (lines[i] == ' ' || lines[i] == '\t'))
+              i++;
+            eofdelim = lines + i;
+            dlen = 0;
+            while (i < llen && lines[i] != '\n' && lines[i] != ' ' && lines[i] != '\t')
+              i++, dlen++;
+            heredoc = 1;
+            heredocln = 0;
+            boundary = 0;
+            i--;
+            continue;
+          }
 
           if (boundary && c != ' ' && c != '\t' && c != '\n' && c != ';' &&
               c != '|' && c != '&') {
             size_t s = i;
             int wlen, h;
             while (i < llen && lines[i] != ' ' && lines[i] != '\t' &&
-                   lines[i] != '\n' && lines[i] != ';' && lines[i] != '|')
+                   lines[i] != '\n' && lines[i] != ';' && lines[i] != '|' &&
+                   lines[i] != '\'' && lines[i] != '"')
               i++;
             wlen = i - s;
             h = kwhash(lines + s, wlen);
@@ -521,6 +554,8 @@ need_more(const char *lines, size_t llen)
   }
   if (kdepth)
     return 1;
+  if (heredoc)
+    return 1;
 
   return 0;
 }
@@ -565,6 +600,10 @@ _lineread_(int ps1)
         el.running = 1;
         continue;
       }
+      if (chksig[SIGQUIT]) {
+        chksig[SIGQUIT] = 0;
+        continue;
+      }
     }
     rmeventloop(&el, STDIN_FILENO);
     return nxtline;
@@ -575,21 +614,59 @@ static int
 input_notify(EditLine *e, wchar_t *wc)
 {
   (void)e;
-  struct pollfd fds[2];
+  struct pollfd fds[3];
   fds[0].fd = STDIN_FILENO;
   fds[0].events = POLLIN;
   fds[1].fd = selfpipe[0];
-  fds[1].events = POLLIN;
+  fds[2].fd = sigpipe[0];
+  fds[2].events = POLLIN;
 
   for (;;) {
-    if (poll(fds, 2, -1) < 0)
+    int n = poll(fds, 3, -1);
+    if (n < 0) {
+      if (errno == EINTR) {
+        if (intsig)
+          return -1;
+        if (chksig[SIGQUIT])
+          chksig[SIGQUIT] = 0;
+        if (chksig[SIGWINCH]) {
+          chksig[SIGWINCH] = 0;
+          libedit_el_set(e, EL_REFRESH);
+        }
+        if (chksig[SIGCHLD] || ndnotify) {
+          drain_chldp();
+          killjob();
+          if (bflag && ndnotify) {
+            ndnotify = 0, jobnotify();
+            libedit_el_set(e, EL_REFRESH);
+          }
+        }
+        continue;
+      }
       return -1;
+    }
 
     if (fds[1].revents & POLLIN) {
       drain_chldp();
-      if (bflag && ndnotify) {
-        ndnotify = 0;
-        jobnotify();
+      if (ndnotify) {
+        killjob();
+        if (bflag) {
+          ndnotify = 0, jobnotify();
+          libedit_el_set(e, EL_REFRESH);
+        }
+      }
+      continue;
+    }
+
+    if (fds[2].revents & POLLIN) {
+      drain_sigp();
+      if (intsig)
+        return -1;
+      if (chksig[SIGQUIT])
+        chksig[SIGQUIT] = 0;
+      if (chksig[SIGWINCH]) {
+        chksig[SIGWINCH] = 0;
+        libedit_el_set(e, EL_REFRESH);
       }
       continue;
     }
@@ -618,17 +695,25 @@ lineread(int ps1)
   int count;
   char *s;
   const char *line;
+  sigset_t sq, osq;
 
+  sigemptyset(&sq);
+  // sigaddset(&sq, SIGQUIT);
 again:
+  sigprocmask(SIG_BLOCK, &sq, &osq);
   ps1mode = ps1;
   line = libedit_el_gets(edl, &count);
+  sigprocmask(SIG_SETMASK, &osq, NULL);
   if (!line) {
     if (!count) {
       putchar('\n');
       return NULL;
     }
     if (errno == EINTR) {
-      putchar('\n');
+      if (intsig) {
+        intsig = 0;
+        putchar('\n');
+      }
       goto again;
     }
     return NULL;

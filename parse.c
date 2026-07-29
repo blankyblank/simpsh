@@ -394,6 +394,8 @@ static redir *parse_redir(sh_tok rdr, int fd)
   r->type = rdr.sub;
   r->name = tbuf.cmd;
   r->next = NULL;
+  r->heredoc = NULL;
+
   if (fd >= 0)
     r->fd = fd;
   else if (rdr.sub == RDHERE || rdr.sub == RDHERE_D)
