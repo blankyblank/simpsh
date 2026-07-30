@@ -38,3 +38,4 @@ perf.data*
 heaptrack.*
 /parsebench
 /tests/testfiles/source.sh
+/tests/quotetest.sh
