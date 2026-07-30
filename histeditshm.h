@@ -40,7 +40,7 @@ static EditLine *(*libedit_el_init)(const char *, FILE *, FILE *, FILE *);
 static int (*libedit_el_set)(EditLine *, int, ...);
 static const char *(*libedit_el_gets)(EditLine *, int *);
 static unsigned char (*libedit_el_sh_complete)(EditLine *, int);
-
+static int (*libedit_el_resize)(EditLine *);
 
 #ifdef STATICLIBEDIT
 static UNUSED int
@@ -50,6 +50,7 @@ load_libedit(void)
   libedit_el_set = el_set;
   libedit_el_gets = el_gets;
   libedit_el_sh_complete = _el_fn_sh_complete;
+  libedit_el_resize = el_resize;
   return 1;
 }
 #else
@@ -68,7 +69,8 @@ load_libedit(void)
   DLSYM_FN(h, libedit_el_set, "el_set");
   DLSYM_FN(h, libedit_el_gets, "el_gets");
   DLSYM_FN(h, libedit_el_sh_complete, "_el_fn_sh_complete");
-  return libedit_el_init && libedit_el_set && libedit_el_gets;
+  DLSYM_FN(h, libedit_el_resize, "el_resize");
+  return libedit_el_init && libedit_el_set && libedit_el_gets && libedit_el_resize;
 }
 #endif /* STATICLIBEDIT */
 

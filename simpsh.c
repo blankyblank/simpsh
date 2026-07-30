@@ -631,14 +631,14 @@ input_notify(EditLine *e, wchar_t *wc)
           chksig[SIGQUIT] = 0;
         if (chksig[SIGWINCH]) {
           chksig[SIGWINCH] = 0;
-          libedit_el_set(e, EL_REFRESH);
+          libedit_el_resize(e);
         }
         if (chksig[SIGCHLD] || ndnotify) {
           drain_chldp();
           killjob();
           if (bflag && ndnotify) {
             ndnotify = 0, jobnotify();
-            libedit_el_set(e, EL_REFRESH);
+            libedit_el_resize(e);
           }
         }
         continue;
@@ -652,7 +652,7 @@ input_notify(EditLine *e, wchar_t *wc)
         killjob();
         if (bflag) {
           ndnotify = 0, jobnotify();
-          libedit_el_set(e, EL_REFRESH);
+          libedit_el_resize(e);
         }
       }
       continue;
@@ -666,7 +666,7 @@ input_notify(EditLine *e, wchar_t *wc)
         chksig[SIGQUIT] = 0;
       if (chksig[SIGWINCH]) {
         chksig[SIGWINCH] = 0;
-        libedit_el_set(e, EL_REFRESH);
+        libedit_el_resize(e);
       }
       continue;
     }
