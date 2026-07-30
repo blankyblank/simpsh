@@ -72,12 +72,24 @@ typedef enum {
 #ifdef ENABLE_HEAD
   HEADH,
 #endif /* ENABLE_HEAD */
+#ifdef ENABLE_READLINK
+  READLINKH,
+#endif /* ENABLE_READLINK */
+#ifdef ENABLE_REALPATH
+  REALPATHH,
+#endif /* ENABLE_REALPATH */
 #ifdef ENABLE_SLEEP
   SLEEPH,
 #endif /* ENABLE_SLEEP */
 #ifdef ENABLE_TAIL
   TAILH,
 #endif /* ENABLE_TAIL */
+#ifdef ENABLE_TEE
+  TEEH,
+#endif /* ENABLE_TEE */
+#ifdef ENABLE_WC
+  WCH,
+#endif /* ENABLE_WC */
   HELPCNT
 } helpnum;
 
@@ -87,7 +99,8 @@ static const char dmsg[] = "\nUse \"exit\" to leave the shell \n";
 #define UFLAGMSG(v) fprintf(stderr, "%s: %s: unbound variable\n", shname, (v))
 
 /* unknow cli flag error message */
-#define bad_opt(p, c) fprintf(stderr, "%s: %s: bad option %c\n", shname, (p), (c))
+// check that the , 1 will work correctly
+#define bad_opt(p, c) (fprintf(stderr, "%s: %s: bad option %c\n", shname, (p), (c)), 1)
 #define bad_optx(c) fprintf(stderr, "%s: unknown option %c\n", shname, (c))
 
 /*  missing required argument error message */

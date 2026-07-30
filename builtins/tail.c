@@ -53,8 +53,7 @@ ARGNUM:
       ln = atoi_(*argv);
       break;
     default:
-      bad_opt(argv0, ARGC());
-      return 1;
+      return bad_opt(argv0, ARGC());
   }
   ARGEND
 

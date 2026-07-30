@@ -742,6 +742,27 @@ static const char headhelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_HEAD */
 
+#ifdef ENABLE_REALPATH
+static const char realpathhelp[] = 
+  "Usage: realpath [OPTION]... FILE...\n"
+  "\n"
+  "Print the resolved absolute file name\n"
+  "\n"
+  "all but the last component must exist\n"
+  "Exit Status:\n"
+  "     Returns 0 on success, 1 on error";
+#endif /* ENABLE_REALPATH */
+
+#ifdef ENABLE_READLINK
+static const char readlinkhelp[] =
+  "Usage: readlink [OPTION]... FILE...\n"
+  "\n"
+  "Print value of a symbolic link or canonical file name\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 if file is link, 1 otherwise";
+#endif /* ENABLE_READLINK */
+
 #ifdef ENABLE_SLEEP
 static const char sleephelp[] =
   "sleep [n[.n][smhd]] ...\n"
@@ -771,7 +792,38 @@ static const char tailhelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_TAIL */
 
-/* clang-format off */
+#ifdef ENABLE_TEE
+static const char teehelp[] =
+  "Usage: tee [OPTION]... [FILE]...\n"
+  "Copy standard input to each FILE, and also to standard output.\n"
+  "\n"
+  "-a,            append to the given FILESs, do not overwrite\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on sucess, 1 on file, or read errors.";
+#endif /* ENABLE_TEE */
+
+#ifdef ENABLE_WC
+static const char wchelp[] =
+  "Usage: wc [OPTION]... [FILE]...\n"
+  "Print newline, word, and byte counts for each FILE, and a total line if\n"
+  "more than one FILE is specified.  A word is a non-zero-length sequence of\n"
+  "printable characters delimited by white space.\n"
+  "\n"
+  "With no FILE, or when FILE is -, read standard input.\n"
+  "\n"
+  "The options below may be used to select which counts are printed, always in\n"
+  "the following order: newline, word, character, byte\n"
+  "-c,            print the byte counts"
+  // "-m,            print the character counts"
+  "-l,            print the newline counts"
+  "-w,            print the word counts"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on sucess, 1 on file, or read errors.";
+#endif /* ENABLE_WC */
+
+  /* clang-format off */
 const builtinhelp helpmsgs[] = {
   [DOTH] =      { ".",        "filename [arguments]",   dothelp         },
   [LBRACKH] =   { "[",        "arg... ]",               testhelp        },
@@ -833,11 +885,23 @@ const builtinhelp helpmsgs[] = {
 #ifdef ENABLE_HEAD
   [HEADH] =     { "head",     "[-n count] [file ...]",  headhelp        },
 #endif
+#ifdef ENABLE_READLINK
+  [READLINKH] = { "readlink", "[-n] file",              readlinkhelp    },
+#endif
+#ifdef ENABLE_REALPATH
+  [REALPATHH] = { "realpath", "[-n] file",              realpathhelp    },
+#endif
 #ifdef ENABLE_SLEEP
-  [SLEEPH] =     { "sleep",   "[n[.n][smhd]]",          sleephelp       },
+  [SLEEPH] =    { "sleep",    "[n[.n][smhd]]",          sleephelp       },
 #endif
 #ifdef ENABLE_TAIL
   [TAILH] =     { "tail",     "[-f] [-n count] [file]", tailhelp        },
+#endif
+#ifdef ENABLE_TEE
+  [TEEH] =      { "tee",      "[OPTION]... [FILE]...",  teehelp         },
+#endif
+#ifdef ENABLE_WC
+  [WCH] =      { "wc",        "[OPTION]... [FILE]...",  wchelp         },
 #endif
 }; /* clang-format on */
 

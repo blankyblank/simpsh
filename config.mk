@@ -15,7 +15,7 @@ BUILD_LINK  ?= dynamic
 LIBEDITFLAGS := -DLIBEDIT
 
 ## extra builtins
-EXTRAS := basename cat cut dirname head sleep tail
+EXTRAS := basename cat cut dirname head readlink realpath sleep tail tee wc
 
 ## sanitizer flags: use with the sanitize build target
 ASANFLAGS := -fsanitize=address,undefined

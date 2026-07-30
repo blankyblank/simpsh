@@ -250,8 +250,7 @@ cdcmd(char **argv)
       flag = FLAG_P;
       break;
     default:
-      bad_opt(argv0, ARGC());
-      return 1;
+      return bad_opt(argv0, ARGC());
   }
   ARGEND;
   if (argc > 1)
@@ -358,8 +357,7 @@ hashcmd(char **argv)
       flags |= FLAG_r;
       break;
     default:
-      bad_opt(argv0, ARGC());
-      return 1;
+      return bad_opt(argv0, ARGC());
   }
   ARGEND
 
@@ -403,8 +401,7 @@ pwdcmd(char **argv)
       flag = FLAG_P;
       break;
     default:
-      bad_opt(argv0, ARGC());
-      return 1;
+      return bad_opt(argv0, ARGC());
   }
   ARGEND;
 

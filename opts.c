@@ -112,8 +112,7 @@ setopts(char *arg, int n, char *argv0)
         xflag = n;
         break;
       default:
-        bad_opt(argv0, arg[i]);
-        return -1;
+        return bad_opt(argv0, arg[i]);
     }
     i++;
   }

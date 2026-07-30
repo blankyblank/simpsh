@@ -689,8 +689,7 @@ unsetcmd(char **argv)
       flag = FUNC;
       break;
     default:
-      bad_opt(argv0, ARGC());
-      return 1;
+      return bad_opt(argv0, ARGC());
   }
   ARGEND
 

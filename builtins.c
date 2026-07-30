@@ -86,12 +86,24 @@ extern int dirnamecmd(char **);
 #ifdef ENABLE_HEAD
 extern int headcmd(char **);
 #endif /* ENABLE_HEAD */
+#ifdef ENABLE_READLINK
+extern int readlinkcmd(char **);
+#endif /* ENABLE_READLINK */
+#ifdef ENABLE_REALPATH
+extern int realpathcmd(char **);
+#endif /* ENABLE_REALPATH */
 #ifdef ENABLE_SLEEP
 extern int sleepcmd(char **);
 #endif /* ENABLE_SLEEP */
 #ifdef ENABLE_TAIL
 extern int tailcmd(char **);
 #endif /* ENABLE_TAIL */
+#ifdef ENABLE_TEE
+extern int teecmd(char **);
+#endif /* ENABLE_TEE */
+#ifdef ENABLE_WC
+extern int wccmd(char **);
+#endif /* ENABLE_WC */
 
 
 static int classify_cmd(char *, int, int);
@@ -139,6 +151,12 @@ const builtin builtins[] = {
   { "printf",   &printfcmd,   0     },
   { "pwd",      &pwdcmd,      0     },
   { "read",     &readcmd,     0     },
+#ifdef ENABLE_READLINK
+  { "readlink", &readlinkcmd, 0     },
+#endif  /* ENABLE_READLINK */
+#ifdef ENABLE_REALPATH
+  { "realpath", &realpathcmd, 0     },
+#endif  /* ENABLE_REALPATH */
   { "readonly", &readonlycmd, SBLTN },
   { "return",   &returncmd,   SBLTN },
   { "set",      &setcmd,      SBLTN },
@@ -149,6 +167,9 @@ const builtin builtins[] = {
 #ifdef ENABLE_TAIL
   { "tail",     &tailcmd,     0     },
 #endif  /* ENABLE_TAIL */
+#ifdef ENABLE_TEE
+  { "tee",     &teecmd,     0     },
+#endif  /* ENABLE_TEE */
   { "test",     &testcmd,     0     },
   { "times",    &timescmd,    SBLTN },
   { "trap",     &trapcmd,     SBLTN },
@@ -159,6 +180,9 @@ const builtin builtins[] = {
   { "unalias",  &unaliascmd,  0     },
   { "unset",    &unsetcmd,    SBLTN },
   { "wait",     &waitcmd,     0     },
+#ifdef ENABLE_WC
+  { "wc",       &wccmd,       0     },
+#endif  /* ENABLE_WC */
 };
 
 #define nbuiltins() (sizeof(builtins) / sizeof(builtin))
@@ -330,8 +354,7 @@ commandcmd(char **argv)
       def = 1;
       break;
     default:
-      bad_opt(argv0, ARGC());
-      return 1;
+      return bad_opt(argv0, ARGC());
   }
   ARGEND
 
@@ -554,8 +577,7 @@ readcmd(char **argv)
         return 1;
       break;
     default:
-      bad_opt(argv0, ARGC());
-      return 1;
+      return bad_opt(argv0, ARGC());
   }
   ARGEND;
   if (!argc)
@@ -730,8 +752,7 @@ timescmd(char **argv)
   ARGBEGIN
   {
     default:
-      bad_opt(argv0, ARGC());
-      return 1;
+      return bad_opt(argv0, ARGC());
   }
   ARGEND
   struct rusage shell, chld;
@@ -823,8 +844,7 @@ ulimitcmd(char **argv)
       ltype = SOFT;
       break;
     default:
-      bad_opt(argv0, ARGC());
-      return 1;
+      return bad_opt(argv0, ARGC());
   }
   ARGEND
   opt[optc] = '\0';
@@ -916,8 +936,7 @@ umaskcmd(char **argv)
       symb = 1;
       break;
     default:
-      bad_opt(argv0, ARGC());
-      return 1;
+      return bad_opt(argv0, ARGC());
   }
   ARGEND
 
