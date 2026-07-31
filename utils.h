@@ -13,8 +13,8 @@
 #include "main.h"
 
 /* is_ something checks (some replacing ctypes functions) */
-
-#define isalpha_(c)      (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z') || (c) == '_')
+#define isalpha_(c) \
+  (((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z') || (c) == '_')
 #define isdigit_(c)      ((c) >= '0' && (c) <= '9')
 #define isalnum_(c)      (isalpha_(c) || ((c) >= '0' && (c) <= '9'))
 #define is_ws(c)         (c == ' ' || c == '\t' || c == '\n')
@@ -24,6 +24,7 @@
 #define is_cmd_end(c)    ((c == ' ') | (c == '\t') | (c == '\n'))
 #define nts(s, l)        (s[l] = '\0')
 #define nmemcpy(d, s, l) memcpy((d), (s), (l)), (d)[l] = '\0'
+#define pntlen(e, s)    (e - s)
 /**  check if char is operator  */
 #define is_operator(c) \
   (c == '&' || c == '|' || c == ';' || c == '(' || c == ')' || c == '{' || \
@@ -47,14 +48,18 @@
 static inline int
 atoi_(const char *s)
 {
-    int n = 0;
-    while (isdigit_(*s))
-        n = n * 10 + (*s++ - '0');
-    return n;
+  int neg = 0, n = 0;
+  if (*s == '-') {
+    neg = 1;
+    s++;
+  }
+  while (isdigit_(*s))
+    n = n * 10 + (*s++ - '0');
+  return neg ? -n : n;
 }
 
 static inline i64
-atoll_(const char *restrict s, i64 *restrict res)
+atoll_(const char * restrict s, i64 * restrict res)
 {
   i64 n = 0;
   int neg = 0;
