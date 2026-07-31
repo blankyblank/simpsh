@@ -65,21 +65,19 @@ wccmd(char *argv[])
 
     while ((n = fread(buf, 1, BUFSIZ, fp)) > 0) {
       for (size_t j = 0; j < n; j++) {
+        unsigned char c = (unsigned char)buf[j];
         nbyt++;
-        if (buf[j] == '\n')
+        if (c == '\n')
           nln++;
-        if (isspace(buf[j])) {
-          if (inwrd)
-            nwrd++;
+        if (isspace(c)) {
           inwrd = 0;
-        } else {
+        } else if (!inwrd) {
+          nwrd++;
           // nchr++;
           inwrd = 1;
         }
       }
     }
-    if (inwrd)
-      nwrd++;
     tbyt += nbyt;
     tln += nln;
     // tchr += nchr;

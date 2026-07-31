@@ -729,6 +729,42 @@ static const char cuthelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_CUT */
 
+#ifdef ENABLE_EXPAND
+static const char expandhelp[] =
+  "Usage: expand [OPTION]... [FILE]...\n"
+  "Convert tabs in each FILE to spaces, writing to standard output.\n"
+  "\n"
+  "With no FILE, or when FILE is -, read standard input.\n"
+  "\n"
+  " -i,        do not convert tabs after non blanks\n"
+  " -t,        have tabs N characters apart, not 8\n"
+  " -t LIST,\n"
+  "            use comma separated list of tab positions.\n"
+  "            The last specified position can be prefixed with '/'\n"
+  "            to specify a tab size to use after the last\n"
+  "            explicitly specified tab stop.  Also a prefix of '+'\n"
+  "            can be used to align remaining tab stops relative to\n"
+  "            the last specified tab stop instead of the first column\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, 1 on error.";
+#endif /* ENABLE_EXPAND */
+
+#ifdef ENABLE_FOLD
+static const char foldhelp[] =
+  "Usage: fold [OPTION]... [FILE]...\n"
+  "Wrap input lines in each FILE, writing to standard output.\n"
+  "\n"
+  "With no FILE, or when FILE is -, read standard input.\n"
+  "\n"
+  "   -b,         count bytes rather than columns\n"
+  "   -s,         break at spaces\n"
+  "   -w,         use WIDTH columns instead of 80\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, 1 on error.";
+#endif /* ENABLE_FOLD */
+
 #ifdef ENABLE_HEAD
 static const char headhelp[] =
   "head [-n count] [file ...]\n"
@@ -803,6 +839,27 @@ static const char teehelp[] =
   "    Returns 0 on sucess, 1 on file, or read errors.";
 #endif /* ENABLE_TEE */
 
+#ifdef ENABLE_EXPAND
+static const char unexpandhelp[] =
+  "Usage: unexpand [OPTION]... [FILE]...\n"
+  "Convert blanks in each FILE to tabs, writing to standard output.\n"
+  "\n"
+  "With no FILE, or when FILE is -, read standard input.\n"
+  "\n"
+  " -i,        do not convert tabs after non blanks\n"
+  " -t,        have tabs N characters apart, not 8\n"
+  " -t LIST,\n"
+  "            use comma separated list of tab positions.\n"
+  "            The last specified position can be prefixed with '/'\n"
+  "            to specify a tab size to use after the last\n"
+  "            explicitly specified tab stop.  Also a prefix of '+'\n"
+  "            can be used to align remaining tab stops relative to\n"
+  "            the last specified tab stop instead of the first column\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, 1 on error.";
+#endif /* ENABLE_EXPAND */
+
 #ifdef ENABLE_WC
 static const char wchelp[] =
   "Usage: wc [OPTION]... [FILE]...\n"
@@ -874,13 +931,19 @@ const builtinhelp helpmsgs[] = {
   [BASENAMEH] = { "basename", "name [suffix]",          basenamehelp    },
 #endif
 #ifdef ENABLE_CAT
-  [CATH] =      { "cat",      "[file ...]",             cathelp         },
+  [CATH] =      { "cat",      "[FILE]...",              cathelp         },
 #endif
 #ifdef ENABLE_CUT
   [CUTH] =      { "cut",      cutusg,                   cuthelp         },
 #endif
 #ifdef ENABLE_DIRNAME
-  [DIRNAMEH] =  { "dirname",  "name",                   dirnamehelp     },
+  [DIRNAMEH] =  { "dirname",  "[FILE]...",              dirnamehelp     },
+#endif
+#ifdef ENABLE_EXPAND
+  [EXPANDH] =  { "expand",    "[OPTION]... [FILE]...",  expandhelp      },
+#endif
+#ifdef ENABLE_FOLD
+  [FOLDH] =  { "fold",        "[OPTION]... [FILE]...",  foldhelp        },
 #endif
 #ifdef ENABLE_HEAD
   [HEADH] =     { "head",     "[-n count] [file ...]",  headhelp        },
@@ -895,13 +958,16 @@ const builtinhelp helpmsgs[] = {
   [SLEEPH] =    { "sleep",    "[n[.n][smhd]]",          sleephelp       },
 #endif
 #ifdef ENABLE_TAIL
-  [TAILH] =     { "tail",     "[-f] [-n count] [file]", tailhelp        },
+  [TAILH] =     { "tail",  "[-f] [-n count] [FILE]...", tailhelp        },
 #endif
 #ifdef ENABLE_TEE
   [TEEH] =      { "tee",      "[OPTION]... [FILE]...",  teehelp         },
 #endif
+#ifdef ENABLE_EXPAND
+  [UNEXPANDH] = { "unexpand", "[OPTION]... [FILE]...",  unexpandhelp    },
+#endif
 #ifdef ENABLE_WC
-  [WCH] =      { "wc",        "[OPTION]... [FILE]...",  wchelp         },
+  [WCH] =      { "wc",        "[OPTION]... [FILE]...",  wchelp          },
 #endif
 }; /* clang-format on */
 

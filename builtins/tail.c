@@ -205,13 +205,13 @@ sttail(int ln)
     char *end = buf + off + n;
 
     while (p < end) {
-      char *nl = memchr(p, '\n', end - p);
+      char *nl = memchr(p, '\n', pntlen(end, p));
       if (!nl) {
-        off = end - p;
+        off = pntlen(end, p);;
         memmove(buf, p, off);
         break;
       }
-      rng[c] = st_strndup(p, nl - p + 1);
+      rng[c] = st_strndup(p, pntlen(nl, p) + 1);
       c = (c + 1) % ln;
       cnt++;
       p = nl + 1;

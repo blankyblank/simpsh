@@ -69,6 +69,12 @@ typedef enum {
 #ifdef ENABLE_DIRNAME
   DIRNAMEH,
 #endif /* ENABLE_DIRNAME */
+#ifdef ENABLE_EXPAND
+  EXPANDH,
+#endif /* ENABLE_EXPAND */
+#ifdef ENABLE_FOLD
+  FOLDH,
+#endif /* ENABLE_FOLD */
 #ifdef ENABLE_HEAD
   HEADH,
 #endif /* ENABLE_HEAD */
@@ -87,6 +93,9 @@ typedef enum {
 #ifdef ENABLE_TEE
   TEEH,
 #endif /* ENABLE_TEE */
+#ifdef ENABLE_EXPAND
+  UNEXPANDH,
+#endif /* ENABLE_EXPAND */
 #ifdef ENABLE_WC
   WCH,
 #endif /* ENABLE_WC */

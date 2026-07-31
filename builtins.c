@@ -83,6 +83,12 @@ extern int cutcmd(char **);
 #ifdef ENABLE_DIRNAME
 extern int dirnamecmd(char **);
 #endif /* ENABLE_DIRNAME */
+#ifdef ENABLE_EXPAND
+extern int expandcmd(char **);
+#endif /* ENABLE_EXPAND */
+#ifdef ENABLE_FOLD
+extern int foldcmd(char **);
+#endif /* ENABLE_FOLD */
 #ifdef ENABLE_HEAD
 extern int headcmd(char **);
 #endif /* ENABLE_HEAD */
@@ -101,6 +107,9 @@ extern int tailcmd(char **);
 #ifdef ENABLE_TEE
 extern int teecmd(char **);
 #endif /* ENABLE_TEE */
+#ifdef ENABLE_EXPAND
+extern int unexpandcmd(char **);
+#endif /* ENABLE_EXPAND */
 #ifdef ENABLE_WC
 extern int wccmd(char **);
 #endif /* ENABLE_WC */
@@ -135,10 +144,16 @@ const builtin builtins[] = {
   { "eval",     &evalcmd,     SBLTN },
   { "exec",     &execcmd,     SBLTN },
   { "exit",     &exitcmd,     SBLTN },
+#ifdef ENABLE_EXPAND
+  { "expand",   &expandcmd,   0     },
+#endif  /* ENABLE_EXPAND */
   { "export",   &exportcmd,   SBLTN },
   { "false",    &falsecmd,    0     },
   { "fc",       &fccmd,       0     },
   { "fg",       &fgcmd,       0     },
+#ifdef ENABLE_FOLD
+  { "fold",     &foldcmd,     0     },
+#endif  /* ENABLE_FOLD */
   { "getopts",  &getoptscmd,  0     },
   { "hash",     &hashcmd,     0     },
 #ifdef ENABLE_HEAD
@@ -168,7 +183,7 @@ const builtin builtins[] = {
   { "tail",     &tailcmd,     0     },
 #endif  /* ENABLE_TAIL */
 #ifdef ENABLE_TEE
-  { "tee",     &teecmd,     0     },
+  { "tee",      &teecmd,      0     },
 #endif  /* ENABLE_TEE */
   { "test",     &testcmd,     0     },
   { "times",    &timescmd,    SBLTN },
@@ -178,6 +193,9 @@ const builtin builtins[] = {
   { "ulimit",   &ulimitcmd,   0     },
   { "umask",    &umaskcmd,    0     },
   { "unalias",  &unaliascmd,  0     },
+#ifdef ENABLE_UNEXPAND
+  { "unexpand", &unexpandcmd, 0     },
+#endif  /* ENABLE_UNEXPAND */
   { "unset",    &unsetcmd,    SBLTN },
   { "wait",     &waitcmd,     0     },
 #ifdef ENABLE_WC

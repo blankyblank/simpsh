@@ -14,9 +14,6 @@ BUILD_LINK  ?= dynamic
 ## libedit
 LIBEDITFLAGS := -DLIBEDIT
 
-## extra builtins
-EXTRAS := basename cat cut dirname head readlink realpath sleep tail tee wc
-
 ## sanitizer flags: use with the sanitize build target
 ASANFLAGS := -fsanitize=address,undefined
 ## clang extras: -fsanitize=implicit-conversion | -fsanitize=integer
@@ -33,4 +30,20 @@ GCOV  :=
 CFLAGS  := --std=c23 -I. -Wall -Wextra -pedantic -pipe $(LIBEDITFLAGS)
 LDFLAGS := -Wl,-z,now
 LDLIBS  := $(LIBEDITLIBS)
+
+## extra builtins
+EXTRAS := \
+	basename \
+	cat \
+	cut \
+	dirname \
+	expand \
+	fold \
+	head \
+	readlink \
+	realpath \
+	sleep \
+	tail \
+	tee \
+	wc
 
