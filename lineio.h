@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 
+#include "main.h"
+
 typedef struct {
   FILE *fp;
   char buf[BUFSIZ];
@@ -13,13 +15,17 @@ typedef struct {
 static inline FILE *
 lropen(lr_t *lr, const char *path)
 {
-  FILE *fp;
-  if (!(fp = fopen(path, "r")))
-    return NULL;
-  lr->fp = fp;
+  FILE *fp = NULL;
+  if (!path) {
+    lr->fp = shin;
+  } else {
+    if (!(fp = fopen(path, "r")))
+      return NULL;
+    lr->fp = fp;
+  }
   lr->pos = 0;
   lr->end = 0;
-  return fp;
+  return lr->fp;
 }
 
 extern char *lrread(lr_t *lr, size_t *len);
