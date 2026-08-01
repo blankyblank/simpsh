@@ -18,6 +18,7 @@
 #include "alloc.h"
 #include "arg.h"
 #include "builtins.h"
+#include "config.h"
 #include "env.h"
 #include "exec.h"
 #include "errmsg.h"
@@ -70,47 +71,48 @@ static int umaskcmd(char **);
 extern int unsetcmd(char **);
 extern int waitcmd(char **);
 
+
 /* extra builtins (no fork+exec = fast) */
-#ifdef ENABLE_BASENAME
+#if ENABLE_BASENAME
 extern int basenamecmd(char **);
 #endif /* ENABLE_BASENAME */
-#ifdef ENABLE_CAT
+#if ENABLE_CAT
 extern int catcmd(char **);
 #endif /* ENABLE_CAT */
-#ifdef ENABLE_CUT
+#if ENABLE_CUT
 extern int cutcmd(char **);
 #endif /* ENABLE_CUT */
-#ifdef ENABLE_DIRNAME
+#if ENABLE_DIRNAME
 extern int dirnamecmd(char **);
 #endif /* ENABLE_DIRNAME */
-#ifdef ENABLE_EXPAND
+#if ENABLE_EXPAND
 extern int expandcmd(char **);
 #endif /* ENABLE_EXPAND */
-#ifdef ENABLE_FOLD
+#if ENABLE_FOLD
 extern int foldcmd(char **);
 #endif /* ENABLE_FOLD */
-#ifdef ENABLE_HEAD
+#if ENABLE_HEAD
 extern int headcmd(char **);
 #endif /* ENABLE_HEAD */
-#ifdef ENABLE_READLINK
+#if ENABLE_READLINK
 extern int readlinkcmd(char **);
 #endif /* ENABLE_READLINK */
-#ifdef ENABLE_REALPATH
+#if ENABLE_REALPATH
 extern int realpathcmd(char **);
 #endif /* ENABLE_REALPATH */
-#ifdef ENABLE_SLEEP
+#if ENABLE_SLEEP
 extern int sleepcmd(char **);
 #endif /* ENABLE_SLEEP */
-#ifdef ENABLE_TAIL
+#if ENABLE_TAIL
 extern int tailcmd(char **);
 #endif /* ENABLE_TAIL */
-#ifdef ENABLE_TEE
+#if ENABLE_TEE
 extern int teecmd(char **);
 #endif /* ENABLE_TEE */
-#ifdef ENABLE_EXPAND
+#if ENABLE_EXPAND
 extern int unexpandcmd(char **);
 #endif /* ENABLE_EXPAND */
-#ifdef ENABLE_WC
+#if ENABLE_WC
 extern int wccmd(char **);
 #endif /* ENABLE_WC */
 
@@ -123,40 +125,40 @@ const builtin builtins[] = {
   { "[",        &testcmd,     0     },
   { ":",        &truecmd,     0     },
   { "alias",    &aliascmd,    0     },
-#ifdef ENABLE_BASENAME
+#if ENABLE_BASENAME
   { "basename", &basenamecmd, 0     },
 #endif  /* ENABLE_BASENAME */
   { "bg",       &bgcmd,       0     },
   { "break",    &breakcmd,    SBLTN },
-#ifdef ENABLE_CAT
+#if ENABLE_CAT
   { "cat",      &catcmd,      0     },
 #endif  /* ENABLE_CAT */
   { "cd",       &cdcmd,       0     },
   { "command",  &commandcmd,  0     },
   { "continue", &continuecmd, SBLTN },
-#ifdef ENABLE_CUT
+#if ENABLE_CUT
   { "cut",      &cutcmd,      0     },
 #endif  /* ENABLE_CUT */
-#ifdef ENABLE_DIRNAME
+#if ENABLE_DIRNAME
   { "dirname",  &dirnamecmd,  0     },
 #endif  /* ENABLE_DIRNAME */
   { "echo",     &echocmd,     0     },
   { "eval",     &evalcmd,     SBLTN },
   { "exec",     &execcmd,     SBLTN },
   { "exit",     &exitcmd,     SBLTN },
-#ifdef ENABLE_EXPAND
+#if ENABLE_EXPAND
   { "expand",   &expandcmd,   0     },
 #endif  /* ENABLE_EXPAND */
   { "export",   &exportcmd,   SBLTN },
   { "false",    &falsecmd,    0     },
   { "fc",       &fccmd,       0     },
   { "fg",       &fgcmd,       0     },
-#ifdef ENABLE_FOLD
+#if ENABLE_FOLD
   { "fold",     &foldcmd,     0     },
 #endif  /* ENABLE_FOLD */
   { "getopts",  &getoptscmd,  0     },
   { "hash",     &hashcmd,     0     },
-#ifdef ENABLE_HEAD
+#if ENABLE_HEAD
   { "head",     &headcmd,     0     },
 #endif  /* ENABLE_HEAD */
   { "help",     &helpcmd,     0     },
@@ -166,23 +168,23 @@ const builtin builtins[] = {
   { "printf",   &printfcmd,   0     },
   { "pwd",      &pwdcmd,      0     },
   { "read",     &readcmd,     0     },
-#ifdef ENABLE_READLINK
+#if ENABLE_READLINK
   { "readlink", &readlinkcmd, 0     },
 #endif  /* ENABLE_READLINK */
-#ifdef ENABLE_REALPATH
+#if ENABLE_REALPATH
   { "realpath", &realpathcmd, 0     },
 #endif  /* ENABLE_REALPATH */
   { "readonly", &readonlycmd, SBLTN },
   { "return",   &returncmd,   SBLTN },
   { "set",      &setcmd,      SBLTN },
   { "shift",    &shiftcmd,    SBLTN },
-#ifdef ENABLE_SLEEP
+#if ENABLE_SLEEP
   { "sleep",    &sleepcmd,    0     },
 #endif  /* ENABLE_SLEEP */
-#ifdef ENABLE_TAIL
+#if ENABLE_TAIL
   { "tail",     &tailcmd,     0     },
 #endif  /* ENABLE_TAIL */
-#ifdef ENABLE_TEE
+#if ENABLE_TEE
   { "tee",      &teecmd,      0     },
 #endif  /* ENABLE_TEE */
   { "test",     &testcmd,     0     },
@@ -193,12 +195,12 @@ const builtin builtins[] = {
   { "ulimit",   &ulimitcmd,   0     },
   { "umask",    &umaskcmd,    0     },
   { "unalias",  &unaliascmd,  0     },
-#ifdef ENABLE_UNEXPAND
+#if ENABLE_EXPAND
   { "unexpand", &unexpandcmd, 0     },
-#endif  /* ENABLE_UNEXPAND */
+#endif  /* ENABLE_EXPAND */
   { "unset",    &unsetcmd,    SBLTN },
   { "wait",     &waitcmd,     0     },
-#ifdef ENABLE_WC
+#if ENABLE_WC
   { "wc",       &wccmd,       0     },
 #endif  /* ENABLE_WC */
 };

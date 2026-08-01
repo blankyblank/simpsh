@@ -1,3 +1,5 @@
+#include "config.h"
+#if ENABLE_CUT
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -104,6 +106,7 @@ cutcmd(char **argv)
         cutfld(line, llen, rngs, nr, delim, (flags & sfl));
       else
         cutbt(line, llen, rngs, nr);
+      sfree(line);
     }
     return 0;
   }
@@ -119,6 +122,7 @@ cutcmd(char **argv)
         cutfld(line, llen, rngs, nr, delim, (flags & sfl));
       else
         cutbt(line, llen, rngs, nr);
+      sfree(line);
     }
     fclose(lr.fp);
   }
@@ -257,4 +261,4 @@ getrange(char *list, size_t *restrict nrange)
   *nrange = idx;
   return rngs;
 }
-
+#endif /* ENABLE_CUT */

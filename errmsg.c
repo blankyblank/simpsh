@@ -665,7 +665,7 @@ static const char waitforhelp[] =
   "Exit Status:\n"
   "    Returns the exit status of the last waited-for process.";
 
-#ifdef ENABLE_BASENAME
+#if ENABLE_BASENAME
 static const char basenamehelp[] =
   "basename name [suffix]\n"
   "\n"
@@ -678,7 +678,7 @@ static const char basenamehelp[] =
   "    Always returns 0.";
 #endif /* ENABLE_BASENAME */
 
-#ifdef ENABLE_CAT
+#if ENABLE_CAT
 static const char cathelp[] =
   "cat [file ...]\n"
   "\n"
@@ -691,7 +691,7 @@ static const char cathelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_CAT */
 
-#ifdef ENABLE_DIRNAME
+#if ENABLE_DIRNAME
 static const char dirnamehelp[] =
   "dirname name\n"
   "\n"
@@ -704,7 +704,7 @@ static const char dirnamehelp[] =
   "    Always returns 0.";
 #endif /* ENABLE_DIRNAME */
 
-#ifdef ENABLE_CUT
+#if ENABLE_CUT
 static const char cutusg[] = "[-b list] [-c list] [-d delim] [-f list] [-s] [file ...]";
 static const char cuthelp[] =
   "cut -b list [-d delim] [-s] [file ...]\n"
@@ -729,7 +729,7 @@ static const char cuthelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_CUT */
 
-#ifdef ENABLE_EXPAND
+#if ENABLE_EXPAND
 static const char expandhelp[] =
   "Usage: expand [OPTION]... [FILE]...\n"
   "Convert tabs in each FILE to spaces, writing to standard output.\n"
@@ -750,7 +750,7 @@ static const char expandhelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_EXPAND */
 
-#ifdef ENABLE_FOLD
+#if ENABLE_FOLD
 static const char foldhelp[] =
   "Usage: fold [OPTION]... [FILE]...\n"
   "Wrap input lines in each FILE, writing to standard output.\n"
@@ -765,7 +765,7 @@ static const char foldhelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_FOLD */
 
-#ifdef ENABLE_HEAD
+#if ENABLE_HEAD
 static const char headhelp[] =
   "head [-n count] [file ...]\n"
   "\n"
@@ -778,7 +778,7 @@ static const char headhelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_HEAD */
 
-#ifdef ENABLE_REALPATH
+#if ENABLE_REALPATH
 static const char realpathhelp[] = 
   "Usage: realpath [OPTION]... FILE...\n"
   "\n"
@@ -789,7 +789,7 @@ static const char realpathhelp[] =
   "     Returns 0 on success, 1 on error";
 #endif /* ENABLE_REALPATH */
 
-#ifdef ENABLE_READLINK
+#if ENABLE_READLINK
 static const char readlinkhelp[] =
   "Usage: readlink [OPTION]... FILE...\n"
   "\n"
@@ -799,7 +799,7 @@ static const char readlinkhelp[] =
   "    Returns 0 if file is link, 1 otherwise";
 #endif /* ENABLE_READLINK */
 
-#ifdef ENABLE_SLEEP
+#if ENABLE_SLEEP
 static const char sleephelp[] =
   "sleep [n[.n][smhd]] ...\n"
   "\n"
@@ -814,7 +814,7 @@ static const char sleephelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_SLEEP */
 
-#ifdef ENABLE_TAIL
+#if ENABLE_TAIL
 static const char tailhelp[] =
   "tail [-f] [-n count] [file ...]\n"
   "\n"
@@ -828,7 +828,7 @@ static const char tailhelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_TAIL */
 
-#ifdef ENABLE_TEE
+#if ENABLE_TEE
 static const char teehelp[] =
   "Usage: tee [OPTION]... [FILE]...\n"
   "Copy standard input to each FILE, and also to standard output.\n"
@@ -839,7 +839,7 @@ static const char teehelp[] =
   "    Returns 0 on sucess, 1 on file, or read errors.";
 #endif /* ENABLE_TEE */
 
-#ifdef ENABLE_EXPAND
+#if ENABLE_EXPAND
 static const char unexpandhelp[] =
   "Usage: unexpand [OPTION]... [FILE]...\n"
   "Convert blanks in each FILE to tabs, writing to standard output.\n"
@@ -860,7 +860,7 @@ static const char unexpandhelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_EXPAND */
 
-#ifdef ENABLE_WC
+#if ENABLE_WC
 static const char wchelp[] =
   "Usage: wc [OPTION]... [FILE]...\n"
   "Print newline, word, and byte counts for each FILE, and a total line if\n"
@@ -927,46 +927,46 @@ const builtinhelp helpmsgs[] = {
   [WAITH] =     { "wait",     "[id ...]",               waitforhelp     },
   [WHILEH] =    { "while",    whileusg,                 whilehelp       },
   [BRACEH] =    { " { ",      "COMMANDS ;}",            bracehelp       },
-#ifdef ENABLE_BASENAME
+#if ENABLE_BASENAME
   [BASENAMEH] = { "basename", "name [suffix]",          basenamehelp    },
 #endif
-#ifdef ENABLE_CAT
+#if ENABLE_CAT
   [CATH] =      { "cat",      "[FILE]...",              cathelp         },
 #endif
-#ifdef ENABLE_CUT
+#if ENABLE_CUT
   [CUTH] =      { "cut",      cutusg,                   cuthelp         },
 #endif
-#ifdef ENABLE_DIRNAME
+#if ENABLE_DIRNAME
   [DIRNAMEH] =  { "dirname",  "[FILE]...",              dirnamehelp     },
 #endif
-#ifdef ENABLE_EXPAND
+#if ENABLE_EXPAND
   [EXPANDH] =  { "expand",    "[OPTION]... [FILE]...",  expandhelp      },
 #endif
-#ifdef ENABLE_FOLD
+#if ENABLE_FOLD
   [FOLDH] =  { "fold",        "[OPTION]... [FILE]...",  foldhelp        },
 #endif
-#ifdef ENABLE_HEAD
+#if ENABLE_HEAD
   [HEADH] =     { "head",     "[-n count] [file ...]",  headhelp        },
 #endif
-#ifdef ENABLE_READLINK
+#if ENABLE_READLINK
   [READLINKH] = { "readlink", "[-n] file",              readlinkhelp    },
 #endif
-#ifdef ENABLE_REALPATH
+#if ENABLE_REALPATH
   [REALPATHH] = { "realpath", "[-n] file",              realpathhelp    },
 #endif
-#ifdef ENABLE_SLEEP
+#if ENABLE_SLEEP
   [SLEEPH] =    { "sleep",    "[n[.n][smhd]]",          sleephelp       },
 #endif
-#ifdef ENABLE_TAIL
+#if ENABLE_TAIL
   [TAILH] =     { "tail",  "[-f] [-n count] [FILE]...", tailhelp        },
 #endif
-#ifdef ENABLE_TEE
+#if ENABLE_TEE
   [TEEH] =      { "tee",      "[OPTION]... [FILE]...",  teehelp         },
 #endif
-#ifdef ENABLE_EXPAND
+#if ENABLE_EXPAND
   [UNEXPANDH] = { "unexpand", "[OPTION]... [FILE]...",  unexpandhelp    },
 #endif
-#ifdef ENABLE_WC
+#if ENABLE_WC
   [WCH] =      { "wc",        "[OPTION]... [FILE]...",  wchelp          },
 #endif
 }; /* clang-format on */

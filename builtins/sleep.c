@@ -1,3 +1,5 @@
+#include "config.h"
+#if ENABLE_SLEEP
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
@@ -76,3 +78,4 @@ sleepcmd(char *argv[])
   }
   return 0;
 }
+#endif /* ENABLE_SLEEP */

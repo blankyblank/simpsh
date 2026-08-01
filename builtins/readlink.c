@@ -1,3 +1,5 @@
+#include "config.h"
+#if ENABLE_READLINK
 #define _POSIX_C_SOURCE 200809L
 
 #include <limits.h>
@@ -38,3 +40,4 @@ readlinkcmd(char *argv[])
   }
   return 0;
 }
+#endif /* if ENABLE_READLINK */

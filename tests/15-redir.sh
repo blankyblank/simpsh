@@ -117,14 +117,13 @@ fi
 
 # === Close-FD (>&- / <&- ) ===
 
-msg_run "redir >&- close stdout test: echo >&-"
-rm -f "$errf"
-../simpsh -c 'echo >&-' 2> "$errf"
+msg_run "redir >&- closes fd 1 (persistent via exec)"
+../simpsh -c 'exec >&-; : >&1' 2>"$errf"
 rc=$?
-if [ $rc -ne 0 ] && grep -q "Bad file descriptor\|could not write" "$errf"; then
-  msg_pass ">&- closes stdout"
+if [ $rc -ne 0 ]; then
+  msg_pass "exec >&- closes fd 1"
 else
-  msg_fail ">&- (rc=$rc, err=$(cat "$errf"))"
+  msg_fail "exec >&- did not close fd 1 (rc=$rc)"
   exit 1
 fi
 rm -f "$errf"

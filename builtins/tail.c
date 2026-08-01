@@ -1,3 +1,5 @@
+#include "config.h"
+#if ENABLE_TAIL
 #define _POSIX_C_SOURCE 200809L
 
 #include <sys/stat.h>
@@ -232,3 +234,4 @@ sttail(int ln)
   stack_restore(m);
   return 0;
 }
+#endif /* ENABLE_TAIL */

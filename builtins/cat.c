@@ -1,3 +1,5 @@
+#include "config.h"
+#if ENABLE_CAT
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -42,3 +44,4 @@ catcmd(char **argv)
     sfree(buf);
   return 0;
 }
+#endif /* ENABLE_CAT */

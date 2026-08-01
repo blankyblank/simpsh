@@ -1,3 +1,5 @@
+#include "config.h"
+#if ENABLE_HEAD
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 
@@ -53,6 +55,7 @@ ARGNUM:
         fwrite(line, 1, len, shout);
         fputc('\n', shout);
         ln--;
+        sfree(line);
       }
       fclose(fp);
     }
@@ -69,6 +72,8 @@ ARGNUM:
     fwrite(line, 1, len, shout);
     fputc('\n', shout);
     ln--;
+    sfree(line);
   }
   return status;
 }
+#endif /* if ENABLE_HEAD */

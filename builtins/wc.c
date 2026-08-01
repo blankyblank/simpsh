@@ -1,5 +1,6 @@
+#include "config.h"
+#if ENABLE_WC
 #define _POSIX_C_SOURCE 200809L
-#include <ctype.h>
 #include <stdio.h>
 
 #include "arg.h"
@@ -43,7 +44,6 @@ wccmd(char *argv[])
   if (!flags)
     flags |= ln | wrd | byt;
 
-
   nsrc = argc ? argc : 1;
 
   for (size_t i = 0; i < nsrc; i++) {
@@ -69,7 +69,7 @@ wccmd(char *argv[])
         nbyt++;
         if (c == '\n')
           nln++;
-        if (isspace(c)) {
+        if (is_ws(c)) {
           inwrd = 0;
         } else if (!inwrd) {
           nwrd++;
@@ -111,3 +111,4 @@ wccmd(char *argv[])
   }
   return status;
 }
+#endif /* ENABLE_WC */

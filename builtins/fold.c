@@ -1,3 +1,5 @@
+#include "config.h"
+#if ENABLE_FOLD
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <string.h>
@@ -116,3 +118,4 @@ foldcmd(char *argv[])
   }
   return status;
 }
+#endif /* if ENABLE_FOLD */

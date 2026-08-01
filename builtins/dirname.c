@@ -1,3 +1,5 @@
+#include "config.h"
+#if ENABLE_DIRNAME
 #define _POSIX_C_SOURCE 200809L
 
 #include <libgen.h>
@@ -20,3 +22,4 @@ dirnamecmd(char *argv[])
   }
   return 0;
 }
+#endif /* ENABLE_DIRNAME */

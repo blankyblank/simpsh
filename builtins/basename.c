@@ -1,3 +1,5 @@
+#include "config.h"
+#if ENABLE_BASENAME
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -42,3 +44,4 @@ basenamecmd(char *argv[])
   printf("%.*s\n", (int)len, path);
   return 0;
 }
+#endif /* ENABLE_BASENAME */

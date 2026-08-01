@@ -1,3 +1,5 @@
+#include "config.h"
+#if ENABLE_TEE
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -65,3 +67,4 @@ teecmd(char *argv[])
     sfree(buf);
   return status;
 }
+#endif /* if ENABLE_TEE */

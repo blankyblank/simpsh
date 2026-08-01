@@ -2,80 +2,110 @@
 
 include config.mk
 
-ifneq ($(filter debug valgrind sanitize,$(BUILD)),)
-	DEBUGFLAGS := -g3 -fno-omit-frame-pointer
-	CFLAGS += $(if $(filter gcc,$(CC)),-ggdb -fvar-tracking-assignments -fno-analyzer-state-merge)
-	CFLAGS += $(if $(filter clang,$(CC)),-glldb -fstandalone-debug)
-endif
+SRC = \
+  alloc.c \
+  arith.c \
+  builtins.c \
+  env.c \
+  errmsg.c \
+  exec.c \
+  expand.c \
+  glob.c \
+  history.c \
+  input.c \
+  job.c \
+  lex.c \
+  lineio.c \
+  main.c \
+  opts.c \
+  parse.c \
+  path.c \
+  pipe.c \
+  printf.c \
+  sig.c \
+  simpsh.c \
+  test.c \
+  var.c
 
-ifeq ($(BUILD_LINK),static)
-  CFLAGS += -DSTATICLIBEDIT
-  LDLIBS := -ledit -lncurses
-else
-  LDLIBS += -ldl
-endif
+EXTRAS = \
+  builtins/basename.c \
+  builtins/cat.c \
+  builtins/cut.c \
+  builtins/dirname.c \
+  builtins/expand.c \
+  builtins/fold.c \
+  builtins/head.c \
+  builtins/readlink.c \
+  builtins/realpath.c \
+  builtins/sleep.c \
+  builtins/tail.c \
+  builtins/tee.c \
+  builtins/uniq.c \
+  builtins/wc.c
 
-ifeq ($(BUILD),release)
-	CFLAGS += -march=native -fno-plt
-	ifeq ($(CC),gcc)
-		CFLAGS += $(if $(filter gcc,$(CC)),-O2 -flto=auto -s)
-		LDFLAGS += $(if $(filter gcc,$(CC)),-flto=auto)
-	else
-		CFLAGS += $(if $(filter clang,$(CC)), -flto -O2 -fvectorize -flto=full)
-		LDFLAGS += $(if $(filter clang,$(CC)), -flto=full -Wl,--strip-all)
-	endif
-	# CFLAGS += -march=native -O3 -ffast-math -flto
-else ifeq ($(BUILD),debug)
-	CFLAGS += $(DEBUGFLAGS)
-	CFLAGS += $(if $(filter gcc,$(CC)),-Og -flto=auto)
-	CFLAGS += $(if $(filter clang,$(CC)), -flto -Og -glldb -fstandalone-debug -flto=full)
-else ifeq ($(BUILD),valgrind)
-	CC := gcc
-	CFLAGS += -Og $(DEBUGFLAGS) -DDEBUG -DENABLE_VALGRIND
-else ifeq ($(BUILD),profile)
-	CFLAGS += -O2 -g3 $(PROFFLAGS)
-	CFLAGS += $(if $(filter gcc,$(CC)),-fvar-tracking-assignments -fno-analyzer-state-merge -pg)
-	LDFLAGS += $(if $(filter gcc,$(CC)),-pg)
-	CFLAGS += $(if $(filter clang,$(CC)),-fprofile-instr-generate -fcoverage-mapping)
-	LDFLAGS += $(if $(filter clang,$(CC)),-fprofile-instr-generate)
-else ifeq ($(BUILD),sanitize)
-	CFLAGS += -O1 $(DEBUGFLAGS)
-  ifeq ($(BUILD_LINK),static)
-		CFLAGS += -fsanitize=undefined,bounds
-		LDFLAGS += -fsanitize=undefined,bounds
-		LDFLAGS += $(if $(filter gcc,$(CC)),-static-libasan)
-		CFLAGS += $(if $(filter clang,$(CC)),-glldb -fstandalone-debug)
-		LDFLAGS += $(if $(filter clang,$(CC)),-static-libsan)
-	else
-		CFLAGS += $(ASANFLAGS)
-		LDFLAGS += $(ASANFLAGS)
-	endif
-endif
-ifdef GCOV
-	CFLAGS += --coverage -fno-lto
-	LDFLAGS += --coverage
-endif
-# Link type
-LDFLAGS += $(if $(filter static,$(BUILD_LINK)),-static)
-# CFLAGS +=  -DMUSL
+HDR = \
+  alloc.h \
+  arith.h \
+  arg.h \
+  builtins.h \
+  config.h \
+  env.h \
+  errmsg.h \
+  exec.h \
+  expand.h \
+  glob.h \
+  histeditshm.h \
+  history.h \
+  input.h \
+  job.h \
+  lex.h \
+  lineio.h \
+  main.h \
+  opts.h \
+  parse.h \
+  path.h \
+  pipe.h \
+  sig.h \
+  simd.h \
+  simpsh.h \
+  utils.h \
+  var.h
 
-OBJDIR := obj
-SRC 	 := $(wildcard *.c)
-SRC		 += $(foreach b,$(EXTRAS),builtins/$(b).c)
-CFLAGS += $(foreach b,$(EXTRAS),-DENABLE_$(shell echo $(b) | tr a-z A-Z))
-OBJ 	 := $(patsubst %.c, $(OBJDIR)/%.o, $(SRC))
+OBJDIR = obj
+TARGET = simpsh
 
-TARGET := simpsh
-CFLAGS := $(CFLAGS)
-
-.PHONY: all clean test install uninstall analyze examine bench parsebench
+.PHONY: all clean test install uninstall analyze examine bench
 
 all: $(TARGET)
-$(OBJDIR)/%.o: %.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
-$(TARGET): $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LDLIBS)
+
+obj:
+	@mkdir -p obj obj/builtins
+
+obj/root.stamp: obj $(SRC) $(HDR)
+	@h=$$(ls -t $(HDR) | head -1); \
+		for f in $(SRC); do \
+			o=obj/$${f%.c}.o; \
+			if [ "$$o" -nt "$$f" ] && [ "$$o" -nt "$$h" ]; then \
+				continue; \
+			fi; \
+			printf '  %s %s\n' "$(CC)" "$$f"; \
+			$(CC) $(CFLAGS) -c $$f -o $$o; \
+		done
+	@touch $@
+obj/builtins.stamp: obj $(EXTRAS) $(HDR)
+	@h=$$(ls -t $(HDR) | head -1); \
+	for f in $(EXTRAS); do \
+		o=obj/builtins/$${f##*/}; o=$${o%.c}.o; \
+		if [ "$$o" -nt "$$f" ] && [ "$$o" -nt "$$h" ]; then \
+			continue; \
+		fi; \
+		printf '  %s %s\n' "$(CC)" "$$f"; \
+		$(CC) $(CFLAGS) -c $$f -o $$o; \
+	 done
+	@touch $@
+
+$(TARGET): obj obj/root.stamp obj/builtins.stamp
+	$(CC) -o $@ obj/*.o obj/builtins/*.o $(CFLAGS) $(LDFLAGS) $(LDLIBS)
 
 install:
 	rm -f $(BINDIR)/simpsh
@@ -89,13 +119,8 @@ analyze:
 	scan-build --force-analyze-debug-code --use-cc=$(CC) -enable-checker core -enable-checker unix  -analyze-headers -o reports make clean all
 examine:
 	# gcc -O2 -g -fdump-tree-optimized $(SRC)
-	gcc -O2 -g -fopt-info-all=report.txt $(SRC)
+	gcc -O2 -g -fopt-info-all=report.txt $(SRC) $(EXTRAS)
 test:
 	cd tests && ./runtests.sh
 bench:
 	hyperfine --warmup 4 './simpsh profile/bench.sh'
-parsebench: $(OBJDIR)/parsebench.o $(filter-out $(OBJDIR)/main.o,$(OBJ))
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LDLIBS)
-
-# $(OBJDIR)/parsebench.o: profiling/parsebench.c | $(OBJDIR)
-# 	$(CC) $(CFLAGS) -c $< -o $@

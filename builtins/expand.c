@@ -1,3 +1,5 @@
+#include "config.h"
+#if ENABLE_EXPAND
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -98,6 +100,7 @@ expandcmd(char *argv[])
         }
       }
       fputc('\n', shout);
+      sfree(line);
     }
     if (path)
       fclose(fp);
@@ -181,6 +184,7 @@ unexpandcmd(char *argv[])
       }
       flushspace();
       fputc('\n', shout);
+      sfree(line);
     }
     if (path)
       fclose(fp);
@@ -261,3 +265,4 @@ tabcol(size_t col, size_t *tbs, size_t ntbs)
   }
   return col + 1;
 }
+#endif /* ENABLE_EXPAND */
