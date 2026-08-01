@@ -5,6 +5,8 @@
 
 #include <stddef.h>
 
+#include "config.h"
+
 typedef struct {
   const char *name;
   const char *usage;
@@ -96,6 +98,9 @@ typedef enum {
 #if ENABLE_EXPAND
   UNEXPANDH,
 #endif /* ENABLE_EXPAND */
+#if ENABLE_UNIQ
+  UNIQH,
+#endif /* ENABLE_UNIQ */
 #if ENABLE_WC
   WCH,
 #endif /* ENABLE_WC */

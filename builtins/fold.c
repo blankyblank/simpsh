@@ -24,8 +24,10 @@ foldcmd(char *argv[])
     case 'w':
       {
         char *wdth = EARGF(usage(argv0, helpmsgs[FOLDH].usage));
-        if (!(w = atoi_(wdth)))
+        long tmpw;
+        if ((tmpw = atoi_(wdth)) <= 0)
           return shwarn_arg(argv0, wdth, "must be a positive integer");
+        w = (size_t)tmpw;
       }
       break;
     case 's':

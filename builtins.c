@@ -112,6 +112,9 @@ extern int teecmd(char **);
 #if ENABLE_EXPAND
 extern int unexpandcmd(char **);
 #endif /* ENABLE_EXPAND */
+#if ENABLE_UNIQ
+extern int uniqcmd(char **);
+#endif /* ENABLE_UNIQ */
 #if ENABLE_WC
 extern int wccmd(char **);
 #endif /* ENABLE_WC */
@@ -198,6 +201,9 @@ const builtin builtins[] = {
 #if ENABLE_EXPAND
   { "unexpand", &unexpandcmd, 0     },
 #endif  /* ENABLE_EXPAND */
+#if ENABLE_UNIQ
+  { "uniq",     &uniqcmd,     0     },
+#endif  /* ENABLE_UNIQ */
   { "unset",    &unsetcmd,    SBLTN },
   { "wait",     &waitcmd,     0     },
 #if ENABLE_WC

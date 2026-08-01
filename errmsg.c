@@ -871,14 +871,38 @@ static const char wchelp[] =
   "\n"
   "The options below may be used to select which counts are printed, always in\n"
   "the following order: newline, word, character, byte\n"
-  "-c,            print the byte counts"
+  "  -c,          print the byte counts"
+  "  -l,          print the newline counts"
+  "  -w,          print the word counts"
   // "-m,            print the character counts"
-  "-l,            print the newline counts"
-  "-w,            print the word counts"
   "\n"
   "Exit Status:\n"
   "    Returns 0 on sucess, 1 on file, or read errors.";
 #endif /* ENABLE_WC */
+
+#if ENABLE_UNIQ
+static const char uniqhelp[] =
+  "Usage: uniq [OPTION]... [INPUT [OUTPUT]]\n"
+  "Filter adjacent matching lines from INPUT (or standard input),\n"
+  "writing to OUTPUT (or standard output).\n"
+  "With no options, matching lines are merged to the first occurrence.\n"
+  "\n"
+  "With no FILE, or when FILE is -, read standard input.\n"
+  "\n"
+  "  -c,       prefix lines by the number of occurrences\n"
+  "  -d,       only print duplicate lines, one for each group\n"
+  "  -f,       avoid comparing the first N fields\n"
+  "  -s,       avoid comparing the first N characters\n"
+  "  -u,       only print unique lines\n"
+  "\n"
+  "A field is a run of blanks (usually spaces and/or TABs), then non-blank\n"
+  "characters.  Fields are skipped before chars.\n"
+  "\n"
+  "Note: 'uniq' does not detect repeated lines unless they are adjacent.\n"
+  "You may want to sort the input first, or use 'sort -u' without 'uniq'.\n"
+  "Exit Status:\n"
+  "    Returns 0 on sucess, 1 on file, or read errors.";
+#endif /* ENABLE_UNIQ */
 
   /* clang-format off */
 const builtinhelp helpmsgs[] = {
@@ -965,6 +989,9 @@ const builtinhelp helpmsgs[] = {
 #endif
 #if ENABLE_EXPAND
   [UNEXPANDH] = { "unexpand", "[OPTION]... [FILE]...",  unexpandhelp    },
+#endif
+#if ENABLE_UNIQ
+  [UNIQH] =    { "uniq", "[OPTION]... [INPUT [OUTPUT]]", uniqhelp       },
 #endif
 #if ENABLE_WC
   [WCH] =      { "wc",        "[OPTION]... [FILE]...",  wchelp          },

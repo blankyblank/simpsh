@@ -26,7 +26,7 @@ cutcmd(char **argv)
   size_t nr, argc = 0;
   char *list = NULL;
   char delim = '\t';
-  int mode, flags = 0, status = 0;
+  int m, flags = 0, status = 0;
 
   enum {
     bfl = 1 << 0,
@@ -85,10 +85,10 @@ cutcmd(char **argv)
 
   if ((flags & sfl) && !(flags & ffl))
     return shwarn(argv0, "-s only valid with -f");
-  mode = flags & (bfl | cfl | ffl);
-  if (mode & (mode - 1))
+  m = flags & (bfl | cfl | ffl);
+  if (m & (m - 1))
     return shwarn(argv0, "only one of -b, -c, -f allowed");
-  if (!mode)
+  if (!m)
     return shwarn(argv0, "you must specify a list of bytes, characters, or fields");
 
   char *line = NULL;

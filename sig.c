@@ -447,7 +447,7 @@ cont:
     }
     int n;
     n = atoi_(*argv) - 128;
-    if (n < 0 && n >= NSIG) {
+    if (n < 0 || n >= NSIG) {
       shwarn_arg(argv0, *argv, "invalid signal spec");
       return 1;
     }

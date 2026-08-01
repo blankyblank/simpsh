@@ -79,7 +79,7 @@ atoll_(const char * restrict s, i64 * restrict res)
   return 0;
 }
 
-/* convert long long to string  */
+/* convert long long to string  returns length */
 static inline size_t
 lltoa(i64 val, char *buf)
 {

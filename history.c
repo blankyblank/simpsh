@@ -40,10 +40,12 @@ init_history(void)
   char *histsize_s;
   shvar *hf;
 
-  if ((histsize_s = getvar("HISTSIZE")))
-    histsize = atoi_(histsize_s);
-  else
-   histsize = HISTORY_SIZE;
+  if ((histsize_s = getvar("HISTSIZE"))) {
+    if ((histsize = atoi_(histsize_s)) <= 0)
+      histsize = HISTORY_SIZE;
+  } else {
+    histsize = HISTORY_SIZE;
+  }
 
   shhistory = slcalloc(histsize + 1, sizeof(char *));
   histcnt = 0;
