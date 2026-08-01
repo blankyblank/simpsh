@@ -39,3 +39,5 @@ heaptrack.*
 /parsebench
 /tests/testfiles/source.sh
 /tests/quotetest.sh
+/obj/builtins.stamp
+/obj/root.stamp
