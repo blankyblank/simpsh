@@ -1,3 +1,9 @@
+## for portability reasons while not requiring a dependency, or external
+## scripts this file is where you adjust the build type. you have to pick one of:
+## CC, CFLAG, and LDFLAG.
+## and comment the lines in the old build "profile".
+## you can also chose, static or dynamic linking, and whether or not to include libedit
+
 ####### cc | gcc | clang
 CC = gcc
 
@@ -7,7 +13,7 @@ BINDIR = $(DESTDIR)$(PREFIX)/bin
 
 ####### build type. use one line.
 ### 			release
-CFLAG = -march=native -fno-plt -O2 -flto=auto -s
+CFLAG = -march=native -falign-functions=16 -fno-plt -O2 -flto=auto -s
 LDFLAG = -flto=auto
 ### (clang)
 # CFLAG = -march=native -fno-plt -flto -O2 -fvectorize -flto=full
@@ -32,8 +38,6 @@ LDFLAG = -flto=auto
 ## clang extras: -fsanitize=implicit-conversion | -fsanitize=integer
 # ASANFLAGS = -fsanitize=integer
 
-#NOTE: check if xray-instrument works with gcc even
-
 ######### profile
 # CFLAG = -O2 -g3 -pg -fxray-instrument -fvar-tracking-assignments -fno-analyzer-state-merge
 # LDFLAG = -pg
@@ -55,8 +59,9 @@ LIBEDITFLAGS = -DLIBEDIT
 ###			gcov
 #GCOVFLAGS = --coverage -fno-lto
 
+# BASE   = -I. -Wall -Wextra -pedantic -pipe
 BASE   = --std=c23 -I. -Wall -Wextra -pedantic -pipe
 ## Compiler flags
-CFLAGS  = $(BASE) $(STATICLIBEDIT) $(CFLAG) $(LIBEDITFLAGS) $(GCOVFLAGS)
-LDFLAGS = -Wl,-z,now $(LDFLAG) $(STATIC) $(GCOVFLAGS)
+CFLAGS  = $(BASE) $(STATICLIBEDIT) $(CFLAG) $(LIBEDITFLAGS) $(GCOVFLAGS) $(PGOFLAGS)
+LDFLAGS = -Wl,-z,now $(LDFLAG) $(STATIC) $(GCOVFLAGS) $(PGOFLAGS)
 LDLIBS  = $(LIBEDITLIBS)

@@ -12,6 +12,13 @@ notes.txt
 tests/bench.sh
 tests/forbench.sh
 tests/script-test.sh
+/tests/testfiles/source.sh
+/tests/quotetest.sh
+/tests/pgo
+/pgo
+/obj/builtins.stamp
+/obj/root.stamp
+/parsebench
 
 *.svg
 .project*
@@ -36,8 +43,3 @@ reports
 *.out
 perf.data*
 heaptrack.*
-/parsebench
-/tests/testfiles/source.sh
-/tests/quotetest.sh
-/obj/builtins.stamp
-/obj/root.stamp

@@ -30,6 +30,7 @@ SRC = \
 EXTRAS = \
   builtins/basename.c \
   builtins/cat.c \
+  builtins/comm.c \
   builtins/cut.c \
   builtins/dirname.c \
   builtins/expand.c \
@@ -74,13 +75,11 @@ HDR = \
 OBJDIR = obj
 TARGET = simpsh
 
-.PHONY: all clean test install uninstall analyze examine bench
+.PHONY: all clean pgo test install uninstall analyze examine bench
 
 all: $(TARGET)
-
 obj:
 	@mkdir -p obj obj/builtins
-
 obj/root.stamp: obj $(SRC) $(HDR)
 	@h=$$(ls -t $(HDR) | head -1); \
 		for f in $(SRC); do \
@@ -94,14 +93,18 @@ obj/root.stamp: obj $(SRC) $(HDR)
 	@touch $@
 obj/builtins.stamp: obj $(EXTRAS) $(HDR)
 	@h=$$(ls -t $(HDR) | head -1); \
-	for f in $(EXTRAS); do \
-		o=obj/builtins/$${f##*/}; o=$${o%.c}.o; \
-		if [ "$$o" -nt "$$f" ] && [ "$$o" -nt "$$h" ]; then \
+	 for f in $(EXTRAS); do \
+		t=$${f##*/}; t=$${t%.c}; \
+		o=obj/builtins/$$t.o; \
+		if ! grep -qi "^#define ENABLE_$${t} 1" config.h; then \
+			rm -f $$o; \
+		elif [ "$$o" -nt "$$f" ] && [ "$$o" -nt "$$h" ]; then \
 			continue; \
+		else \
+			printf '  %s %s\n' "$(CC)" "$$f"; \
+			$(CC) $(CFLAGS) -c $$f -o $$o; \
 		fi; \
-		printf '  %s %s\n' "$(CC)" "$$f"; \
-		$(CC) $(CFLAGS) -c $$f -o $$o; \
-	 done
+		done
 	@touch $@
 
 $(TARGET): obj obj/root.stamp obj/builtins.stamp
@@ -110,17 +113,38 @@ $(TARGET): obj obj/root.stamp obj/builtins.stamp
 install:
 	rm -f $(BINDIR)/simpsh
 	install -m 755 simpsh $(BINDIR)/simpsh
+
 uninstall:
 	rm -f $(BINDIR)/simpsh
+
 clean:
 	rm -f simpsh
 	rm -rf $(OBJDIR)
+
+pgo:
+	rm -rf pgo
+	$(MAKE) clean
+	$(MAKE) PGOFLAGS="-fprofile-dir=pgo -fprofile-generate"
+	./simpsh profile/bench.sh
+	./simpsh ./profile/parse.bench
+	./simpsh ./profile/forbench.sh
+	./simpsh ./profile/quote-bench.sh
+	./simpsh ./profile/arith-bench.sh
+	./simpsh ./profile/printf-bench.sh
+	./simpsh ./profile/benchwecho.sh
+	cd tests && ./runtests.sh > /dev/null 2>&1 || true
+	$(MAKE) clean
+	$(MAKE) PGOFLAGS="-fprofile-dir=pgo -fprofile-use -fprofile-correction"
+
 analyze:
 	scan-build --force-analyze-debug-code --use-cc=$(CC) -enable-checker core -enable-checker unix  -analyze-headers -o reports make clean all
+
 examine:
 	# gcc -O2 -g -fdump-tree-optimized $(SRC)
 	gcc -O2 -g -fopt-info-all=report.txt $(SRC) $(EXTRAS)
+	
 test:
 	cd tests && ./runtests.sh
+
 bench:
 	hyperfine --warmup 4 './simpsh profile/bench.sh'
