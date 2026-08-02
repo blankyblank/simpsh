@@ -19,7 +19,7 @@ catcmd(char **argv)
 
   array_len(argv, argc);
 
-  if (argc == 1) {
+  if (argc == 1 || (argc == 2 && argv[1][0] == '-' && argv[1][1] == '\0')) {
     buf = salloc(bufsize);
     while ((n = fread(buf, 1, bufsize, shin)) > 0)
       fwrite(buf, 1, n, shout);

@@ -691,6 +691,25 @@ static const char cathelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_CAT */
 
+#if ENABLE_COMM
+static const char commhelp[] =
+  "Usage: comm [OPTION]... FILE1 FILE2\n"
+  "Compare sorted files FILE1 and FILE2 line by line.\n"
+  "\n"
+  "When FILE1 or FILE2 (not both) is -, read standard input.\n"
+  "\n"
+  "With no options, produce three-column output.  Column one contains\n"
+  "lines unique to FILE1, column two contains lines unique to FILE2,\n"
+  "and column three contains lines common to both files.\n"
+  "\n"
+  "  -1            suppress column 1 (lines unique to FILE1)\n"
+  "  -2            suppress column 2 (lines unique to FILE2)\n"
+  "  -3            suppress column 3 (lines that appear in both files)\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, 1 on error.";
+#endif /* ENABLE_COMM */
+
 #if ENABLE_DIRNAME
 static const char dirnamehelp[] =
   "dirname name\n"
@@ -956,6 +975,9 @@ const builtinhelp helpmsgs[] = {
 #endif
 #if ENABLE_CAT
   [CATH] =      { "cat",      "[FILE]...",              cathelp         },
+#endif
+#if ENABLE_COMM
+  [COMMH] =     { "comm",   "[OPTION]... FILE1 FILE2",  commhelp        },
 #endif
 #if ENABLE_CUT
   [CUTH] =      { "cut",      cutusg,                   cuthelp         },

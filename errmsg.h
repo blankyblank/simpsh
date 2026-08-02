@@ -65,6 +65,9 @@ typedef enum {
 #if ENABLE_CAT
   CATH,
 #endif /* ENABLE_CAT */
+#if ENABLE_COMM
+  COMMH,
+#endif /* ENABLE_COMM */
 #if ENABLE_CUT
   CUTH,
 #endif /* ENABLE_CUT */

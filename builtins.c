@@ -79,6 +79,9 @@ extern int basenamecmd(char **);
 #if ENABLE_CAT
 extern int catcmd(char **);
 #endif /* ENABLE_CAT */
+#if ENABLE_COMM
+extern int commcmd(char **);
+#endif /* ENABLE_COMM */
 #if ENABLE_CUT
 extern int cutcmd(char **);
 #endif /* ENABLE_CUT */
@@ -136,6 +139,9 @@ const builtin builtins[] = {
 #if ENABLE_CAT
   { "cat",      &catcmd,      0     },
 #endif  /* ENABLE_CAT */
+#if ENABLE_COMM
+  { "comm",     &commcmd,     0     },
+#endif  /* ENABLE_COMM */
   { "cd",       &cdcmd,       0     },
   { "command",  &commandcmd,  0     },
   { "continue", &continuecmd, SBLTN },

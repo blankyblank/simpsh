@@ -3,6 +3,7 @@
 
 #define ENABLE_BASENAME 1
 #define ENABLE_CAT 1
+#define ENABLE_COMM 1
 #define ENABLE_CUT 1
 #define ENABLE_DIRNAME 1
 #define ENABLE_EXPAND 1
