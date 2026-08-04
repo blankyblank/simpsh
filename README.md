@@ -4,8 +4,8 @@ a simple (mostly) shell.
 
 This is still a WIP, there are things that aren't implemented yet, and there are definitely still bugs.
 
-As I get closer to finishing the initial features needed for the shell. I expect to go through and hunt for bugs.
-and places things aren't stable.
+The main shell is now implemented. I'm currently working on adding in many of the text processing/math unix tools
+as builtins.
 
 The main goal of this shell is going to be to highly optimize for performance over everything.
 Where bash tries being full featured (to the point of breaking posix conformance), along with zsh, some shells
