@@ -382,19 +382,18 @@ need_more(const char *lines, size_t llen)
             depth = 1;
           }
         } else {
-          if (c == '\n' || c == ' ' || c == '\t') {
-            if (c == '\n') {
-              if (heredoc && heredocln) {
-                size_t lstart = (prevnl == -1) ? 0 : prevnl + 1;
-                if ((i - lstart) == dlen && !memcmp(lines + lstart, eofdelim, dlen))
-                  heredoc = 0;
-              }
-              if (heredoc && !heredocln)
-                heredocln = 1;
-              prevnl = i;
+          if (c == '\n') {
+            if (heredoc && heredocln) {
+              size_t lstart = (prevnl == -1) ? 0 : prevnl + 1;
+              if ((i - lstart) == dlen &&
+                  !memcmp(lines + lstart, eofdelim, dlen))
+                heredoc = 0;
             }
+            if (heredoc && !heredocln)
+              heredocln = 1;
+            prevnl = i;
             boundary = 1;
-          } else if (c == '&')
+          } else if (c == ';' || c == '&' || c == '|' || c == '(')
             boundary = 1;
 
           if (c == '<' && next == '<') {
@@ -416,8 +415,8 @@ need_more(const char *lines, size_t llen)
             continue;
           }
 
-          if (boundary && c != ' ' && c != '\t' && c != '\n' && c != ';' &&
-              c != '|' && c != '&') {
+          if (boundary && !heredoc && c != ' ' && c != '\t' && c != '\n' && c != ';' &&
+              c != '|' && c != '&' && c != '(' && c != ')') {
             size_t s = i;
             int wlen, h;
             while (i < llen && lines[i] != ' ' && lines[i] != '\t' &&
