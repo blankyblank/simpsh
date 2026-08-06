@@ -30,13 +30,13 @@ LDFLAG = -flto=auto
 # LDFLAG =
 
 ######## sanitize
-# CFLAG = -O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined
+# CFLAG = -O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined  $(CLANGASANFLAGS)
 # LDFLAG = -fsanitize=address,undefined $(CLANGASANLDFLAGS)
 ### (clang)
-#CLANGASANLDFLAGS = -static-libasan
+CLANGASANLDFLAGS = -static-libasan
 ## sanitizer flags: use with the sanitize build target
 ## clang extras: -fsanitize=implicit-conversion | -fsanitize=integer
-# ASANFLAGS = -fsanitize=integer
+CLANGASANFLAGS = -fsanitize=integer
 
 ######### profile
 # CFLAG = -O2 -g3 -pg -fxray-instrument -fvar-tracking-assignments -fno-analyzer-state-merge
@@ -59,9 +59,11 @@ LIBEDITFLAGS = -DLIBEDIT
 ###			gcov
 #GCOVFLAGS = --coverage -fno-lto
 
-# BASE   = -I. -Wall -Wextra -pedantic -pipe
+# gcc or clang
 BASE   = --std=c23 -I. -Wall -Wextra -pedantic -pipe
-## Compiler flags
+# for tcc
+# BASE   =  -std=c11 -I. -Wall -Wextra -pedantic -pipe
+
 CFLAGS  = $(BASE) $(STATICLIBEDIT) $(CFLAG) $(LIBEDITFLAGS) $(GCOVFLAGS) $(PGOFLAGS)
 LDFLAGS = -Wl,-z,now $(LDFLAG) $(STATIC) $(GCOVFLAGS) $(PGOFLAGS)
 LDLIBS  = $(LIBEDITLIBS)
