@@ -91,15 +91,17 @@ foldcmd(char *argv[])
         }
         if (col > w) {
           size_t brk;
-          brk = ((flags & spc) && ws >= strt) ? ws : j;
-          if (brk > strt)
-            fwrite(buf + strt, 1, brk - strt, shout);
-          fputc('\n', shout);
-
-          if (brk == ws) {
+          if ((flags & spc) && ws >= strt) {
+            brk = ws;
+            fwrite(buf + strt, 1, brk + 1 - strt, shout);
+            fputc('\n', shout);
             strt = brk + 1;
             j = brk;
           } else {
+            brk = j;
+            if (brk > strt)
+              fwrite(buf + strt, 1, brk - strt, shout);
+            fputc('\n', shout);
             strt = brk;
             j = brk - 1;
           }
@@ -115,6 +117,8 @@ foldcmd(char *argv[])
       }
       strt = 0;
     }
+    if (r)
+      fwrite(buf, 1, r, shout);
     if (fp && fp != shin)
       fclose(fp);
   }

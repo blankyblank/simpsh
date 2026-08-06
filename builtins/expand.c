@@ -62,7 +62,7 @@ expandcmd(char *argv[])
 
     path = (argc) ? argv[i] : NULL;
     if (!(fp = lropen(&lr, path))) {
-      status = sherr(1, argv0, path);
+      status = sherr(1, argv0, path ? path : "(stdin)");
       continue;
     }
 

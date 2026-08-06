@@ -4,11 +4,6 @@
 #include <stddef.h>
 #include <string.h>
 
-#ifdef __SSE2__
-#include <emmintrin.h>
-
-/* simd integer. long long */
-typedef __m128i sint;
 
 /* scalar versions (used when machines don't support simd/or for short buffers) */
 static inline size_t
@@ -82,6 +77,12 @@ memchr_scalar(const char *buf, size_t len, char c)
   return p ? (size_t)((const char *)p - buf) : len;
 }
 
+
+#ifdef __SSE2__
+#include <emmintrin.h>
+
+/* simd integer. long long */
+typedef __m128i sint;
 
 /* simd optimized scan to end of word */
 static inline size_t

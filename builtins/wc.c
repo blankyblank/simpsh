@@ -20,6 +20,7 @@ wccmd(char *argv[])
   size_t argc = 0, nsrc;
   int status = 0, flags = 0;
   int tbyt = 0, tln = 0, twrd = 0;
+  int nsel;
   // int tchr = 0;
 
   array_len(argv, argc);
@@ -45,6 +46,9 @@ wccmd(char *argv[])
     flags |= ln | wrd | byt;
 
   nsrc = argc ? argc : 1;
+  nsel = (flags & ln) ? 1 : 0;
+  nsel += (flags & wrd) ? 1 : 0;
+  nsel += (flags & byt) ? 1 : 0;
 
   for (size_t i = 0; i < nsrc; i++) {
     char *name, buf[BUFSIZ];
@@ -86,9 +90,9 @@ wccmd(char *argv[])
     if (flags & ln)
       printf("%4d", nln);
     if (flags & wrd)
-      printf(" %4d", nwrd);
+      printf("%s%4d", (nsel > 1) ? " " : "", nwrd);
     if (flags & byt)
-      printf(" %4d", nbyt);
+      printf("%s%4d", (nsel > 1) ? " " : "", nbyt);
     // if (flags & chr)
     //   printf("%7d", nchr);
     if (name)
@@ -100,11 +104,11 @@ wccmd(char *argv[])
   }
   if (argc > 1) {
     if (flags & ln)
-      printf(" %4d", tln);
+      printf("%4d", tln);
     if (flags & wrd)
-      printf(" %4d", twrd);
+      printf("%s%4d", (nsel > 1) ? " " : "", twrd);
     if (flags & byt)
-      printf(" %4d", tbyt);
+      printf("%s%4d", (nsel > 1) ? " " : "", tbyt);
     // if (flags & chr)
     //   printf("%4d", tchr);
     puts(" total");
