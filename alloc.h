@@ -21,7 +21,7 @@
 #endif
 
 /* so far 8000 for minstack_s seems pretty good for performance, but it seems
- * large which can have it's own drawbacks test more sized */
+ * large which can have it's own drawbacks test more sizes */
 #define align_mem(n) (((n) + (_Alignof(max_align_t) - 1)) & ~(size_t)(_Alignof(max_align_t) - 1))
 #define MINSTACK_S   align_mem(8192)
 #define MEMSIZE    4096
