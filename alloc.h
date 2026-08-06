@@ -35,6 +35,28 @@
 #define stcheck(n) ((void)(stleft == 0 ? grow_stack(n) : (void *)0))
 #define st_putc(c)  (*(unsigned char *)stnext++ = (c), stleft--)
 #define strdup_(s) (strndup_((s), strlen(s)))
+#ifdef __TINYC__
+static inline __attribute__((always_inline)) int
+flrlog2(size_t x)
+{
+  int n = 0;
+  if (x >> 32)
+    n += 32, x >>= 32;
+  if (x >> 16)
+    n += 16, x >>= 16;
+  if (x >> 8)
+    n += 8, x >>= 8;
+  if (x >> 4)
+    n += 4, x >>= 4;
+  if (x >> 2)
+    n += 2, x >>= 2;
+  if (x >> 1)
+    n += 1;
+  return n;
+}
+#else
+#define flrlog2(x) (63 - __builtin_clzll((unsigned long long)(x)))
+#endif /* __TINYC__ */
 
 #define streallocar(ar, sz, used, t) \
   do { \
@@ -57,7 +79,7 @@
 #define getclass(n, i) \
   do { \
     size_t _n = (size_t)(n); \
-    int _flr = 63 - __builtin_clzll(_n | 1); \
+    int _flr = flrlog2(_n | 1); \
     int _ceil = _flr + ((_n & (_n - 1)) != 0); \
     i = _ceil > 4 ? _ceil - 4 : 0; \
     if (i > 8) \
@@ -222,6 +244,7 @@ strndup_(const char *restrict s, size_t n)
   return dup;
 }
 
+/* reallocate from slab allocator */
 static inline void *
 srealloc(void *p, size_t s)
 {
