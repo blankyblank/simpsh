@@ -56,14 +56,14 @@ static unsigned flags;
 static unsigned mode;
 
 static int frange(const char *, size_t , const keydef *, const char **, const char **);
-static int keycmp(const char *, size_t , const char *, size_t);
+static int keycmp(const char *, size_t , const char *, size_t, int);
 static ln *sortmerge(const ln *, size_t, const ln *, size_t, size_t *);
 
 static inline int
 sortcmp(const void *a, const void *b)
 {
   return keycmp(((const ln *)a)->line, ((const ln *)a)->llen,
-                ((const ln *)b)->line, ((const ln *)b)->llen);
+                ((const ln *)b)->line, ((const ln *)b)->llen, 1);
 }
 
 
@@ -284,7 +284,8 @@ sortcmd(char *argv[])
 
   if (mode & (cfl | Cfl)) {
     for (size_t i = 1; i < linec; i++) {
-      res = keycmp(lines[i - 1].line, lines[i - 1].llen, lines[i].line, lines[i].llen);
+      res = keycmp(lines[i - 1].line, lines[i - 1].llen, lines[i].line, lines[i].llen,
+          (mode & ufl) ? 0 : 1);
       if (res > 0) {
         if (mode & cfl)
           fprintf(stderr, "%s: %s:%d: disorder: %s\n", argv0, lines[i].src,
@@ -310,7 +311,7 @@ sortcmd(char *argv[])
     return sherr(1, argv0, (hasout) ? outfile : "(stdout)");
   for (size_t i = 0; i < linec; i++) {
     if ((mode & ufl) && i > 0) {
-      if (!(res = keycmp(lines[i - 1].line, lines[i - 1].llen, lines[i].line, lines[i].llen)))
+      if (!(res = keycmp(lines[i - 1].line, lines[i - 1].llen, lines[i].line, lines[i].llen, 0)))
         continue;
     }
     fwrite(lines[i].line, 1, lines[i].llen, of);
@@ -336,7 +337,7 @@ sortmerge(const ln *a, size_t na, const ln *b, size_t nb, size_t *ol)
   l = salloc((na + nb) * sizeof(ln));
 
   for (i = j = 0; i < na && j < nb ; ) {
-    res = keycmp(a[i].line, a[i].llen, b[j].line, b[j].llen);
+    res = keycmp(a[i].line, a[i].llen, b[j].line, b[j].llen, 1);
     if (res <= 0)
       l[cnt++] = a[i++];
     else
@@ -579,7 +580,7 @@ bytecmp(const char *a, size_t la, const char *b, size_t lb)
 }
 
 static int
-keycmp(const char *a, size_t la, const char *b, size_t lb)
+keycmp(const char *a, size_t la, const char *b, size_t lb, int full)
 {
   const char *astrt, *aend;
   const char *bstrt, *bend;
@@ -618,6 +619,8 @@ keycmp(const char *a, size_t la, const char *b, size_t lb)
     if (res)
       return (flags & rev) ? -res : res;
   }
+  if (!full)
+    return 0;
   res = bytecmp(a, la, b, lb);
   return (flags & rev) ? -res : res;
 }
