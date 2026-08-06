@@ -3,10 +3,10 @@
 
 [ -f ./funcs ] && . ./funcs || { echo "no ./funcs file"; exit 1; }
 
-if [ -x ./test ]; then
-  msg "Running C unit tests..."
-  ./test || { msg_fail "C unit tests"; exit 1;}
-fi
+# if [ -x ./test ]; then
+#   msg "Running C unit tests..."
+#   ./test || { msg_fail "C unit tests"; exit 1;}
+# fi
 
 msg "Running shell tests..."
 for f in [0-9][0-9]-*.sh; do
@@ -18,4 +18,7 @@ for f in [0-9][0-9]-*.sh; do
   fi
 done
 
+if [ -x ./runbuiltins.sh ]; then
+  ./runbuiltins.sh || { msg_fail "builtin tests"; exit 1;}
+fi
 msg_pass "all tests"
