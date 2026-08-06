@@ -78,17 +78,21 @@ stack_restore(stmark m)
 void *
 st_addseg(size_t asize)
 {
-  size_t need = asize < MINSTACK_S ? MINSTACK_S : asize;
-  size_t len = sizeof(stackseg) - MINSTACK_S + need;
+  size_t need, len;
+  stackseg *nseg;
+  char *rp;
+
+  need = asize < MINSTACK_S ? MINSTACK_S : asize;
+  len = sizeof(stackseg) - MINSTACK_S + need;
   stacksl = 1;
-  stackseg *nseg = salloc(len);
+  nseg = salloc(len);
   if (!nseg)
     return NULL;
   nseg->prev = current;
   stnext = nseg->buf;
-  stleft = need;
+  stleft = allocsz(nseg) - (sizeof(stackseg) - MINSTACK_S);
   current = nseg;
-  char *rp = stnext;
+  rp = stnext;
   stnext += asize;
   stleft -= asize;
 #ifdef ENABLE_VALGRIND
@@ -120,7 +124,7 @@ grow_stack(size_t msize)
   if (used > 0)
     memcpy(nb->buf, oldbuf, used);
   stnext = nb->buf + used;
-  stleft = nsize - used;
+  stleft = allocsz(nb) - (sizeof(stackseg) - MINSTACK_S) - used;
   return stnext;
 }
 

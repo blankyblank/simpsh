@@ -136,6 +136,18 @@ extern void stunalloc(void *);
 void *newslab(int);
 extern void slclear(void);
 
+static inline size_t
+allocsz(void *p)
+{
+  void *magic;
+  magic = *(void **)((char *)p - sizeof(slab *));
+  if (magic == LARGEMAGIC) {
+    size_t sz = *(size_t *)((char *)p - sizeof(slab *) - sizeof(size_t));
+    return sz - sizeof(slab *) - sizeof(size_t);
+  }
+  return ((slab *)magic)->stsz - sizeof(slab *);
+}
+
 static inline void *
 salloc(size_t n)
 {
