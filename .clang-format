@@ -31,7 +31,7 @@ AlwaysBreakAfterReturnType: TopLevelDefinitions
 AlwaysBreakBeforeMultilineStrings: false
 AlwaysBreakTemplateDeclarations: Yes
 AttributeMacros: []
-BinPackArguments: false
+BinPackArguments: true
 BinPackParameters: false
 PenaltyBreakBeforeFirstCallParameter: 100
 BitFieldColonSpacing: Both
