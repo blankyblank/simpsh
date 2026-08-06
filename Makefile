@@ -39,6 +39,7 @@ EXTRAS = \
   builtins/readlink.c \
   builtins/realpath.c \
   builtins/sleep.c \
+  builtins/sort.c \
   builtins/tail.c \
   builtins/tee.c \
   builtins/uniq.c \

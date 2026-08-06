@@ -833,6 +833,65 @@ static const char sleephelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_SLEEP */
 
+#if ENABLE_SORT
+static const char sorthelp[] =
+"NOTE: REMEMBER TO UPDATE THIS WHEN DONE WRITING SORT!!!!\n\n\n\n"
+"Usage: sort [OPTION]... [FILE]... \n"
+"  or:  sort [OPTION]... --files0-from=F \n"
+"Write sorted concatenation of all FILE(s) to standard output.\n"
+"\n"
+"With no FILE, or when FILE is -, read standard input.\n"
+"\n"
+"Mandatory arguments to long options are mandatory for short options too.\n"
+"Ordering options:\n"
+"\n"
+"  -b,          ignore leading blanks\n"
+"  -d,          consider only blanks and alphanumeric characters\n"
+"  -f,          fold lower case to upper case characters\n"
+"  -g,          compare according to general numerical value\n"
+"  -i,          consider only printable characters\n"
+"  -M,          compare (unknown) < 'JAN' < ... < 'DEC'\n"
+"  -h,          compare human readable numbers (e.g., 2K 1G)\n"
+"  -n,          compare according to string numerical value\n"
+"  -R,          shuffle, but group identical keys.  See shuf(1)\n"
+"                get random bytes from FILE\n"
+"  -r,          reverse the result of comparisons\n"
+"               sort according to WORD:\n"
+"                 general-numeric -g, human-numeric -h, month -M,\n"
+"                 numeric -n, random -R, version -V\n"
+"  -V,  natural sort of (version) numbers within text\n"
+"\n"
+"Other options:\n"
+"\n"
+"  -c,          check for sorted input; do not sort\n"
+"  -C,          like -c, but do not report first bad line\n"
+"  -k,          sort via a key; KEYDEF gives location and type\n"
+"  -m,          merge already sorted files; do not sort\n"
+"  -o,          write result to FILE instead of standard output\n"
+"  -s,          stabilize sort by disabling last-resort comparison\n"
+"  -S,          use SIZE for main memory buffer\n"
+"  -t,          use SEP instead of non-blank to blank transition\n"
+"  -T,          use DIR for temporaries, not $TMPDIR or /tmp;\n"
+"                 multiple options specify multiple directories\n"
+"  -u,          with -c, check for strict ordering;\n"
+"                 without -c, output only the first of an equal run\n"
+"  -z,          line delimiter is NUL, not newline\n"
+"\n"
+"KEYDEF is F[.C][OPTS][,F[.C][OPTS]] for start and stop position, where F is a\n"
+"field number and C a character position in the field; both are origin 1, and\n"
+"the stop position defaults to the line's end.  If neither -t nor -b is in\n"
+"effect, characters in a field are counted from the beginning of the preceding\n"
+"whitespace.  OPTS is one or more single-letter ordering options [bdfgiMhnRrV],\n"
+"which override global ordering options for that key.  If no key is given, use\n"
+"the entire line as the key.  Use --debug to diagnose incorrect key usage.\n"
+"\n"
+"SIZE may be followed by the following multiplicative suffixes:\n"
+"% 1% of memory, b 1, K 1024 (default), and so on for M, G, T, P, E, Z, Y, R, Q.\n"
+"   Exit Status:\n"
+"       Returns 0 on success, 1 on error.\n";
+#endif /* ENABLE_SORT */
+
+
 #if ENABLE_TAIL
 static const char tailhelp[] =
   "tail [-f] [-n count] [file ...]\n"
@@ -1002,6 +1061,9 @@ const builtinhelp helpmsgs[] = {
 #endif
 #if ENABLE_SLEEP
   [SLEEPH] =    { "sleep",    "[n[.n][smhd]]",          sleephelp       },
+#endif
+#if ENABLE_SORT
+  [SORTH] =    { "sort",     "[OPTION]... [FILE]...",    sorthelp       },
 #endif
 #if ENABLE_TAIL
   [TAILH] =     { "tail",  "[-f] [-n count] [FILE]...", tailhelp        },

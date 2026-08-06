@@ -11,6 +11,7 @@
 #define ENABLE_HEAD 1
 #define ENABLE_READLINK 1
 #define ENABLE_REALPATH 1
+#define ENABLE_SORT 1
 #define ENABLE_SLEEP 1
 #define ENABLE_TAIL 1
 #define ENABLE_TEE 1

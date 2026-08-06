@@ -106,6 +106,9 @@ extern int realpathcmd(char **);
 #if ENABLE_SLEEP
 extern int sleepcmd(char **);
 #endif /* ENABLE_SLEEP */
+#if ENABLE_SORT
+extern int sortcmd(char **);
+#endif /* ENABLE_SORT */
 #if ENABLE_TAIL
 extern int tailcmd(char **);
 #endif /* ENABLE_TAIL */
@@ -190,6 +193,9 @@ const builtin builtins[] = {
 #if ENABLE_SLEEP
   { "sleep",    &sleepcmd,    0     },
 #endif  /* ENABLE_SLEEP */
+#if ENABLE_SORT
+  { "sort",     &sortcmd,     0     },
+#endif  /* ENABLE_SORT */
 #if ENABLE_TAIL
   { "tail",     &tailcmd,     0     },
 #endif  /* ENABLE_TAIL */

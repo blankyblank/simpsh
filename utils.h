@@ -24,7 +24,7 @@
 #define is_cmd_end(c)    ((c == ' ') | (c == '\t') | (c == '\n'))
 #define nts(s, l)        (s[l] = '\0')
 #define nmemcpy(d, s, l) memcpy((d), (s), (l)), (d)[l] = '\0'
-#define pntlen(e, s)    (e - s)
+#define pntlen(s, e)    (e - s)
 /**  check if char is operator  */
 #define is_operator(c) \
   (c == '&' || c == '|' || c == ';' || c == '(' || c == ')' || c == '{' || \

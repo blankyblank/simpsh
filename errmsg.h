@@ -92,6 +92,9 @@ typedef enum {
 #if ENABLE_SLEEP
   SLEEPH,
 #endif /* ENABLE_SLEEP */
+#if ENABLE_SORT
+  SORTH,
+#endif /* ENABLE_SORT */
 #if ENABLE_TAIL
   TAILH,
 #endif /* ENABLE_TAIL */
