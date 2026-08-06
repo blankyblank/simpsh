@@ -12,6 +12,7 @@
 
 #include "alloc.h"
 #include "arg.h"
+#include "builtins.h"
 #include "errmsg.h"
 #include "utils.h"
 
@@ -48,11 +49,17 @@ tailcmd(char *argv[])
   array_len(argv, argc);
   ARGBEGIN
   {
+    char *arg;
     case 'f':
       f_flag = 1;
       break;
+    case 'n':
+      if (!(arg = EARGF(usage(argv0, helpmsgs[TAILH].usage))))
+        return 1;
+      ln = bltin_atoi(arg, argv0, "requires a number");
+      break;
 ARGNUM:
-      ln = atoi_(*argv);
+      ln = ARGNUMF();
       break;
     default:
       return bad_opt(argv0, ARGC());

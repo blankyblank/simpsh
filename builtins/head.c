@@ -13,20 +13,21 @@ int
 headcmd(char *argv[])
 {
   int ln = 10, status = 0;
-  char *f, *arg;
+  char *f;
   size_t argc = 0;
   lr_t lr;
 
   array_len(argv, argc);
   ARGBEGIN
   {
+    char *arg;
     case 'n':
-      if (!(arg = EARGF(usage(argv0, "head [-n number] [file...]"))))
+      if (!(arg = EARGF(usage(argv0, helpmsgs[HEADH].usage))))
         return 1;
       ln = bltin_atoi(arg, argv0, "requires a number");
       break;
 ARGNUM:
-      ln = atoi_(*argv);
+      ln = ARGNUMF();
       break;
     default:
       return bad_opt(argv0, ARGC());

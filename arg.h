@@ -17,8 +17,7 @@
 #define ARGBEGIN	\
 char *argv0; \
 for (argv0 = *argv, argv++, argc--;\
-					argv[0] && argv[0][0] == '-'\
-					&& argv[0][1];\
+					argv[0] && argv[0][0] == '-' && argv[0][1];\
 					argc--, argv++) {\
 				char argc_;\
 				char **argv_;\
@@ -53,7 +52,7 @@ for (argv0 = *argv, argv++, argc--;\
 
 #define ARGC()		argc_
 
-#define ARGNUMF()	(brk_ = 1, estrtonum(argv[0], 0, INT_MAX))
+#define ARGNUMF()	(brk_ = 1, atoi_(argv[0]))
 
 #define EARGF(x)	((argv[0][1] == '\0' && argv[1] == NULL)?\
 				((x), (char *)0) :\
