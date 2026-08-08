@@ -35,6 +35,7 @@ expandcmd(char *argv[])
   size_t nsrc, argc = 0, ntb = 1;
   size_t *t = &((size_t) { 8 });
   int init = 0, status = 0;
+  stmark em;
 
   array_len(argv, argc);
   ARGBEGIN
@@ -66,6 +67,7 @@ expandcmd(char *argv[])
       continue;
     }
 
+    em = stack_mark();
     while ((line = lrread(&lr, &llen))) {
       size_t col = 0, lead = 1;
       for (size_t j = 0; j < llen; j++) {
@@ -100,7 +102,7 @@ expandcmd(char *argv[])
         }
       }
       fputc('\n', shout);
-      sfree(line);
+      stack_restore(em);
     }
     if (path)
       fclose(fp);
@@ -114,6 +116,7 @@ unexpandcmd(char *argv[])
   size_t nsrc, argc = 0, ntb = 1;
   size_t *t = &((size_t) { 8 });
   int all = 0, status = 0;
+  stmark uxm;
 
   array_len(argv, argc);
   ARGBEGIN
@@ -145,6 +148,7 @@ unexpandcmd(char *argv[])
       continue;
     }
 
+    uxm = stack_mark();
     while ((line = lrread(&lr, &llen))) {
       size_t col = 0, lead = 1;
       size_t nxt = 0, run = 0, strt = 0;
@@ -184,7 +188,7 @@ unexpandcmd(char *argv[])
       }
       flushspace();
       fputc('\n', shout);
-      sfree(line);
+      stack_restore(uxm);
     }
     if (path)
       fclose(fp);
@@ -203,7 +207,7 @@ parsetb(char *s, size_t *idx)
 
   if (!ccnt) {
     int n;
-    t = salloc(1 * sizeof(size_t));
+    t = st_alloc(1 * sizeof(size_t));
     if (!(n = atoi_(s)) || (n < 0)) {
       *idx = 0;
       return NULL;
@@ -215,7 +219,7 @@ parsetb(char *s, size_t *idx)
   ccnt++;
 
   char *strt, *cur;
-  t = salloc(ccnt * sizeof(size_t));
+  t = st_alloc(ccnt * sizeof(size_t));
   strt = s;
   for (size_t i = 0; ; i++) {
     int n;

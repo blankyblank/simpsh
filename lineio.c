@@ -22,7 +22,7 @@ lrread(lr_t *lr, size_t *len)
 
   if ((nl = memchr(lr->buf + lr->pos, '\n', lr->end - lr->pos))) {
     size_t llen = nl - (lr->buf + lr->pos);
-    line = salloc(llen + 1);
+    line = st_alloc(llen + 1);
     nmemcpy(line, lr->buf + lr->pos, llen);
     lr->pos = nl - lr->buf + 1;
     *len = llen;
@@ -31,7 +31,7 @@ lrread(lr_t *lr, size_t *len)
   seg = lr->buf + lr->pos;
   slen = lr->end - lr->pos;
   cap = slen + 1;
-  line = salloc(cap);
+  line = st_alloc(cap);
   memcpy(line, seg, slen);
   off = slen;
 
@@ -47,7 +47,7 @@ lrread(lr_t *lr, size_t *len)
       llen = nl - lr->buf;
       if (cap <= off + llen) {
         cap = off + llen + 1;
-        line = srealloc(line, cap);
+        streallocar(line, cap, off, char);
       }
       memcpy(line + off, lr->buf, llen);
       off += llen;
@@ -59,7 +59,7 @@ lrread(lr_t *lr, size_t *len)
     }
     if (cap <= off + nread) {
       cap = off + nread + 1;
-      line = srealloc(line, cap);
+      streallocar(line, cap, off, char);
     }
     memcpy(line + off, lr->buf, nread);
     off += nread;

@@ -55,6 +55,7 @@ static int hasout;
 static unsigned flags;
 static unsigned mode;
 
+static int parsekey(char *s, keydef *kd);
 static int frange(const char *, size_t , const keydef *, const char **, const char **);
 static int keycmp(const char *, size_t , const char *, size_t, int);
 static ln *sortmerge(const ln *, size_t, const ln *, size_t, size_t *);
@@ -66,6 +67,179 @@ sortcmp(const void *a, const void *b)
                 ((const ln *)b)->line, ((const ln *)b)->llen, 1);
 }
 
+int
+sortcmd(char *argv[])
+{
+  size_t argc = 0;
+  int status = 0;
+  char *kdstr = NULL;
+
+  array_len(argv, argc);
+  ARGBEGIN
+  {
+    case 'c':
+      mode |= cfl;
+      break;
+    case 'C':
+      mode |= Cfl;
+      break;
+    case 'm':
+      mode |= mfl;
+      break;
+    case 'u':
+      mode |= ufl;
+      break;
+    case 'b':
+      flags |= strtb|endb;
+      break;
+    case 'd':
+      flags |= dict;
+      break;
+    case 'f':
+      flags |= icase;
+      break;
+    case 'i':
+      flags |= inprnt;
+      break;
+    case 'n':
+      flags |= num;
+      break;
+    case 'r':
+      flags |= rev;
+      break;
+    case 'k':
+        if (!(kdstr = EARGF(no_opt(argv0, ARGC()))))
+          return 1;
+        if (nkeyd >= KEYCAP) {
+          return usage(argv0, helpmsgs[SORTH].usage), 1;
+        }
+        if (parsekey(kdstr, &keys[nkeyd++]) < 0)
+          return shwarn_arg(argv0, kdstr, "bad key");
+        break;
+    case 'o':
+      if (!(outfile = EARGF(no_opt(argv0, ARGC()))))
+        return 1;
+      hasout = 1;
+      break;
+    case 't':
+      if (!(sep = *EARGF(no_opt(argv0, ARGC()))))
+        return 1;
+      hassep = 1;
+      break;
+    default:
+      return bad_opt(argv0, ARGC());
+  }
+  ARGEND
+
+  if (argc > 1 && (mode & (cfl | Cfl)))
+    return usage(argv0, helpmsgs[SORTH].usage), 1;
+
+  int res;
+  size_t linec = 0, rlen = 0;
+  size_t nsrc, linecap = LINECAP;;
+  ln *lines = NULL, *run = NULL, *mrun = NULL;
+
+  nsrc = (argc) ? argc : 1;
+  if (!(mode & mfl))
+    lines = st_alloc(linecap * sizeof(ln));
+
+  for (size_t i = 0; i < nsrc; i++) {
+    FILE *fp;
+    lr_t lr;
+    size_t llen = 0;
+    char *path, *arg;
+    int lnno = 1;
+
+    arg = argv[i];
+    path = (argc && !(arg[0] == '-' && arg[1] == '\0')) ? argv[i] : NULL;
+    if (!(fp = lropen(&lr, path))) {
+      status = sherr(1, argv0, path ? path : "(stdin)");
+      continue;
+    }
+
+    if (mode & mfl) {
+      ln *flns;
+      size_t flen = 0, mlen;
+
+      flns = st_alloc(linecap * sizeof(ln));
+      while ((flns[flen].line = lrread(&lr, &llen))) {
+        flns[flen].llen = llen;
+        flns[flen].lineno = lnno++;
+        flns[flen++].src = path ? path : "(stdin)";
+        if (flen >= linecap) {
+          linecap *= 2;
+          streallocar(flns, linecap, flen, ln);
+        }
+      }
+      if (!run) {
+        run = flns;
+        rlen = flen;
+      } else {
+        mrun = sortmerge(run, rlen, flns, flen, &mlen);
+        run = mrun, rlen = mlen;
+      }
+    } else {
+      if (linec >= linecap) {
+        linecap *= 2;
+        streallocar(lines, linecap, linec, ln);
+      }
+      while ((lines[linec].line = lrread(&lr, &llen))) {
+        lines[linec].llen = llen;
+        lines[linec].lineno = lnno++;
+        lines[linec++].src = path ? path : "(stdin)";
+        if (linec >= linecap) {
+          linecap *= 2;
+          streallocar(lines, linecap, linec, ln);
+        }
+      }
+    }
+    if (fp != shin)
+      fclose(fp);
+  }
+
+  if (mode & mfl)
+    lines = run, linec = rlen;
+
+  if (mode & (cfl | Cfl)) {
+    for (size_t i = 1; i < linec; i++) {
+      res = keycmp(lines[i - 1].line, lines[i - 1].llen, lines[i].line, lines[i].llen,
+          (mode & ufl) ? 0 : 1);
+      if (res > 0) {
+        if (mode & cfl)
+          fprintf(stderr, "%s: %s:%d: disorder: %s\n", argv0, lines[i].src,
+                  lines[i].lineno, lines[i].line);
+        return 1;
+      }
+      if (mode & ufl) {
+        if (!res) {
+          fprintf(stderr, "%s: %s:%d: disorder: %s\n", argv0, lines[i].src,
+                  lines[i].lineno, lines[i].line);
+          return 1;
+        }
+      }
+    }
+    return 0;
+  }
+
+  if (!(mode & mfl))
+    qsort(lines, linec, sizeof(ln), sortcmp);
+
+  FILE *of = (hasout) ? fopen(outfile, "w") : shout;
+  if (!of)
+    return sherr(1, argv0, (hasout) ? outfile : "(stdout)");
+  for (size_t i = 0; i < linec; i++) {
+    if ((mode & ufl) && i > 0) {
+      if (!(res = keycmp(lines[i - 1].line, lines[i - 1].llen, lines[i].line, lines[i].llen, 0)))
+        continue;
+    }
+    fwrite(lines[i].line, 1, lines[i].llen, of);
+    fputc('\n', of);
+  }
+  if (of != shout)
+    fclose(of);
+
+  return status;
+}
 
 static int
 parsekey(char *s, keydef *kd)
@@ -146,186 +320,6 @@ parsekey(char *s, keydef *kd)
   return 0;
 }
 
-int
-sortcmd(char *argv[])
-{
-  size_t argc = 0;
-  int status = 0;
-  char *kdstr = NULL;
-
-  array_len(argv, argc);
-  ARGBEGIN
-  {
-    case 'c':
-      mode |= cfl;
-      break;
-    case 'C':
-      mode |= Cfl;
-      break;
-    case 'm':
-      mode |= mfl;
-      break;
-    case 'u':
-      mode |= ufl;
-      break;
-    case 'b':
-      flags |= strtb|endb;
-      break;
-    case 'd':
-      flags |= dict;
-      break;
-    case 'f':
-      flags |= icase;
-      break;
-    case 'i':
-      flags |= inprnt;
-      break;
-    case 'n':
-      flags |= num;
-      break;
-    case 'r':
-      flags |= rev;
-      break;
-    case 'k':
-        if (!(kdstr = EARGF(no_opt(argv0, ARGC()))))
-          return 1;
-        if (nkeyd >= KEYCAP) {
-          return usage(argv0, helpmsgs[SORTH].usage), 1;
-        }
-        if (parsekey(kdstr, &keys[nkeyd++]) < 0)
-          return shwarn_arg(argv0, kdstr, "bad key");
-        break;
-    case 'o':
-      if (!(outfile = EARGF(no_opt(argv0, ARGC()))))
-        return 1;
-      hasout = 1;
-      break;
-    case 't':
-      if (!(sep = *EARGF(no_opt(argv0, ARGC()))))
-        return 1;
-      hassep = 1;
-      break;
-    default:
-      return bad_opt(argv0, ARGC());
-  }
-  ARGEND
-
-  if (argc > 1 && (mode & (cfl | Cfl)))
-    return usage(argv0, helpmsgs[SORTH].usage), 1;
-
-  int res;
-  size_t linec = 0, rlen = 0;
-  size_t nsrc, linecap = LINECAP;;
-  ln *lines = NULL, *run = NULL, *mrun = NULL;
-
-  nsrc = (argc) ? argc : 1;
-
-  if (!(mode & mfl))
-    lines = salloc(linecap * sizeof(ln));
-
-  for (size_t i = 0; i < nsrc; i++) {
-    FILE *fp;
-    lr_t lr;
-    size_t llen = 0;
-    char *path, *arg;
-    int lnno = 1;
-
-    arg = argv[i];
-    path = (argc && !(arg[0] == '-' && arg[1] == '\0')) ? argv[i] : NULL;
-    if (!(fp = lropen(&lr, path))) {
-      status = sherr(1, argv0, path ? path : "(stdin)");
-      continue;
-    }
-
-    if (mode & mfl) {
-      ln *flns;
-      size_t flen = 0, mlen;
-
-      flns = salloc(linecap * sizeof(ln));
-      while ((flns[flen].line = lrread(&lr, &llen))) {
-        flns[flen].llen = llen;
-        flns[flen].lineno = lnno++;
-        flns[flen++].src = path ? path : "(stdin)";
-        if (flen >= linecap) {
-          linecap *= 2;
-          flns = srealloc(flns, linecap * sizeof(ln));
-        }
-      }
-      if (!run) {
-        run = flns;
-        rlen = flen;
-      } else {
-        mrun = sortmerge(run, rlen, flns, flen, &mlen);
-        sfree(run);
-        sfree(flns);
-        run = mrun, rlen = mlen;
-      }
-    } else {
-      if (linec >= linecap) {
-        linecap *= 2;
-        lines = srealloc(lines, (linecap * sizeof(ln)));
-      }
-      while ((lines[linec].line = lrread(&lr, &llen))) {
-        lines[linec].llen = llen;
-        lines[linec].lineno = lnno++;
-        lines[linec++].src = path ? path : "(stdin)";
-        if (linec >= linecap) {
-          linecap *= 2;
-          lines = srealloc(lines, linecap * sizeof(ln));
-        }
-      }
-    }
-    if (fp != shin)
-      fclose(fp);
-  }
-
-  if (mode & mfl)
-    lines = run, linec = rlen;
-
-  if (mode & (cfl | Cfl)) {
-    for (size_t i = 1; i < linec; i++) {
-      res = keycmp(lines[i - 1].line, lines[i - 1].llen, lines[i].line, lines[i].llen,
-          (mode & ufl) ? 0 : 1);
-      if (res > 0) {
-        if (mode & cfl)
-          fprintf(stderr, "%s: %s:%d: disorder: %s\n", argv0, lines[i].src,
-                  lines[i].lineno, lines[i].line);
-        return 1;
-      }
-      if (mode & ufl) {
-        if (!res) {
-          fprintf(stderr, "%s: %s:%d: disorder: %s\n", argv0, lines[i].src,
-                  lines[i].lineno, lines[i].line);
-          return 1;
-        }
-      }
-    }
-    return 0;
-  }
-
-  if (!(mode & mfl))
-    qsort(lines, linec, sizeof(ln), sortcmp);
-
-  FILE *of = (hasout) ? fopen(outfile, "w") : shout;
-  if (!of)
-    return sherr(1, argv0, (hasout) ? outfile : "(stdout)");
-  for (size_t i = 0; i < linec; i++) {
-    if ((mode & ufl) && i > 0) {
-      if (!(res = keycmp(lines[i - 1].line, lines[i - 1].llen, lines[i].line, lines[i].llen, 0)))
-        continue;
-    }
-    fwrite(lines[i].line, 1, lines[i].llen, of);
-    fputc('\n', of);
-  }
-  if (of != shout)
-    fclose(of);
-  for (size_t i = 0; i < linec; i++)
-    sfree(lines[i].line);
-  sfree(lines);
-
-
-  return status;
-}
 
 static ln *
 sortmerge(const ln *a, size_t na, const ln *b, size_t nb, size_t *ol)
@@ -334,7 +328,7 @@ sortmerge(const ln *a, size_t na, const ln *b, size_t nb, size_t *ol)
   int res, cnt = 0;
   ln *l;
 
-  l = salloc((na + nb) * sizeof(ln));
+  l = st_alloc((na + nb) * sizeof(ln));
 
   for (i = j = 0; i < na && j < nb ; ) {
     res = keycmp(a[i].line, a[i].llen, b[j].line, b[j].llen, 1);

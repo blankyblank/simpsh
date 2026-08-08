@@ -112,18 +112,15 @@ uniqcmd(char *argv[])
     if (oline && llen - key == olen - okey &&
         !memcmp(line + key, oline + okey, llen - key)) {
       cnt++;
-      sfree(line);
       continue;
     }
     prntuniq(oline, olen, cnt);
-    sfree(oline);
     oline = line;
     olen = llen;
     okey = key;
     cnt = 1;
   }
   prntuniq(oline, olen, cnt);
-  sfree(oline);
 
   if (ifp != shin)
     fclose(ifp);

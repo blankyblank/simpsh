@@ -12,10 +12,11 @@
 int
 headcmd(char *argv[])
 {
-  int ln = 10, status = 0;
+  int svln, ln = 10, status = 0;
   char *f;
   size_t argc = 0;
   lr_t lr;
+  stmark hm;
 
   array_len(argv, argc);
   ARGBEGIN
@@ -38,16 +39,19 @@ ARGNUM:
     return 0;
 
   f = *argv;
+  svln = ln;
   if (f) {
     for (size_t i = 0; i < argc; i++) {
       FILE *fp;
       f = *argv++;
+      ln = svln;
       if (!(fp = lropen(&lr, f))) {
         status = sherr(1, f, "could not access file");
         continue;
       }
       if (argc > 1)
         fprintf(shout,"%s==> %s <==\n", (i > 0) ? "\n" : "", f);
+      hm = stack_mark();
       while (ln > 0) {
         char *line;
         size_t len;
@@ -56,15 +60,17 @@ ARGNUM:
         fwrite(line, 1, len, shout);
         fputc('\n', shout);
         ln--;
-        sfree(line);
+        stack_restore(hm);
       }
       fclose(fp);
     }
+    stack_restore(hm);
     return status;
   }
 
   lr.fp = shin;
   lr.pos = lr.end = 0;
+  hm = stack_mark();
   while (ln > 0) {
     char *line;
     size_t len;
@@ -73,7 +79,7 @@ ARGNUM:
     fwrite(line, 1, len, shout);
     fputc('\n', shout);
     ln--;
-    sfree(line);
+    stack_restore(hm);
   }
   return status;
 }

@@ -27,6 +27,7 @@ cutcmd(char **argv)
   char *list = NULL;
   char delim = '\t';
   int m, flags = 0, status = 0;
+  stmark cm;
 
   enum {
     bfl = 1 << 0,
@@ -101,12 +102,13 @@ cutcmd(char **argv)
   if (!*argv) {
     lr.fp = shin;
     lr.pos = lr.end = 0;
+    cm = stack_mark();
     while ((line = lrread(&lr, &llen))) {
       if (flags & ffl)
         cutfld(line, llen, rngs, nr, delim, (flags & sfl));
       else
         cutbt(line, llen, rngs, nr);
-      sfree(line);
+      stack_restore(cm);
     }
     return 0;
   }
@@ -117,12 +119,13 @@ cutcmd(char **argv)
       sherr(1, argv[i], "could not access file");
       continue;
     }
+    cm = stack_mark();
     while ((line = lrread(&lr, &llen))) {
       if (flags & ffl)
         cutfld(line, llen, rngs, nr, delim, (flags & sfl));
       else
         cutbt(line, llen, rngs, nr);
-      sfree(line);
+      stack_restore(cm);
     }
     fclose(lr.fp);
   }
@@ -214,7 +217,7 @@ getrange(char *list, size_t *restrict nrange)
     if (*cur == ',')
       ccnt++;
 
-  rngs = salloc(++ccnt * sizeof(range));
+  rngs = st_alloc(++ccnt * sizeof(range));
 
   for (cur = list; *cur; cur++) {
     char *dash, sv;

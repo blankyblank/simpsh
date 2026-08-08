@@ -7,6 +7,7 @@
 #include <time.h>
 
 #include "errmsg.h"
+#include "main.h"
 
 #define MIN 60
 #define HOUR 3600
@@ -23,8 +24,8 @@ sleepcmd(char *argv[])
     return shwarn(argv0, "requires an argument");
   for (; *argv; argv++) {
     char *arg = *argv;
-    int sec, nsec;
-    int mult = 1, dot = 0, denom = 10;
+    i64 sec, nsec, ns;
+    int mult = 1, dot = 0, denom = 1;
     int dec = 0, whole = 0;
 
     for (char *p = arg; *p; p++) {
@@ -42,6 +43,9 @@ sleepcmd(char *argv[])
         case '.':
           dot = 1;
           continue;
+        case 'S':
+        case 's':
+          break;
         case 'M':
         case 'm':
           mult = MIN;
@@ -61,8 +65,10 @@ sleepcmd(char *argv[])
           return shwarn_arg(argv0, arg, "invalid time interval");
       }
     }
-    sec = whole * mult + (dec * mult) / denom;
-    nsec = ((dec * mult) % denom) * 1000000000 / denom;
+    ns = (i64)whole * mult * 1000000000LL
+      + (i64)dec * mult * 1000000000LL / denom;
+    sec = ns / 1000000000;
+    nsec = ns % 1000000000;
     ts.tv_sec += sec;
     ts.tv_nsec += nsec;
   }

@@ -97,15 +97,15 @@ foldcmd(char *argv[])
             fputc('\n', shout);
             strt = brk + 1;
             j = brk;
-          } else {
+            col = ws = 0;
+          } else if (j > strt) {
             brk = j;
-            if (brk > strt)
-              fwrite(buf + strt, 1, brk - strt, shout);
+            fwrite(buf + strt, 1, brk - strt, shout);
             fputc('\n', shout);
             strt = brk;
             j = brk - 1;
+            col = ws = 0;
           }
-          col = ws = 0;
         }
       }
       if (strt < r) {

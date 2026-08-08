@@ -81,16 +81,12 @@ commcmd(char *argv[])
     cmp = lcmp(line1, len1, line2, len2);
     if (!cmp) {
       printline(2, line1, len1);
-      sfree(line1);
-      sfree(line2);
       line1 = line2 = NULL;
     } else if (cmp < 0) {
       printline(0, line1, len1);
-      sfree(line1);
       line1 = NULL;
     } else {
       printline(1, line2, len2);
-      sfree(line2);
       line2 = NULL;
     }
   }
@@ -98,6 +94,7 @@ commcmd(char *argv[])
     fclose(fp1);
   if (fp2 != shin)
     fclose(fp2);
+
   return status;
 }
 
@@ -133,7 +130,6 @@ drain(lr_t *lr, int col, char **line, size_t *len)
 {
   while (*line) {
     printline(col, *line, *len);
-    sfree(*line);
     *line = lrread(lr, len);
   }
 }

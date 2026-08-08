@@ -42,7 +42,7 @@ teecmd(char *argv[])
         bufsize = GETBLKSIZE(files[i], st);
         break;
       }
-    buf = salloc(bufsize);
+    buf = st_alloc(bufsize);
     while ((n = fread(buf, 1, bufsize, shin)) > 0) {
       fwrite(buf, 1, n, shout);
       for (size_t i = 0; i < argc; i++)
@@ -53,18 +53,15 @@ teecmd(char *argv[])
       status = sherr(1, argv0, "read error\n");
     for (size_t i = 0; i < argc; i++)
       fclose(files[i]);
-    if (buf)
-      sfree(buf);
     return status;
   }
-  buf = salloc(bufsize);
+  buf = st_alloc(bufsize);
   while ((n = fread(buf, 1, bufsize, shin)) > 0) {
     fwrite(buf, 1, n, shout);
   }
   if (ferror(shin))
     status = sherr(1, argv0, "read error");
-  if (buf)
-    sfree(buf);
+
   return status;
 }
 #endif /* if ENABLE_TEE */

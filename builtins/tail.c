@@ -201,14 +201,12 @@ ftail(int ln, char **files, size_t argc)
 int
 sttail(int ln)
 {
-  stmark m;
   int s, c = 0, cnt = 0, n = 0;
   size_t off = 0;
   char *rng[ln], buf[BUFSIZ];
 
   for (int in = 0; in < ln; ++in)
     rng[in] = NULL;
-  m = stack_mark();
   while ((n = fread(buf + off, 1, sizeof(buf) - off, shin)) > 0) {
     char *p = buf;
     char *end = buf + off + n;
@@ -238,7 +236,6 @@ sttail(int ln)
     fwrite(rng[(s + i) % ln], 1, strlen(rng[(s + i) % ln]), shout);
   }
 
-  stack_restore(m);
   return 0;
 }
 #endif /* ENABLE_TAIL */

@@ -20,13 +20,11 @@ catcmd(char **argv)
   array_len(argv, argc);
 
   if (argc == 1 || (argc == 2 && argv[1][0] == '-' && argv[1][1] == '\0')) {
-    buf = salloc(bufsize);
+    buf = st_alloc(bufsize);
     while ((n = fread(buf, 1, bufsize, shin)) > 0)
       fwrite(buf, 1, n, shout);
     if (ferror(shin))
       return sherr(1, argv[0], "Bad file descriptor\n");
-    if (buf)
-      sfree(buf);
     return 0;
   }
 
@@ -34,14 +32,12 @@ catcmd(char **argv)
     if (!(f = fopen(argv[i], "r")))
       return sherr(1, argv[i], "could not access file");
     bufsize = GETBLKSIZE(f, st);
-    buf = salloc(bufsize);
+    buf = st_alloc(bufsize);
     while ((n = fread(buf, 1, bufsize, f)) > 0)
       fwrite(buf, 1, n, shout);
     fclose(f);
     i++;
   }
-  if (buf)
-    sfree(buf);
   return 0;
 }
 #endif /* ENABLE_CAT */

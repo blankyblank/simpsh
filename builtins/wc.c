@@ -5,7 +5,107 @@
 
 #include "arg.h"
 #include "errmsg.h"
+#include "simd.h"
 #include "utils.h"
+
+static inline size_t
+cntnl(const char *buf, size_t len)
+{
+  size_t n = 0;
+  for (size_t i = 0; i < len; i++)
+    if (buf[i] == '\n')
+      n++;
+  return n;
+}
+
+static inline size_t
+cntwords(const char *buf, size_t len, int *inwrd)
+{
+  size_t n = 0;
+  for (size_t i = 0; i < len; i++) {
+    unsigned char c = (unsigned char)buf[i];
+    if (c == ' ' || c == '\t' || c == '\n')
+      *inwrd = 0;
+    else if (!*inwrd) {
+      n++;
+      *inwrd = 1;
+    }
+  }
+  return n;
+}
+
+#ifdef __SSE2__
+static inline size_t
+scntnl(const char *buf, size_t len)
+{
+  sint input, nlv, nlr;
+  int mask;
+  size_t i, n = 0;
+
+  nlv = _mm_set1_epi8('\n');
+  for (i = 0; i + 16 <= len; i += 16) {
+    input = _mm_loadu_si128((const sint *)(buf + i));
+    nlr = _mm_cmpeq_epi8(input, nlv);
+    mask = _mm_movemask_epi8(nlr);
+    n += __builtin_popcount((unsigned)mask);
+  }
+  if (i < len) {
+    char tmp[16] __attribute__((aligned(16)));
+    size_t rem = len - i;
+    memcpy(tmp, buf + i, rem);
+    input = _mm_load_si128((const sint *)tmp);
+    nlr = _mm_cmpeq_epi8(input, nlv);
+    mask = _mm_movemask_epi8(nlr) & ((1 << rem) - 1);
+    n += __builtin_popcount((unsigned)mask);
+  }
+  return n;
+}
+
+static inline size_t
+scntwords(const char *buf, size_t len, int *inwrd)
+{
+  sint input, spv, tabv, nlv, wsm;
+  int mask, non, starts;
+  size_t i, n = 0;
+
+  spv = _mm_set1_epi8(' ');
+  tabv = _mm_set1_epi8('\t');
+  nlv = _mm_set1_epi8('\n');
+  for (i = 0; i + 16 <= len; i += 16) {
+    input = _mm_loadu_si128((const sint *)(buf + i));
+    wsm = _mm_or_si128(_mm_cmpeq_epi8(input, spv),
+                       _mm_or_si128(_mm_cmpeq_epi8(input, tabv),
+                                    _mm_cmpeq_epi8(input, nlv)));
+    mask = _mm_movemask_epi8(wsm);
+    non = ~mask & 0xFFFF;
+    starts = non & ~(non << 1);
+    if (*inwrd)
+      starts &= ~1;
+    *inwrd = (non >> 15) & 1;
+    n += __builtin_popcount((unsigned)starts);
+  }
+  if (i < len) {
+    char tmp[16] __attribute__((aligned(16)));
+    size_t rem = len - i;
+    memcpy(tmp, buf + i, rem);
+    input = _mm_load_si128((const sint *)tmp);
+    wsm = _mm_or_si128(_mm_cmpeq_epi8(input, spv),
+                       _mm_or_si128(_mm_cmpeq_epi8(input, tabv),
+                                    _mm_cmpeq_epi8(input, nlv)));
+    mask = _mm_movemask_epi8(wsm) & ((1 << rem) - 1);
+    non = ~mask & ((1 << rem) - 1);
+    starts = non & ~(non << 1);
+    if (*inwrd)
+      starts &= ~1;
+    *inwrd = (non >> 15) & 1;
+    n += __builtin_popcount((unsigned)starts);
+  }
+  return n;
+}
+#else
+#define scntnl(buf, len) (cntnl((buf), (len)))
+#define scntwords(buf, len, inwrd) (cntwords((buf), (len), (inwrd)))
+#endif /* __SSE2__ */
 
 int
 wccmd(char *argv[])
@@ -68,19 +168,9 @@ wccmd(char *argv[])
     }
 
     while ((n = fread(buf, 1, BUFSIZ, fp)) > 0) {
-      for (size_t j = 0; j < n; j++) {
-        unsigned char c = (unsigned char)buf[j];
-        nbyt++;
-        if (c == '\n')
-          nln++;
-        if (is_ws(c)) {
-          inwrd = 0;
-        } else if (!inwrd) {
-          nwrd++;
-          // nchr++;
-          inwrd = 1;
-        }
-      }
+      nbyt += (int)n;
+      nln += (int)scntnl(buf, n);
+      nwrd += (int)scntwords(buf, n, &inwrd);
     }
     tbyt += nbyt;
     tln += nln;
