@@ -634,10 +634,12 @@ run_cmd(const cmd_tree *n, int inchld)
   const builtin *volatile b = NULL;
   shfunc *f = NULL;
   shvar *v;
+  stmark cm;
 
   ifl = iflag;
   efl = eflag;
   gstate.lineno = n->line;
+  cm = stack_mark();
   {
     jmploc jmp;
     jmploc * const volatile sv = handler;
@@ -699,9 +701,13 @@ run_cmd(const cmd_tree *n, int inchld)
       }
     }
     if (predir)
-      return apply_redir(predir);
-    return 0;
+      status = apply_redir(predir);
+    goto done;
   }
+#ifdef DEBUG
+  stack_state(final[0]);
+#endif /* DEBUG */
+
   if ((b = findbuiltin(*final)) && (b->flags & SBLTN)) {
     status = runsbltn(b, final, CVARS(n));
   } else if ((f = findfunc(final[0]))) {
@@ -715,6 +721,8 @@ run_cmd(const cmd_tree *n, int inchld)
     status = !status;
   if (efl && status != 0 && !ifl && !(n->flags & EFLAG_SAFE) && !CNEG(n))
     exit(status);
+done:
+  stack_restore(cm);
   return status;
 }
 

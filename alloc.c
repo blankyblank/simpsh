@@ -30,6 +30,10 @@ char *stnext = stackbase.buf;
 size_t stleft = MINSTACK_S;
 unsigned char stacksl = 0;
 
+#ifdef DEBUG
+  ststat stt;
+#endif /* DEBUG */
+
 slclass slotsz[SLCLASSN] = {
   { .stsz = 24,    .sbsz = sizeof(slab) + (ul)(512 * 16)  },
   { .stsz = 40,    .sbsz = sizeof(slab) + (ul)(256 * 32)  },
@@ -62,6 +66,11 @@ stack_restore(stmark m)
 {
   while (current != &stackbase && current != m.current) {
     stackseg *tmp = current->prev;
+#ifdef DEBUG
+    stt.live -= current->cap;
+    stt.cursegs--;
+    stt.segfree++;
+#endif
     sfree(current);
     current = tmp;
   }
@@ -94,6 +103,16 @@ st_addseg(size_t asize)
   current = nseg;
   rp = stnext;
   stnext += asize;
+#ifdef DEBUG
+  nseg->cap = stleft;
+  stt.live += stleft;
+  stt.cursegs++;
+  stt.segalloc++;
+  if (stt.live > stt.peak)
+    stt.peak = stt.live;
+  if (stt.cursegs > stt.peaksegs)
+    stt.peaksegs = stt.cursegs;
+#endif /* ifdef DEBUG */
   stleft -= asize;
 #ifdef ENABLE_VALGRIND
   VALGRIND_MAKE_MEM_UNDEFINED(rp, asize);
@@ -125,6 +144,16 @@ grow_stack(size_t msize)
     memcpy(nb->buf, oldbuf, used);
   stnext = nb->buf + used;
   stleft = allocsz(nb) - (sizeof(stackseg) - MINSTACK_S) - used;
+#ifdef DEBUG
+  nb->cap = stleft + used;
+  stt.live += nb->cap;
+  stt.cursegs++;
+  stt.segalloc++;
+  if (stt.live > stt.peak)
+    stt.peak = stt.live;
+  if (stt.cursegs > stt.peaksegs)
+    stt.peaksegs = stt.cursegs;
+#endif /* ifdef DEBUG */
   return stnext;
 }
 
@@ -135,6 +164,11 @@ stack_clear(void)
   stackseg *tmp;
   while (current->prev != NULL) {
     tmp = current->prev;
+#ifdef DEBUG
+    stt.live -= current->cap;
+    stt.cursegs--;
+    stt.segfree++;
+#endif
     sfree(current);
     current = tmp;
   }
@@ -153,6 +187,9 @@ init_stack(void)
   current = &stackbase;
   stnext = stackbase.buf;
   stleft = MINSTACK_S;
+#ifdef DEBUG
+  memset(&stt, 0, sizeof(stt));
+#endif /* ifdef DEBUG */
 }
 
 /*  slab allocator  */
@@ -194,3 +231,43 @@ slclear(void)
   }
 }
 
+#ifdef DEBUG
+void
+stack_state(const char *label)
+{
+  char cb[32];
+  size_t committed = MINSTACK_S + stt.live;
+
+  if (committed >> 20)
+    snprintf(cb, sizeof cb, "%.2fM", (double)committed / (1 << 20));
+  else if (committed >> 10)
+    snprintf(cb, sizeof cb, "%.2fK", (double)committed / (1 << 10));
+  else
+    snprintf(cb, sizeof cb, "%zuB", committed);
+
+  if (stt.cursegs)
+    fprintf(stderr, "%s: committed %s in %zu seg, %zuB free in top\n",
+            label, cb, stt.cursegs + 1, stleft);
+  else
+    fprintf(stderr, "%s: used %zuB of %s base\n",
+            label, stnext - stackbase.buf, cb);
+}
+
+void
+stack_report(void)
+{
+  size_t v[2] = { stt.live, stt.peak };
+  char buf[2][32];
+
+  for (size_t i = 0; i < 2; i++) {
+    if (v[i] >> 20)
+      snprintf(buf[i], sizeof buf[i], "%.2fM", (double)v[i] / (1 << 20));
+    else if (v[i] >> 10)
+      snprintf(buf[i], sizeof buf[i], "%.2fK", (double)v[i] / (1 << 10));
+    else
+      snprintf(buf[i], sizeof buf[i], "%zuB", v[i]);
+  }
+  fprintf(stderr, "stack: live %s in %zu seg, peak %s in %zu seg, %zu alloc / %zu free\n",
+    buf[0], stt.cursegs, buf[1], stt.peaksegs, stt.segalloc, stt.segfree);
+}
+#endif /* DEBUG */

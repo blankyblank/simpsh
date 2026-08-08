@@ -231,6 +231,9 @@ simpsh_run(void)
     if (fchksig)
       dotrap();
     c = parse_list(0);
+#ifdef DEBUG
+    stack_state("parse");
+#endif /* DEBUG */
     if (!c) {
       stack_restore(mark);
       break;
@@ -241,6 +244,9 @@ simpsh_run(void)
     if (RETNOW) {
       RETNOW = 0;
       stack_restore(mark);
+#ifdef DEBUG
+      stack_state("done");
+#endif
       break;
     }
     stack_restore(mark);

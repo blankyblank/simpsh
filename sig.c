@@ -388,6 +388,9 @@ exittrap(int status)
     trapm &= ~1ULL;
     sh_ccmd(cmd);
   }
+#ifdef DEBUG
+  stack_report();
+#endif /* DEBUG */
   exit(status);
 }
 
