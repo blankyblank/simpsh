@@ -83,6 +83,9 @@ typedef enum {
 #if ENABLE_HEAD
   HEADH,
 #endif /* ENABLE_HEAD */
+#if ENABLE_PASTE
+  PASTEH,
+#endif /* ENABLE_PASTE */
 #if ENABLE_READLINK
   READLINKH,
 #endif /* ENABLE_READLINK */

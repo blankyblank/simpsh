@@ -9,6 +9,7 @@
 #define ENABLE_EXPAND 1
 #define ENABLE_FOLD 1
 #define ENABLE_HEAD 1
+#define ENABLE_PASTE 1
 #define ENABLE_READLINK 1
 #define ENABLE_REALPATH 1
 #define ENABLE_SORT 1

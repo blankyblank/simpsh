@@ -97,6 +97,9 @@ extern int foldcmd(char **);
 #if ENABLE_HEAD
 extern int headcmd(char **);
 #endif /* ENABLE_HEAD */
+#if ENABLE_PASTE
+extern int pastecmd(char **);
+#endif /* ENABLE_PASTE */
 #if ENABLE_READLINK
 extern int readlinkcmd(char **);
 #endif /* ENABLE_READLINK */
@@ -177,6 +180,9 @@ const builtin builtins[] = {
   { "jobs",     &jobscmd,     0     },
   { "kill",     &killcmd,     0     },
   { "local",    &localcmd,    0     },
+#if ENABLE_PASTE
+  { "paste",    &pastecmd,    0     },
+#endif  /* ENABLE_PASTE */
   { "printf",   &printfcmd,   0     },
   { "pwd",      &pwdcmd,      0     },
   { "read",     &readcmd,     0     },

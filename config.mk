@@ -20,13 +20,14 @@ LDFLAG = -flto=auto
 # LDFLAG = -flto=full -Wl,--strip-all
 
 ######## debug
-# CFLAG = -Og -g3 -fno-omit-frame-pointer -flto=auto -ggdb
+# CFLAG = -Og -g3 -fno-omit-frame-pointer -flto=auto -ggdb $(TRACE)
 # LDFLAG = -flto=auto
+# TRACE = -DDEBUG
 ### (clang)
 # CFLAG = -Og -g3 -fno-omit-frame-pointer -flto -glldb -fstandalone-debug
 # LDFLAG =
 ### 			valgrind (CC must be gcc)
-# CFLAG = -Og -g3 -fno-omit-frame-pointer -DDEBUG -DENABLE_VALGRIND
+# CFLAG = -Og -g3 -fno-omit-frame-pointer -DENABLE_VALGRIND
 # LDFLAG =
 
 ######## sanitize

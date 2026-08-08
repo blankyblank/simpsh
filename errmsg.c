@@ -797,6 +797,21 @@ static const char headhelp[] =
   "    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_HEAD */
 
+#if ENABLE_PASTE
+static const char pastehelp[] =
+  "Usage: paste [OPTION]... [FILE]...\n"
+  "Write lines consisting of the sequentially corresponding lines from\n"
+  "each FILE, separated by TABs, to standard output.\n"
+  "\n"
+  "With no FILE, or when FILE is -, read standard input.\n"
+  "\n"
+  "    -d LIST, reuse characters from LIST instead of TABs\n"
+  "    -s,      paste one file at a time instead of in parallel\n"
+  "\n"
+  "Exit Status:\n"
+  "    Returns 0 on success, 1 on error.";
+#endif /* ENABLE_PASTE */
+
 #if ENABLE_REALPATH
 static const char realpathhelp[] = 
   "Usage: realpath [OPTION]... FILE...\n"
@@ -1045,13 +1060,16 @@ const builtinhelp helpmsgs[] = {
   [DIRNAMEH] =  { "dirname",  "[FILE]...",              dirnamehelp     },
 #endif
 #if ENABLE_EXPAND
-  [EXPANDH] =  { "expand",    "[OPTION]... [FILE]...",  expandhelp      },
+  [EXPANDH] =   { "expand",   "[OPTION]... [FILE]...",  expandhelp      },
 #endif
 #if ENABLE_FOLD
-  [FOLDH] =  { "fold",        "[OPTION]... [FILE]...",  foldhelp        },
+  [FOLDH] =     { "fold",     "[OPTION]... [FILE]...",  foldhelp        },
 #endif
 #if ENABLE_HEAD
   [HEADH] =     { "head",     "[-n count] [file ...]",  headhelp        },
+#endif
+#if ENABLE_PASTE
+  [PASTEH] =    { "paste",   "[OPTION]... [FILE]...",   pastehelp       },
 #endif
 #if ENABLE_READLINK
   [READLINKH] = { "readlink", "[-n] file",              readlinkhelp    },
@@ -1063,7 +1081,7 @@ const builtinhelp helpmsgs[] = {
   [SLEEPH] =    { "sleep",    "[n[.n][smhd]]",          sleephelp       },
 #endif
 #if ENABLE_SORT
-  [SORTH] =    { "sort",     "[OPTION]... [FILE]...",    sorthelp       },
+  [SORTH] =     { "sort",     "[OPTION]... [FILE]...",  sorthelp        },
 #endif
 #if ENABLE_TAIL
   [TAILH] =     { "tail",  "[-f] [-n count] [FILE]...", tailhelp        },

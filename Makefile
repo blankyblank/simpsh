@@ -36,6 +36,7 @@ EXTRAS = \
   builtins/expand.c \
   builtins/fold.c \
   builtins/head.c \
+  builtins/paste.c \
   builtins/readlink.c \
   builtins/realpath.c \
   builtins/sleep.c \
