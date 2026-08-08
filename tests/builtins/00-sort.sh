@@ -28,6 +28,16 @@ else
   exit 1
 fi
 
+msg_run 'sort -n (global numeric)'
+out=$(printf '10\n2\n' | ../simpsh -c 'sort -n')
+if [ "$out" = "2
+10" ]; then
+  msg_pass "sort -n"
+else
+  msg_fail "sort -n: expected '2' before '10' (numeric, not byte order)"
+  exit 1
+fi
+
 msg_run 'sort -k 2 (byte order)'
 out=$(printf 'b 10\na 9\n' | ../simpsh -c 'sort -k 2')
 if [ "$out" = "b 10
@@ -92,9 +102,9 @@ msg_run 'sort -c -k 2 (field includes separator)'
 printf 'y\tb\nx a\n' | ../simpsh -c 'sort -c -k 2' 2>/dev/null
 rc=$?
 if [ $rc -eq 0 ]; then
-  test_pass "rc" "0 (already sorted)" ""
+  test_pass "rc" "already sorted" "0"
 else
-  test_fail "rc" "expected 0" "$rc"
+  test_fail "rc" "expected" "0"
   exit 1
 fi
 
@@ -102,9 +112,9 @@ msg_run 'sort -c -k 2 (disorder)'
 printf 'a 2\nb 1\n' | ../simpsh -c 'sort -c -k 2' 2>/dev/null
 rc=$?
 if [ $rc -eq 1 ]; then
-  test_pass "rc" "1 (disorder)" ""
+  test_pass "rc" "disorder" "1"
 else
-  test_fail "rc" "expected 1" "$rc"
+  test_fail "rc" "expected" "1"
   exit 1
 fi
 
@@ -112,9 +122,9 @@ msg_run 'sort -C -k 2 (silent)'
 printf 'a 2\nb 1\n' | ../simpsh -c 'sort -C -k 2' 2>/dev/null
 rc=$?
 if [ $rc -eq 1 ]; then
-  test_pass "rc" "1 (disorder)" ""
+  test_pass "rc" "disorder" "1"
 else
-  test_fail "rc" "expected 1" "$rc"
+  test_fail "rc" "expected" "1"
   exit 1
 fi
 

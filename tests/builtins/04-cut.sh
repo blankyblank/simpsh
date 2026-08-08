@@ -26,6 +26,15 @@ out=$(printf 'abc\n' | ../simpsh -c 'cut -s -d : -f 1')
 if [ -z "$out" ]; then
   test_pass "out" "empty (line suppressed)" ""
 else
-  test_fail "out" "expected empty" "$out"
+  test_fail "out" "expected empty" ""
+  exit 1
+fi
+
+msg_run 'cut -b 2-4 (bytes)'
+out=$(printf 'abcdef\n' | ../simpsh -c 'cut -b 2-4')
+if [ "$out" = "bcd" ]; then
+  test_pass "out" "matches" "bcd"
+else
+  test_fail "out" "expected" "bcd"
   exit 1
 fi
