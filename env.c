@@ -75,8 +75,18 @@ tree_dup(cmd_tree *s)
   switch (n->type) {
     case OP:
       COPP(n) = COPP(s);
-      n->left = tree_dup(s->left);
-      n->right = tree_dup(s->right);
+      if (COPP(s) == TPIPE) {
+        CPIPE(n) = salloc((CPIPEC(s) + 1) * sizeof(cmd_tree *));
+        if (!CPIPE(n))
+          return NULL;
+        for (size_t i = 0; i < CPIPEC(s); i++)
+          CPIPE(n)[i] = tree_dup(CPIPE(s)[i]);
+        CPIPEC(n) = CPIPEC(s);
+        n->left = n->right = NULL;
+      } else {
+        n->left = tree_dup(s->left);
+        n->right = tree_dup(s->right);
+      }
       break;
     case SUBSHELL:
       n->left = tree_dup(s->left);
@@ -176,8 +186,14 @@ free_tree(cmd_tree *n)
 
   switch (n->type) {
     case OP:
-      free_tree(n->left);
-      free_tree(n->right);
+      if (COPP(n) == TPIPE) {
+        for (size_t i = 0; i < CPIPEC(n); i++)
+          free_tree(CPIPE(n)[i]);
+        sfree(CPIPE(n));
+      } else {
+        free_tree(n->left);
+        free_tree(n->right);
+      }
       sfree(n);
       break;
     case SUBSHELL:
