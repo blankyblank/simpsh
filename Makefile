@@ -43,6 +43,7 @@ EXTRAS = \
   builtins/sort.c \
   builtins/tail.c \
   builtins/tee.c \
+  builtins/tr.c \
   builtins/uniq.c \
   builtins/wc.c
 

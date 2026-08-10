@@ -118,6 +118,9 @@ extern int tailcmd(char **);
 #if ENABLE_TEE
 extern int teecmd(char **);
 #endif /* ENABLE_TEE */
+#if ENABLE_TR
+extern int trcmd(char **);
+#endif /* ENABLE_TR */
 #if ENABLE_EXPAND
 extern int unexpandcmd(char **);
 #endif /* ENABLE_EXPAND */
@@ -210,6 +213,9 @@ const builtin builtins[] = {
 #endif  /* ENABLE_TEE */
   { "test",     &testcmd,     0     },
   { "times",    &timescmd,    SBLTN },
+#if ENABLE_TR
+  { "tr",      &trcmd,      0     },
+#endif  /* ENABLE_TR */
   { "trap",     &trapcmd,     SBLTN },
   { "true",     &truecmd,     SBLTN },
   { "type",     &typecmd,     0     },

@@ -16,6 +16,7 @@
 #define ENABLE_SLEEP 1
 #define ENABLE_TAIL 1
 #define ENABLE_TEE 1
+#define ENABLE_TR 1
 #define ENABLE_WC 1
 #define ENABLE_UNIQ 1
 

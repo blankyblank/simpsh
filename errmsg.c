@@ -929,8 +929,59 @@ static const char teehelp[] =
   "-a,            append to the given FILESs, do not overwrite\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on sucess, 1 on file, or read errors.";
+  "    Returns 0 on success, 1 on file, or read errors.";
 #endif /* ENABLE_TEE */
+
+#if ENABLE_TR
+static const char trhelp[] =
+"Usage: tr [OPTION]... STRING1 [STRING2]\n"
+"Translate, squeeze, and/or delete characters from standard input,\n"
+"writing to standard output.  STRING1 and STRING2 specify arrays of\n"
+"characters ARRAY1 and ARRAY2 that control the action.\n"
+"\n"
+"  -c, -C,         use the complement of ARRAY1\n"
+"  -d,             delete characters in ARRAY1, do not translate\n"
+"  -s,             replace each sequence of a repeated character\n"
+"                      that is listed in the last specified ARRAY,\n"
+"                      with a single occurrence of that character\n"
+"\n"
+"ARRAYs are specified as strings of characters.  Most represent themselves.\n"
+"Interpreted sequences are:\n"
+"\n"
+"  \\NNN           character with octal value NNN (1 to 3 octal digits)\n"
+"  \\\\             backslash\n"
+"  \\a             audible BEL\n"
+"  \\b             backspace\n"
+"  \\f             form feed\n"
+"  \\n             new line\n"
+"  \\r             return\n"
+"  \\t             horizontal tab\n"
+"  \\v             vertical tab\n"
+"  CHAR1-CHAR2     all characters from CHAR1 to CHAR2 in ascending order\n"
+"  [CHAR*]         in ARRAY2, copies of CHAR until length of ARRAY1\n"
+"  [CHAR*REPEAT]   REPEAT copies of CHAR\n"
+"  [:alnum:]       all letters and digits\n"
+"  [:alpha:]       all letters\n"
+"  [:blank:]       all horizontal whitespace\n"
+"  [:cntrl:]       all control characters\n"
+"  [:digit:]       all digits\n"
+"  [:graph:]       all printable characters, not including space\n"
+"  [:lower:]       all lower case letters\n"
+"  [:print:]       all printable characters, including space\n"
+"  [:punct:]       all punctuation characters\n"
+"  [:space:]       all horizontal or vertical whitespace\n"
+"  [:upper:]       all upper case letters\n"
+"  [:xdigit:]      all hexadecimal digits\n"
+"  [=CHAR=]        all characters which are equivalent to CHAR\n"
+"\n"
+"Translation occurs if -d is not given and both STRING1 and STRING2 appear.\n"
+"ARRAY2 is extended to length of\n" "ARRAY1 by repeating its last character as necessary.\n"
+"Excess characters of ARRAY2 are ignored.  Character classes expand in ascending order;\n"
+"while translating, [:lower:] and [:upper:] must be used in pairs to\n"
+"specify case conversion.  Squeezing occurs after translation or deletion.\n"
+"   Exit Status:\n"
+"     Returns 0 on success, 1 on errors.";
+#endif /* ENABLE_TR */
 
 #if ENABLE_EXPAND
 static const char unexpandhelp[] =
@@ -970,7 +1021,7 @@ static const char wchelp[] =
   // "-m,            print the character counts"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on sucess, 1 on file, or read errors.";
+  "    Returns 0 on success, 1 on file, or read errors.";
 #endif /* ENABLE_WC */
 
 #if ENABLE_UNIQ
@@ -994,7 +1045,7 @@ static const char uniqhelp[] =
   "Note: 'uniq' does not detect repeated lines unless they are adjacent.\n"
   "You may want to sort the input first, or use 'sort -u' without 'uniq'.\n"
   "Exit Status:\n"
-  "    Returns 0 on sucess, 1 on file, or read errors.";
+  "    Returns 0 on success, 1 on file, or read errors.";
 #endif /* ENABLE_UNIQ */
 
   /* clang-format off */
@@ -1088,6 +1139,9 @@ const builtinhelp helpmsgs[] = {
 #endif
 #if ENABLE_TEE
   [TEEH] =      { "tee",      "[OPTION]... [FILE]...",  teehelp         },
+#endif
+#if ENABLE_TR
+  [TRH] =      { "tr",      "[OPTION]... STRING1 [STRING2]", trhelp    },
 #endif
 #if ENABLE_EXPAND
   [UNEXPANDH] = { "unexpand", "[OPTION]... [FILE]...",  unexpandhelp    },

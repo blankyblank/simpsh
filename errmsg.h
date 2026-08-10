@@ -104,6 +104,9 @@ typedef enum {
 #if ENABLE_TEE
   TEEH,
 #endif /* ENABLE_TEE */
+#if ENABLE_TR
+  TRH,
+#endif /* ENABLE_TR */
 #if ENABLE_EXPAND
   UNEXPANDH,
 #endif /* ENABLE_EXPAND */

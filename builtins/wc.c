@@ -8,32 +8,6 @@
 #include "simd.h"
 #include "utils.h"
 
-static inline size_t
-cntnl(const char *buf, size_t len)
-{
-  size_t n = 0;
-  for (size_t i = 0; i < len; i++)
-    if (buf[i] == '\n')
-      n++;
-  return n;
-}
-
-static inline size_t
-cntwords(const char *buf, size_t len, int *inwrd)
-{
-  size_t n = 0;
-  for (size_t i = 0; i < len; i++) {
-    unsigned char c = (unsigned char)buf[i];
-    if (c == ' ' || c == '\t' || c == '\n')
-      *inwrd = 0;
-    else if (!*inwrd) {
-      n++;
-      *inwrd = 1;
-    }
-  }
-  return n;
-}
-
 #ifdef __SSE2__
 static inline size_t
 scntnl(const char *buf, size_t len)
@@ -103,6 +77,33 @@ scntwords(const char *buf, size_t len, int *inwrd)
   return n;
 }
 #else
+static inline size_t
+cntnl(const char *buf, size_t len)
+{
+  size_t n = 0;
+  for (size_t i = 0; i < len; i++)
+    if (buf[i] == '\n')
+      n++;
+  return n;
+}
+
+static inline size_t
+cntwords(const char *buf, size_t len, int *inwrd)
+{
+  size_t n = 0;
+  for (size_t i = 0; i < len; i++) {
+    unsigned char c = (unsigned char)buf[i];
+    if (c == ' ' || c == '\t' || c == '\n')
+      *inwrd = 0;
+    else if (!*inwrd) {
+      n++;
+      *inwrd = 1;
+    }
+  }
+  return n;
+}
+
+
 #define scntnl(buf, len) (cntnl((buf), (len)))
 #define scntwords(buf, len, inwrd) (cntwords((buf), (len), (inwrd)))
 #endif /* __SSE2__ */
