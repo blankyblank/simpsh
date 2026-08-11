@@ -34,10 +34,10 @@ LDFLAG = -flto=auto
 # CFLAG = -O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined  $(CLANGASANFLAGS)
 # LDFLAG = -fsanitize=address,undefined $(CLANGASANLDFLAGS)
 ### (clang)
-CLANGASANLDFLAGS = -static-libasan
+# CLANGASANLDFLAGS = -static-libasan
 ## sanitizer flags: use with the sanitize build target
 ## clang extras: -fsanitize=implicit-conversion | -fsanitize=integer
-CLANGASANFLAGS = -fsanitize=integer
+# CLANGASANFLAGS = -fsanitize=integer
 
 ######### profile
 # CFLAG = -O2 -g3 -pg -fxray-instrument -fvar-tracking-assignments -fno-analyzer-state-merge
@@ -47,10 +47,10 @@ CLANGASANFLAGS = -fsanitize=integer
 # LDFLAG = -fprofile-instr-generate
 
 ######## linker flags
-###			dynamic + libedit
+###			dynamic + libedit (uncomment these two for dynamic)
 LIBEDITLIBS = -ldl
 LIBEDITFLAGS = -DLIBEDIT
-###			 static + libedit
+###			 static + libedit (uncomment these tree for static)
 # LIBEDITLIBS = -ledit -lncurses
 # STATICLIBEDIT = -DSTATICLIBEDIT
 ###			static
