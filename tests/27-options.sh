@@ -48,3 +48,12 @@ else
   test_fail "out" "expected glob expansion" ""
   exit 1
 fi
+
+msg_run "xtrace PS4 goes to stderr: set -x; echo hi"
+out=$(../simpsh -c 'set -x; echo hi' 2>/dev/null)
+err=$(../simpsh -c 'set -x; echo hi' 2>&1 >/dev/null)
+if [ "$out" != "hi" ] || [ "$err" != "+  echo hi" ]; then
+  test_fail "out/err" "expected" "hi / + echo hi"; exit 1
+else
+  test_pass "out/err" "matches" "hi / + echo hi"
+fi

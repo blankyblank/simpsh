@@ -169,6 +169,72 @@ else
   exit 1
 fi
 
+msg_run "embedded quoted \$*: set -- a b c; echo \"MSG:[\$*]\""
+out=$(../simpsh -c 'set -- a b c; echo "MSG:[$*]"')
+if [ "$out" != "MSG:[a b c]" ]; then
+  test_fail "out" "expected" "MSG:[a b c]"; exit 1
+else
+  test_pass "out" "matches" "MSG:[a b c]"
+fi
+
+msg_run 'quoted "$*" is one field: printf "<%s>" "$*"'
+out=$(../simpsh -c 'set -- a "b c" d; printf "<%s>" "$*"')
+if [ "$out" != "<a b c d>" ]; then
+  test_fail "out" "expected" "<a b c d>"; exit 1
+else
+  test_pass "out" "matches" "<a b c d>"
+fi
+
+msg_run 'quoted "$@" keeps fields: printf "<%s>" "$@"'
+out=$(../simpsh -c 'set -- a "b c" d; printf "<%s>" "$@"')
+if [ "$out" != "<a><b c><d>" ]; then
+  test_fail "out" "expected" "<a><b c><d>"; exit 1
+else
+  test_pass "out" "matches" "<a><b c><d>"
+fi
+
+msg_run "embedded unquoted \$@: echo x\$@y"
+out=$(../simpsh -c 'set -- a b c; echo x$@y')
+if [ "$out" != "xa b cy" ]; then
+  test_fail "out" "expected" "xa b cy"; exit 1
+else
+  test_pass "out" "matches" "xa b cy"
+fi
+
+msg_run 'for i in "$@" iterates: set -- a "b c" d'
+out=$(../simpsh -c 'set -- a "b c" d; for i in "$@"; do echo "[$i]"; done')
+if [ "$out" != "[a]
+[b c]
+[d]" ]; then
+  test_fail "out" "expected" "[a] [b c] [d]"; exit 1
+else
+  test_pass "out" "matches" "[a] [b c] [d]"
+fi
+
+msg_run 'empty middle param preserved: set -- a "" b'
+out=$(../simpsh -c 'set -- a "" b; printf "<%s>" "$@"')
+if [ "$out" != "<a><><b>" ]; then
+  test_fail "out" "expected" "<a><><b>"; exit 1
+else
+  test_pass "out" "matches" "<a><><b>"
+fi
+
+msg_run "IFS join: IFS=,; set -- a b c; echo \"\$*\""
+out=$(../simpsh -c 'IFS=,; set -- a b c; echo "$*"')
+if [ "$out" != "a,b,c" ]; then
+  test_fail "out" "expected" "a,b,c"; exit 1
+else
+  test_pass "out" "matches" "a,b,c"
+fi
+
+msg_run "empty: set --; echo \"[\$*]\""
+out=$(../simpsh -c 'set --; echo "[$*]"')
+if [ "$out" != "[]" ]; then
+  test_fail "out" "expected" "[]"; exit 1
+else
+  test_pass "out" "matches" "[]"
+fi
+
 msg_run 'variable stress test'
 printf '%s\n' \
 "abc1=asdasdf" \

@@ -39,3 +39,53 @@ if [ "$?" -ne 2 ]; then
 else
   msg_pass "exit status is 2"
 fi
+
+msg_run "pipe continued on next line: echo hello | <NL> tr a-z A-Z"
+out=$(../simpsh -c 'echo hello |
+ tr a-z A-Z')
+if [ "$out" != "HELLO" ]; then
+  test_fail "out" "expected" "HELLO"; exit 1
+else
+  test_pass "out" "matches" "HELLO"
+fi
+
+msg_run "if...fi piped: if true; then echo a; echo b; fi | grep b"
+out=$(../simpsh -c 'if true; then
+ echo a
+ echo b
+fi | grep b')
+if [ "$out" != "b" ]; then
+  test_fail "out" "expected" "b"; exit 1
+else
+  test_pass "out" "matches" "b"
+fi
+
+msg_run "heredoc into pipe: cat <<EOF | grep x (canonical form)"
+out=$(../simpsh -c 'cat <<EOF | grep x
+hello x
+EOF')
+if [ "$out" != "hello x" ]; then
+  test_fail "out" "expected" "hello x"; exit 1
+else
+  test_pass "out" "matches" "hello x"
+fi
+
+msg_run "compound redir: if true; then echo hi; fi > /tmp/simpsh_ml"
+rm -f /tmp/simpsh_ml
+../simpsh -c 'if true; then echo hi; fi > /tmp/simpsh_ml'
+out=$(cat /tmp/simpsh_ml 2>/dev/null)
+rm -f /tmp/simpsh_ml
+if [ "$out" != "hi" ]; then
+  test_fail "out" "expected" "hi"; exit 1
+else
+  test_pass "out" "matches" "hi"
+fi
+
+msg_run "backslash continuation: echo a \ <NL> b"
+out=$(../simpsh -c 'echo a \
+ b')
+if [ "$out" != "a b" ]; then
+  test_fail "out" "expected" "a b"; exit 1
+else
+  test_pass "out" "matches" "a b"
+fi

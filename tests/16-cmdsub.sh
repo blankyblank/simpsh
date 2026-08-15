@@ -40,3 +40,36 @@ else
   test_pass "out3" "matches" "test123"
 fi
 
+msg_run "cmdsub with pipe: t=\$(echo hi | tr a-z A-Z); echo \$t"
+out=$(../simpsh -c 't=$(echo hi | tr a-z A-Z); echo $t')
+if [ "$out" != "HI" ]; then
+  test_fail "out" "expected" "HI"; exit 1
+else
+  test_pass "out" "matches" "HI"
+fi
+
+msg_run 'cmdsub with for loop: x=$(for i in a b; do echo $i; done); echo "$x"'
+out=$(../simpsh -c 'x=$(for i in a b; do echo $i; done); echo "$x"')
+if [ "$out" != "a
+b" ]; then
+  test_fail "out" "expected" "a b"; exit 1
+else
+  test_pass "out" "matches" "a b"
+fi
+
+msg_run 'cmdsub multi-line: x=$(echo a; echo b); echo "$x"'
+out=$(../simpsh -c 'x=$(echo a; echo b); echo "$x"')
+if [ "$out" != "a
+b" ]; then
+  test_fail "out" "expected" "a b"; exit 1
+else
+  test_pass "out" "matches" "a b"
+fi
+
+msg_run 'backtick with pipe: t=`echo hi | tr a-z A-Z`; echo $t'
+out=$(../simpsh -c 't=`echo hi | tr a-z A-Z`; echo $t')
+if [ "$out" != "HI" ]; then
+  test_fail "out" "expected" "HI"; exit 1
+else
+  test_pass "out" "matches" "HI"
+fi

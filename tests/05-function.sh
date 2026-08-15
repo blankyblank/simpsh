@@ -4,7 +4,8 @@
 
 
 msg_run "shell function unset test: f() { echo test123; }"
-out=$(../simpsh -c "f() { echo test123; } ; f")
+out=$(../simpsh -c "f()
+{ echo test123; } ; f")
 if [ "$out" != "test123" ]; then
   test_fail "out" "expected" "test123"
   exit 1

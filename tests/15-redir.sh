@@ -233,7 +233,7 @@ out=$(../simpsh -c 'cat <<- EOF
 		moreindented
 EOF')
 if [ "$out" = "indented
-		moreindented" ]; then
+moreindented" ]; then
   msg_pass "heredoc <<- strips leading tabs"
 else
   msg_fail "heredoc <<-: $out"

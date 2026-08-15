@@ -136,3 +136,44 @@ out=$(../simpsh -c 'echo $((- -5))')
 msg_run 'arithmetic assignment: x=5; echo $((x = x + 2)); echo $x'
 out=$(../simpsh -c 'x=5; y=$((x = x + 2)); echo $y')
 [ "$out" = "7" ] || { msg_fail "arith assignment" ; exit 1; }
+
+msg_run "arithmetic vars: a=5 b=3; echo \$((a + b))"
+out=$(../simpsh -c 'a=5 b=3; echo $((a + b))')
+if [ "$out" != "8" ]; then
+  test_fail "out" "expected" "8"; exit 1
+else
+  test_pass "out" "matches" "8"
+fi
+
+msg_run "arithmetic assignment: x=5; echo \$((x = x + 2)); echo \$x"
+out=$(../simpsh -c 'x=5; echo $((x = x + 2)); echo $x')
+if [ "$out" != "7
+7" ]; then
+  test_fail "out" "expected" "7 7"; exit 1
+else
+  test_pass "out" "matches" "7 7"
+fi
+
+msg_run 'quoted arith: echo "$((1 + 2))"'
+out=$(../simpsh -c 'echo "$((1 + 2))"')
+if [ "$out" != "3" ]; then
+  test_fail "out" "expected" "3"; exit 1
+else
+  test_pass "out" "matches" "3"
+fi
+
+msg_run 'nested arith: echo $(($((1 + 2)) * 2))'
+out=$(../simpsh -c 'echo $(($((1 + 2)) * 2))')
+if [ "$out" != "6" ]; then
+  test_fail "out" "expected" "6"; exit 1
+else
+  test_pass "out" "matches" "6"
+fi
+
+msg_run 'arith equality: echo $((1 == 1)) $((1 != 2))'
+out=$(../simpsh -c 'echo $((1 == 1)) $((1 != 2))')
+if [ "$out" != "1 1" ]; then
+  test_fail "out" "expected" "1 1"; exit 1
+else
+  test_pass "out" "matches" "1 1"
+fi
