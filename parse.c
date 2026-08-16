@@ -316,6 +316,36 @@ parse_subsh(void)
   return sub;
 }
 
+static inline cmd_tree *
+gettailredir(cmd_tree *c)
+{
+  redir *r, *redirs, **tail;
+  redirs = NULL;
+  tail = &redirs;
+
+  for (;;) {
+    if (tbuf.type == TWORD && (tbuf.cmd->flags & WFREDIRFD)) {
+      int fd = 0;
+        fd = atoi_smpl(tbuf.cmd->word);
+        gettok(0);
+        if (!(r = parse_redir(tbuf, fd)))
+          return syntxerr(curline, "missing filename for", tbuf.type);
+        *tail = r, tail = &r->next;
+        gettok(0);
+        continue;
+    }
+    if (tbuf.type != TREDIR)
+      break;
+    if (!(r = parse_redir(tbuf, -1)))
+      return syntxerr(curline, "missing filename for", tbuf.type);
+    *tail = r, tail = &r->next;
+    gettok(0);
+  }
+  if (redirs)
+    c = newredirnode(c, redirs);
+  return c;
+}
+
 cmd_tree *
 parse_pipe(void)
 {
@@ -323,19 +353,23 @@ parse_pipe(void)
   size_t n = 0;
   cmd_tree *stages[256];
   int neg = 0;
+
   while (tbuf.type == TNOT) {
     neg++;
     gettok(CHKALIAS | CHKKWD);
   }
   if (!(cmd = parse_cmd()))
     return NULL;
+
+  cmd = gettailredir(cmd);
   stages[n++] = cmd;
   for (;;) {
     if (tbuf.type != TPIPE)
       break;
-    gettok(CHKALIAS | CHKKWD);
+    gettok(CHKALIAS | CHKKWD | CHKNL);
     if (!(p = parse_cmd()))
       return NULL;
+    p = gettailredir(p);
     stages[n++] = p;
   }
   cmd_tree *l;
@@ -372,7 +406,7 @@ parse_group(void)
 static cmd_tree *
 parse_func(void)
 {
-  gettok(0);
+  gettok(CHKNL);
   if (tbuf.type == TLB) {
     return parse_group();
   }
@@ -429,7 +463,7 @@ parse_heredoc(void)
     bpos = NULL;
     r = heredoc_head;
     heredoc_head = heredoc_head->heredoc_next;
-    eofv = join_wf(r->name);
+    eofv = join_wf(r->name, 0);
     eofvlen = strlen(eofv);
     if (r->type == RDHERE_D) {
       c = shgetchar();
@@ -442,6 +476,13 @@ parse_heredoc(void)
     for (;;) {
       char *lpos;
       size_t llen;
+
+      if (r->type == RDHERE_D) {
+        c = shgetchar();
+        while (c == '\t')
+          c = shgetchar();
+        shungetc(c);
+      }
       lpos = stnext;
 
       for (;;) {
@@ -762,7 +803,7 @@ errtok(sh_tok t)
 {
   char *tok;
   if (t.type == TWORD && t.cmd)
-    tok = join_wf(t.cmd);
+    tok = join_wf(t.cmd, 0);
   else
     tok = (char *)tokstr(t.type);
   return tok;

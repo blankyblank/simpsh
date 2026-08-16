@@ -122,6 +122,7 @@ wccmd(char *argv[])
   int status = 0, flags = 0;
   int tbyt = 0, tln = 0, twrd = 0;
   int nsel;
+  int w, *lns, *wrds, *byts;
   // int tchr = 0;
 
   array_len(argv, argc);
@@ -147,9 +148,14 @@ wccmd(char *argv[])
     flags |= ln | wrd | byt;
 
   nsrc = argc ? argc : 1;
+  lns = st_alloc(nsrc * sizeof(int));
+  wrds = st_alloc(nsrc * sizeof(int));
+  byts = st_alloc(nsrc * sizeof(int));
   nsel = (flags & ln) ? 1 : 0;
   nsel += (flags & wrd) ? 1 : 0;
   nsel += (flags & byt) ? 1 : 0;
+  for (size_t i = 0; i < nsrc; i++)
+    lns[i] = wrds[i] = byts[i] = -1;
 
   for (size_t i = 0; i < nsrc; i++) {
     char *name, buf[BUFSIZ];
@@ -177,32 +183,52 @@ wccmd(char *argv[])
     tln += nln;
     // tchr += nchr;
     twrd += nwrd;
-
-    if (flags & ln)
-      printf("%4d", nln);
-    if (flags & wrd)
-      printf("%s%4d", (nsel > 1) ? " " : "", nwrd);
-    if (flags & byt)
-      printf("%s%4d", (nsel > 1) ? " " : "", nbyt);
-    // if (flags & chr)
-    //   printf("%7d", nchr);
-    if (name)
-      printf(" %s", name);
-    putchar('\n');
+    lns[i] = nln;
+    wrds[i] = nwrd;
+    byts[i] = nbyt;
 
     if (fp && fp != shin)
       fclose(fp);
   }
+
+  {
+    int m;
+    m = tln > twrd ? tln : twrd;
+    if (tbyt > m)
+      m = tbyt;
+    w = 1;
+    while (m >= 10)
+      m /= 10, w++;
+    if (nsel > 1 && !argc)
+      w = 7;
+  }
+
+  for (size_t i = 0; i < nsrc; i++) {
+    if (lns[i] < 0)
+      continue;
+    if (flags & ln)
+      fprintf(shout, "%*d", w, lns[i]);
+    if (flags & wrd)
+      fprintf(shout, "%s%*d", (nsel > 1) ? " " : "", w, wrds[i]);
+    if (flags & byt)
+      fprintf(shout, "%s%*d", (nsel > 1) ? " " : "", w, byts[i]);
+    // if (flags & chr)
+    //   printf("%7d", nchr);
+    if (argc)
+      fprintf(shout, " %s", argv[i]);
+    fputc('\n', shout);
+  }
+
   if (argc > 1) {
     if (flags & ln)
-      printf("%4d", tln);
+      fprintf(shout, "%*d", w, tln);
     if (flags & wrd)
-      printf("%s%4d", (nsel > 1) ? " " : "", twrd);
+      fprintf(shout, "%s%*d", (nsel > 1) ? " " : "", w, twrd);
     if (flags & byt)
-      printf("%s%4d", (nsel > 1) ? " " : "", tbyt);
+      fprintf(shout, "%s%*d", (nsel > 1) ? " " : "", w, tbyt);
     // if (flags & chr)
     //   printf("%4d", tchr);
-    puts(" total");
+    fputs(" total", shout);
   }
   return status;
 }

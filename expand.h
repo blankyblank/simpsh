@@ -15,10 +15,16 @@ extern int incmdsub;
 
 extern char *exp_tilde(char *restrict, size_t, size_t *restrict, size_t *restrict);
 extern char *homedir(char *);
-extern char *exp_str(char *restrict, size_t, size_t *restrict);
 extern char **expand_argv(wf **, size_t *restrict);
 extern char *expand_ps1(char *);
+extern char * exp_cmdsub(const char *restrict, size_t, size_t *restrict);
 extern wf *exp_word(wf *, size_t *restrict);
+
+#define chk_cap(arc, c, arv, t) \
+  if ((arc) >= (c)) { \
+    (c) *= 2; \
+    streallocar(arv, c, arc, t); \
+  }
 
 /* vim: set filetype=c: */
 #endif /* EXPAND_H */

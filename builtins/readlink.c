@@ -36,7 +36,7 @@ readlinkcmd(char *argv[])
     if (nonl)
       fwrite(buf, 1, len, shout);
     else
-      puts(buf);
+      fputs(buf, shout);
   }
   return 0;
 }

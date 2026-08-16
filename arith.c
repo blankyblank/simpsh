@@ -5,9 +5,10 @@
  
 #include "arith.h"
 #include "errmsg.h"
+#include "alloc.h"
+#include "expand.h"
 #include "var.h"
 #include "main.h"
-#include "alloc.h"
 #include "simd.h"
 #include "utils.h"
 
@@ -15,6 +16,7 @@ enum arith_tok {
     A_NUM,
     A_NAME,
     A_EOF,
+    A_DOLLAR,   // $
     A_PLUS,     // +
     A_MINUS,    // -
     A_STAR,     // *
@@ -85,6 +87,21 @@ static void next_tok(void);
 static i64 nud(void);
 static i64 led(i64);
 static i64 lookupavar(void);
+
+static inline i64
+avarval(const char *name, size_t nlen)
+{
+  shvar *v;
+  i64 res;
+
+  if (!(v = findvar_n(name, nlen)))
+    return 0;
+  if (v->flags & VINT)
+    return v->ival;
+  if (atoll_(shvar_val(v), &res) < 0)
+    return 0;
+  return res;
+}
 
 static void
 next_tok(void)
@@ -174,6 +191,9 @@ next_tok(void)
       break;
     case ')':
       atok = A_RPAREN;
+      break;
+    case '$':
+      atok = A_DOLLAR;
       break;
     case '<':
       if (alen > 0 && ap[0] == '<') {
@@ -271,6 +291,155 @@ nud(void)
       }
       next_tok();
       return val;
+    case A_DOLLAR:
+      lname = NULL;
+      {
+        i64 dval = 0;
+        size_t j = 2, k, elen;
+
+        if (alen > 0 && ap[0] == '(') {
+          i64 rv;
+          j = 1;
+          {
+            size_t d = 0;
+            for (; j < alen && !(ap[j] == ')' && d == 0); j++) {
+              if (ap[j] == '(')
+                d++;
+              else if (ap[j] == ')')
+                d--;
+            }
+          }
+          if (j >= alen) {
+            shwarn_arg("arithmetic", ap, "missing ')'");
+            atok = A_EOF;
+          } else if (ap[1] == '(') {
+            if (ap[j - 1] != ')') {
+              shwarn_arg("arithmetic", ap, "missing '))'");
+              atok = A_EOF;
+            } else {
+              const char *sap, *saname;
+              char *slname;
+              size_t salen, sanlen, slnlen;
+              int satok;
+              i64 saval;
+
+              sap = ap, salen = alen, saval = aval, satok = atok;
+              saname = aname, sanlen = anlen;
+              slname = lname, slnlen = lnlen;
+              rv = arith_eval(ap + 2, j - 2);
+              ap = sap, alen = salen, atok = satok, aval = saval;
+              aname = saname, anlen = sanlen;
+              lname = slname, lnlen = slnlen;
+
+              ap += j + 2, alen -= j + 2;
+              dval = rv;
+            }
+
+          } else {
+            char *cmdsub;
+            size_t sublen = 0;
+            if ((cmdsub = exp_cmdsub(ap + 1, j - 1, &sublen))) {
+              char *sbuf = st_strndup(cmdsub, sublen);
+              if (atoll_(sbuf, &dval) < 0)
+                dval = 0;
+            }
+            ap += j + 1;
+            alen -= j + 1;
+          }
+        } else if (alen > 0 && ap[0] == '{') {
+          j = 1;
+          {
+            size_t d = 0;
+            for (; j < alen && !(ap[j] == '}' && d == 0); j++) {
+              if (ap[j] == '{')
+                d++;
+              else if (ap[j] == '}')
+                d--;
+            }
+          }
+          if (j >= alen) {
+            shwarn_arg("arithmetic", ap, "missing '}'");
+            atok = A_EOF;
+          } else {
+            size_t clen = j - 1;
+            int plain = clen > 0;
+            for (k = 1; k < j; k++) {
+              char cc = ap[k];
+              if (!(isalpha_(cc) || isdigit_(cc) || cc == '_')) {
+                plain = 0;
+                break;
+              }
+            }
+            if (plain && isdigit_(ap[1])) {
+              size_t n = 0, t = 0;
+              while (t < clen && isdigit_(ap[1 + t]))
+                n = n * 10 + (ap[1 + t++] - '0');
+              if (n > 0 && n <= (size_t)SHARGC && SHARGV[n - 1])
+                atoll_(SHARGV[n - 1], &dval);
+            } else if (plain) {
+              dval = avarval(ap + 1, clen);
+            } else {
+              wf f;
+              f.qs = QBRACE_DQ;
+              f.word = (char *)ap;
+              f.len = j + 1;
+              f.next = NULL;
+              f.flags = 0;
+              {
+                wf *ew = exp_word(&f, &elen);
+                char *estr = ew ? join_wf(ew, 0) : (char *)"";
+                if (atoll_(estr, &dval) < 0)
+                  dval = 0;
+              }
+            }
+            ap += j + 1;
+            alen -= j + 1;
+          }
+        } else if (alen > 0 && (isalpha_(ap[0]) || ap[0] == '_')) {
+          size_t nlen = sscnword(ap, alen);
+          dval = avarval(ap, alen);
+          ap += nlen;
+          alen -= nlen;
+        } else if (alen > 0) {
+          switch (ap[0]) {
+            case '?':
+              dval = LSTATUS;
+              ap++, alen--;
+              break;
+            case '$':
+              if (atoll_(gvar.pid_s, &dval) < 0)
+                dval = 0;
+              ap++, alen--;
+              break;
+            case '!':
+              if (atoll_(gvar.bgpid_s, &dval) < 0)
+                dval = 0;
+              ap++, alen--;
+              break;
+            case '#':
+              dval = SHARGC;
+              ap++, alen--;
+              break;
+            case '-':
+              ap++, alen--;
+              break;
+            default:
+              if (isdigit_(ap[0])) {
+                size_t n = 0, k = 0;
+                while (k < alen && isdigit_(ap[k]))
+                  n = n * 10 + (ap[k++] - 0);
+                if (n > 0 && n <= (size_t)SHARGC && SHARGV[n - 1])
+                  atoll_(SHARGV[n - 1], &dval);
+                ap += k, alen -= k;
+              } else {
+                shwarn_arg("arithmetic", ap, "unexpected $");
+              }
+              break;
+          }
+        }
+        next_tok();
+        return dval;
+      }
     case A_MINUS:
       lname = NULL;
       next_tok();
@@ -406,8 +575,7 @@ arith_eval(const char *expr, size_t len)
   size_t n = len, skip;
 
   skip = sskipspace(p, n);
-  p += skip;
-  n -= skip;
+  p += skip, n -= skip;
   if (n > 0) {
     i64 lval, rval;
     size_t wlen;
@@ -418,88 +586,84 @@ arith_eval(const char *expr, size_t len)
       lval = 0;
       while (n > 0 && isdigit_(p[0])) {
         lval = lval * 10 + (p[0] - '0');
-        p++;
-        n--;
+        p++, n--;
       }
     } else if (isalpha_(p[0]) || p[0] == '_') {
       wlen = sscnword(p, n);
-      shvar *v = findvar_n(p, wlen);
-      p += wlen;
-      n -= wlen;
-      if (!v || atoll_(shvar_val(v), &lval) < 0)
+      lval = avarval(p, wlen);
+      p += wlen, n -= wlen;
+      if (lval < 0)
         goto fallback;
+    } else if (p[0] == '$' && n > 1 && (isalpha_(p[1]) || p[1] == '_')) {
+      p++, n--;
+      wlen = sscnword(p, n);
+      lval = avarval(p, wlen);
+      p += wlen, n -= wlen;
     } else {
       goto fallback;
     }
 
     skip = sskipspace(p, n);
-    p += skip;
-    n -= skip;
+    p += skip, n -= skip;
 
     /* operator */
     if (n == 0)
       goto fallback;
     if (p[0] == '+') {
       op = '+';
-      p++;
-      n--;
+      p++, n--;
     } else if (p[0] == '-') {
       op = '-';
-      p++;
-      n--;
+      p++, n--;
     } else if (p[0] == '*') {
       op = '*';
-      p++;
-      n--;
+      p++, n--;
     } else if (p[0] == '/') {
       op = '/';
-      p++;
-      n--;
+      p++, n--;
     } else if (p[0] == '%') {
       op = '%';
-      p++;
-      n--;
+      p++, n--;
     } else if (p[0] == '<' && n > 1 && p[1] == '<') {
       op = '<';
-      p += 2;
-      n -= 2;
+      p += 2, n -= 2;
     } else if (p[0] == '>' && n > 1 && p[1] == '>') {
       op = '>';
-      p += 2;
-      n -= 2;
+      p += 2, n -= 2;
     } else if (p[0] == '&') {
       op = '&';
-      p++;
-      n--;
+      p++, n--;
     } else if (p[0] == '^') {
       op = '^';
-      p++;
-      n--;
+      p++, n--;
     } else if (p[0] == '|') {
       op = '|';
-      p++;
-      n--;
+      p++, n--;
     } else
       goto fallback;
 
     skip = sskipspace(p, n);
-    p += skip;
-    n -= skip;
+    p += skip, n -= skip;
 
     /* right operand */
     if (isdigit_(p[0])) {
       rval = 0;
       while (n > 0 && isdigit_(p[0])) {
         rval = rval * 10 + (p[0] - '0');
-        p++;
-        n--;
+        p++, n--;
       }
     } else if (isalpha_(p[0]) || p[0] == '_') {
       wlen = sscnword(p, n);
-      shvar *v = findvar_n(p, wlen);
-      p += wlen;
-      n -= wlen;
-      if (!v || atoll_(shvar_val(v), &rval) < 0)
+      rval = avarval(p, wlen);
+      p += wlen, n -= wlen;
+      if (rval < 0)
+        goto fallback;
+    } else if (p[0] == '$' && n > 1 && (isalpha_(p[1]) || p[1] == '_')) {
+      p++, n--;
+      wlen = sscnword(p, n);
+      rval = avarval(p, wlen);
+      p += wlen, n -= wlen;
+      if (rval < 0)
         goto fallback;
     } else {
       goto fallback;
@@ -545,6 +709,7 @@ fallback:
   return res;
 }
 
+/* why are we keeping this?????????????????????? */
 static i64
 lookupavar(void)
 {
@@ -560,4 +725,6 @@ lookupavar(void)
     return 0;
   return res;
 }
+
+
 /* NOLINTEND(readability-magic-numbers) */

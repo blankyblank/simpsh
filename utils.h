@@ -46,16 +46,23 @@
 /* project specific replacements */
 
 static inline int
+atoi_smpl(const char *restrict s)
+{
+  int n = 0;
+  while (isdigit_(*s))
+    n = n * 10 + (*s++ - '0');
+  return n;
+}
+
+static inline int
 atoi_(const char *s)
 {
-  int neg = 0, n = 0;
+  int neg = 0;
   if (*s == '-') {
     neg = 1;
     s++;
   }
-  while (isdigit_(*s))
-    n = n * 10 + (*s++ - '0');
-  return neg ? -n : n;
+  return neg ? -atoi_smpl(s) : atoi_smpl(s);
 }
 
 static inline i64

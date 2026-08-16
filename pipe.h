@@ -2,6 +2,7 @@
 #define PIPE_H
 
 #include "builtins.h"
+#include "exec.h"
 #include "main.h"
 #include "parse.h"
 #include "var.h"
@@ -59,10 +60,11 @@ canfakepipe(cmd_tree *n)
     n = n->left;
   if (n->type != CMD)
     return 0;
-  char *b = CARGS(n)[0]->word;
-  size_t l = CARGS(n)[0]->len;
-  if (findbuiltin(b) &&
-      !(l == 4 && b[0] == 'e' && b[1] == 'x' && b[2] == 'e' && b[3] == 'c'))
+  const builtin *bi;
+
+  bi = findbuiltin(CARGS(n)[0]->word);
+  if (bi && bi->fn != &execcmd &&
+      bi->fn != &evalcmd && bi->fn != &commandcmd && bi->fn != &dotcmd)
     return 1;
   return 0;
 }
@@ -96,15 +98,18 @@ canfakesubsh(const cmd_tree *n)
             return 0;
         return 1;
       }
+      return canfakesubsh(n->left) && canfakesubsh(n->right);
       /* fall through */
     case REDIR:
     case SUBSHELL:
     case BRACE:
+      return canfakesubsh(n->left);
     case IF:
+      return canfakesubsh(n->left) && canfakesubsh(n->right) && (!CELSE(n) || canfakesubsh(CELSE(n)));
     case WHILE:
       return canfakesubsh(n->left) && canfakesubsh(n->right);
     default:
-      return 0;
+  return 0;
   }
 }
 

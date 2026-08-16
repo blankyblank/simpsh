@@ -240,10 +240,7 @@ sskipnl(const char *buf, size_t len)
 
 /* simd optimized scan for delimeters */
 static inline size_t
-sscndelim(const char * restrict buf,
-          size_t len,
-          const char * restrict delims,
-          int ndelims)
+sscndelim(const char * restrict buf, size_t len, const char * restrict delims, int ndelims)
 {
   sint input, match, delim_vec;
   int mask, d;

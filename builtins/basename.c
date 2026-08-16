@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "errmsg.h"
+#include "main.h"
 
 int
 basenamecmd(char *argv[])
@@ -20,7 +21,7 @@ basenamecmd(char *argv[])
 
   path = *argv++;
   if (path[0] == '\0') {
-    puts("");
+    fputs("", shout);
     return 0;
   }
   len = strlen(path);
@@ -41,7 +42,7 @@ basenamecmd(char *argv[])
   if (slen > 0 && slen < len && !memcmp(path + len - slen, suff, slen))
     len -= slen;
 
-  printf("%.*s\n", (int)len, path);
+  fprintf(shout, "%.*s\n", (int)len, path);
   return 0;
 }
 #endif /* ENABLE_BASENAME */

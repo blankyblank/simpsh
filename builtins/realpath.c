@@ -35,7 +35,7 @@ realpathcmd(char *argv[])
       status = (quiet) ? 1 : sherr(1, argv0, argv[i]);
       continue;
     }
-    puts(buf);
+    fputs(buf, shout);
   }
   return status;
 }

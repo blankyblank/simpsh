@@ -241,10 +241,13 @@ setvar(const char *restrict name, const char *restrict val, shvflags flags)
       if (v->flags & VREADONLY)
         return;
       if (v->flen >= flen) {
-        if (val)
+        if (val) {
           memcpy(v->var + nlen + 1, val, vlen + 1);
-        else
+          v->flen = flen;
+        } else {
           v->var[nlen + 1] = '\0';
+          v->flen = flen;
+        }
       } else {
         if (!(nvar = salloc(flen)))
           return;
@@ -522,7 +525,7 @@ init_env(void)
   }
   shvar *ifs;
   int shlvl;
-  char *shlvl_s, pwd[PATH_MAX];
+  char *shlvl_p, shlvl_s[24], pwd[PATH_MAX];
 
   if ((ifs = findvar_n("IFS", 3)))
     ifsupdt(shvar_val(ifs));
@@ -543,8 +546,8 @@ init_env(void)
   lltoa(shppid, gvar.ppid_s);
   setvar("PPID", gvar.ppid_s, VREADONLY);
 
-  shlvl_s = getvar("SHLVL");
-  shlvl = (shlvl_s) ? atoi_(shlvl_s) : 0;
+  shlvl_p = getvar("SHLVL");
+  shlvl = (shlvl_p) ? atoi_(shlvl_p) : 0;
   shlvl++;
   lltoa(shlvl, shlvl_s);
   setvar("SHLVL", shlvl_s, VEXPRT);

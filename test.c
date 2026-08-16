@@ -234,20 +234,16 @@ testeval(testvar *tv, testop op, const char *opnd1, const char *opnd2)
     case TFILGID:
       return (!stat(opnd1, &st) && st.st_gid == getegid());
     case TFILEQ:
-      if (stat(opnd1, &st) < 0) {
-        tv->flags |= terr;
+      if (stat(opnd1, &st) < 0)
         return 0;
-      }
       if (stat(opnd2, &st2) < 0) {
         tv->flags |= terr;
         return 0;
       }
       return (st.st_dev == st2.st_dev && st.st_ino == st2.st_ino);
     case TFILNT:
-      if (stat(opnd1, &st) < 0) {
-        tv->flags |= terr;
+      if (stat(opnd1, &st) < 0)
         return 0;
-      }
       if (stat(opnd2, &st2) < 0) {
         tv->flags |= terr;
         return 0;
@@ -256,10 +252,8 @@ testeval(testvar *tv, testop op, const char *opnd1, const char *opnd2)
               (st.st_mtim.tv_sec == st2.st_mtim.tv_sec &&
                st.st_mtim.tv_nsec > st2.st_mtim.tv_nsec));
     case TFILOT:
-      if (stat(opnd1, &st) < 0) {
-        tv->flags |= terr;
+      if (stat(opnd1, &st) < 0)
         return 0;
-      }
       if (stat(opnd2, &st2) < 0) {
         tv->flags |= terr;
         return 0;
@@ -400,9 +394,16 @@ testcmd(char **argv) {
         return res ? 0 : 1;
     }
   } else if (argc == 3) {
+    testop op = istestop(argv[1], 1);
+    if (op != TEND) {
+      res =  testeval(&fasttv, op, argv[2], NULL);
+      if (!(fasttv.flags & terr))
+        return res ? 0 : 1;
+    }
+  } else if (argc == 4) {
     testop op = istestop(argv[2], 0);
     if (op != TEND) {
-      return testeval(&fasttv, op, argv[1], argv[2]);
+      res = testeval(&fasttv, op, argv[1], argv[3]);
       if (!(fasttv.flags & terr))
         return res ? 0 : 1;
     }

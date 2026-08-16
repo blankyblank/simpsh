@@ -33,7 +33,7 @@
 #define FD_CACHE_MAX 4
 #define HEREDOC_LIMIT 65536
 #define OPENRW 0666
-#define xpnd(a) (join_wf(exp_word((a), NULL)))
+#define xpnd(a) (join_wf(exp_word((a), NULL), 0))
 #define _INCHLD (1 << 0)
 
 typedef struct fdlist {
@@ -54,11 +54,10 @@ static const struct redirtable redir_tab[] = {
 };
 redir *predir = NULL;
 
-static void poptmpvars(tmp_var *, size_t);
-static int save_fd(redir *, fdlist *, size_t * restrict);
 static char *bg_cmd(const cmd_tree *);
 static pid_t forkrun(int);
 static int fgwait_simple(pid_t, const char *);
+static void poptmpvars(tmp_var *, size_t);
 static int run_if(const cmd_tree *);
 static int run_case(const cmd_tree *);
 static int run_while(const cmd_tree *);
@@ -66,12 +65,13 @@ static int run_for(const cmd_tree *);
 static int run_func(const cmd_tree *restrict, char **restrict);
 static int run_pipe(const cmd_tree *);
 static int run_bg(const cmd_tree *);
-static int run_redir(const cmd_tree *n, int nchld);
+static int run_redir(const cmd_tree *, int);
 static int run_subsh(const cmd_tree *, int);
 static int run_cmd(const cmd_tree *, int);
 static int runsbltn(const builtin *restrict, char **restrict, wf **restrict);
 static int runshcmd(shfunc *restrict, const builtin *restrict, char **restrict, wf **restrict);
 static int runextcmd(char **restrict, wf **restrict, const cmd_tree *restrict, int);
+static int save_fd(redir *, fdlist *, size_t * restrict);
 static void shexec(char ** restrict, char ** restrict, redir *)
   __attribute__((noreturn));
 int execcmd(char **);
@@ -164,7 +164,6 @@ dupredir:
           return shwarn("heredoc", "EOF NOT FOUND");
 
         {
-          wf b;
           char *body;
           int p[2];
           size_t blen;
@@ -179,12 +178,8 @@ dupredir:
             body = r->heredoc;
             blen = strlen(body);
           } else {
-            b.word = r->heredoc;
-            b.len = strlen(r->heredoc);
-            b.qs = QHEREDOC;
-            b.next = NULL;
-
-            body = xpnd(&b);
+            wf *hb = lex_heredoc(r->heredoc, strlen(r->heredoc));
+            body = xpnd(hb);
             blen = strlen(body);
           }
           if (blen < HEREDOC_LIMIT) {
@@ -297,10 +292,14 @@ _wait_(pid_t pid)
 {
   int wstatus;
   if (!mflag) {
-    waitpid(pid, &wstatus, 0);
+    while (waitpid(pid, &wstatus, 0) < 0 && errno == EINTR);
   } else {
     for (;;) {
-      if (waitpid(pid, &wstatus, WNOHANG) > 0)
+      pid_t r;
+      r = waitpid(pid, &wstatus, WNOHANG);
+      if (r > 0)
+        break;
+      if (r < 0 && errno == EINTR)
         break;
       runeventloop(&el, -1);
       intsigchk(pid);
@@ -352,7 +351,7 @@ forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
     perror(path);
     return 127;
   }
-  if (mflag && getpid() == sh_pgid) {
+  if (mflag) {
     startjob(pid);
     return fgwait_simple(pid, cmd);
   }
@@ -627,17 +626,18 @@ runextcmd(char **restrict final, wf **restrict vars, const cmd_tree *restrict n,
 __attribute__((hot)) static int
 run_cmd(const cmd_tree *n, int inchld)
 {
-  int status;
-  size_t i, len;
+  size_t i, len, evarcap;
   char ifl, efl;
-  char **final = NULL;
-  const builtin *volatile b = NULL;
-  shfunc *f = NULL;
+  char **final, **evars;
+  const builtin *volatile b;
+  shfunc *f;
   shvar *v;
   stmark cm;
 
-  ifl = iflag;
-  efl = eflag;
+  ifl = iflag, efl = eflag;
+  evarcap = 8;
+  final = evars = NULL;
+  f = NULL, b = NULL;
   gstate.lineno = n->line;
   cm = stack_mark();
   {
@@ -663,14 +663,22 @@ run_cmd(const cmd_tree *n, int inchld)
 
   if (xflag) {
     char *xline, *ps4;
+
     ps4 = getvar("PS4");
-    xline = join_strn(final, &len);
-    printf("%s %s\n", ps4, xline);
+    if (final && final[0]) {
+      xline = join_strn(final, &len);
+      fprintf(stderr, "%s%s\n", ps4, xline);
+    }
   }
 
-  if (!final || !final[0]) { /*  if no command only name=value  */
+  int status = 0;
+
+  if (!final || !final[0] || !final[0][0]) { /*  if no command only name=value  */
     if (CVARS(n) && CVARS(n)[0]) {
+      size_t nass = 0;
       wf **vars = CVARS(n);
+      if (xflag)
+        evars = st_alloc(evarcap * sizeof(char *));
       for (i = 0; vars[i]; i++) {
         char *name, *val /*, *evar*/;
         shvflags flags;
@@ -688,6 +696,14 @@ run_cmd(const cmd_tree *n, int inchld)
           nbuf[nlen] = '\0';
           shvar *v = findvar(nbuf);
           setvar_i(nbuf, valbuf, ival, (v ? v->flags : 0));
+          if (xflag) {
+            char *as = st_alloc(nlen + vlen + 2);
+            memcpy(as, nbuf, nlen);
+            as[nlen] = '=';
+            memcpy(as + nlen + 1, valbuf, vlen + 1);
+            chk_cap(nass, evarcap, evars, char *);
+            evars[nass++] = as;
+          }
         } else {
           evar = xpnd(vars[i]);
           st_read_assn(evar, &name, &val);
@@ -697,7 +713,17 @@ run_cmd(const cmd_tree *n, int inchld)
           else
             flags = 0;
           setvar(name, val, flags);
+          if (xflag) {
+            chk_cap(nass, evarcap, evars, char *);
+            evars[nass++] = evar;
+          }
         }
+      }
+      if (xflag) {
+        char *xline;
+        evars[nass] = NULL;
+        xline = join_strn(evars, NULL);
+        fprintf(stderr, "%s%s\n", getvar("PS4"), xline);
       }
     }
     if (predir)
@@ -748,18 +774,19 @@ run_case(const cmd_tree *n)
 
   if (!(wrd = exp_word(CCASE(n).word, &wlen)))
     return 1;
-  word = join_wf(wrd);
+  word = join_wf(wrd, 0);
 
   for (clause *cl = CCASE(n).clauses; cl; cl = cl->next) {
     for (size_t i = 0; cl->ptrn[i]; i++, gl = 0) {
+      char *patstr;
+
       wf *pttrn = exp_word(cl->ptrn[i], &plen);
       if (!pttrn)
         continue;
-      char *patstr = join_wf(pttrn);
-
       for (wf *f = pttrn; f; f = f->next)
         if (f->qs == QNONE && ismetachar(f->word, f->len))
           gl = 1;
+      patstr = join_wf(pttrn, (gl) ? 1 : 0);
       if (gl) {
         if (globmatch(patstr, word, 0)) {
           return run_commands(cl->body, 0);
@@ -987,6 +1014,8 @@ run_subsh(const cmd_tree *n, int chld)
 
   ps = (fakestate) { .cwd = -1 };
   sv = fkstate, svctx = fakectx;
+  fkstate = &ps;
+  fkinit(fkstate);
   svefl = eflag, svifl = iflag;
   eflag = 0, iflag = 0;
   if (predir && (save_fd(predir, sfd, &sfdc) || apply_redir(predir)))

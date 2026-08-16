@@ -8,12 +8,11 @@
 #include <string.h>
 
 #include "alloc.h"
-#include "arith.h"
+#include "main.h"
 #include "env.h"
 #include "errmsg.h"
 #include "input.h"
 #include "lex.h"
-#include "main.h"
 #include "simd.h"
 #include "utils.h"
 
@@ -46,14 +45,10 @@ int chkwd = 0;
 typedef enum {
   M_NORMAL,
   M_DQUOTE,
-  M_SQUOTE
+  M_SQUOTE,
+  M_BRACE,
+  M_HEREDOC
 } tokmode;
-
-enum qs {
-  insq = (1 << 0),
-  indq = (1 << 1),
-  esc = (1 << 2),
-};
 
 /* clang-format off */
 static const unsigned char nchars[256] = {
@@ -84,6 +79,12 @@ static const unsigned char dqchars[256] = {
   ['`'] = C_BTICK,
 };
 
+static const unsigned char hdchars[256] = {
+  ['\\'] = C_BSLASH,
+  ['$'] = C_DOLLAR,
+  ['`'] = C_BTICK,
+};
+
 static const unsigned char sqchars[256] = {
   ['\''] = C_SQUOTE,
 };
@@ -92,6 +93,8 @@ static const unsigned char *ctx_tables[] = {
   [M_NORMAL] = nchars,
   [M_DQUOTE] = dqchars,
   [M_SQUOTE] = sqchars,
+  [M_BRACE] = nchars,
+  [M_HEREDOC] = hdchars,
 };
 
 const struct kw kw[32] = {
@@ -144,6 +147,7 @@ static void skipcomment(void);
       cmdlen++; \
       continue; \
     } \
+  case esc | indq: \
   case esc: \
     st_putc(c); \
     cmdlen++; \
@@ -186,11 +190,32 @@ eatbnl(void)
 
 /* combines word fragments into a string */
 char *
-join_wf(wf *wordf)
+join_wf(wf *wordf, int esc)
 {
+  if (!wordf)
+    return st_strndup("", 0);
   wf *f = wordf;
   char *s, *buf;
   size_t len = 0;
+
+  if (esc) {
+    for (f = wordf; f && f->word; f = f->next)
+      for (size_t i = 0; i < f->len; i++)
+        len += (f->qs != QNONE && f->qs != QCMDSUB && (f->word[i] == '*' ||
+              f->word[i] == '?' || f->word[i] == '[' || f->word[i] == '\\')) ? 2 : 1;
+    buf = st_alloc(len + 1);
+    s = buf;
+    for (f = wordf; f && f->word; f = f->next)
+      for (size_t i = 0; i < f->len; i++) {
+        if (f->qs != QNONE && f->qs != QCMDSUB &&
+            (f->word[i] == '*' || f->word[i] == '?' ||
+             f->word[i] == '[' || f->word[i] == '\\'))
+          *s++ = '\\';
+        *s++ = f->word[i];
+      }
+    *s = '\0';
+    return buf;
+  }
 
   if (f && !f->next && f->word)
     return f->word;
@@ -206,6 +231,9 @@ join_wf(wf *wordf)
   return buf;
 }
 
+// char *
+// join_esc
+
 /** Get wf's from input */
 __attribute__((hot)) static wf *
 get_wf(int c)
@@ -218,7 +246,7 @@ get_wf(int c)
   tail = NULL;
 
   for (;;) {
-    if (cctx == M_NORMAL) {
+    if (cctx == M_NORMAL || cctx == M_BRACE) {
       if (stleft < 32)
         grow_stack(32);
       while (nchars[(unsigned char)c] == C_WORD) {
@@ -285,16 +313,23 @@ get_wf(int c)
           goto done;
         break;
 
+      case C_RB:
+        if (cctx == M_BRACE) {
+          flushword(QNONE);
+          popctx();
+          append_wf(&head, &tail, grab_str(0), 0, QBRACE_END);
+          break;
+        }
+        /* falls through */
       case C_AMP:
       case C_PIPE:
       case C_SEMI:
       case C_LP:
       case C_RP:
       case C_LB:
-      case C_RB:
       case C_LT:
       case C_GT:
-        if (wflen > 0 && cctx == M_NORMAL) {
+        if ((c == '<' || c == '>') && wflen > 0 && cctx == M_NORMAL) {
           char *p = stnext - wflen;
           int allnum = 1;
           for (size_t i = 0; i < wflen; i++)
@@ -445,7 +480,7 @@ tokword(wf *f, int *wd)
       return (sh_tok) { .type = kw[h].tok, .cmd = (f) };
   }
   if ((*wd & CHKALIAS) && (f->flags & WFSINGLE)) {
-    word = join_wf(f);
+    word = join_wf(f, 0);
     a = findalias(word);
     if (a) {
       if (alias_depth >= MAX_ALIAS_DEPTH) {
@@ -538,7 +573,8 @@ lexbslash(int c)
   if (n == SHEOF)
     return SHEOF;
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
-  if (cctx == M_DQUOTE && n != '$' && n != '"' && n != '\\' && n != '`') {
+  if ((cctx == M_DQUOTE && n != '$' && n != '"' && n != '\\' && n != '`') ||
+      (cctx == M_HEREDOC && n != '$' && n != '\\' && n != '`')) {
     stcheck(32), st_putc(c);
     wflen++;
   }
@@ -556,7 +592,7 @@ lexcmdsub(void)
   /* $() */
   int cmdsubd = 1, c;
   size_t cmdlen;
-  enum qs cstate;
+  int cstate;
   char *w;
   cstate = 0;
   cmdlen = 0;
@@ -628,90 +664,36 @@ end:
 static int
 lexarith(void)
 {
-  /* $(()) */
   size_t arlen;
-  int depth, n, n2, c;
-  int arsp = 0;
+  int depth = 0, c;
   static char arbuf[4096];
-  struct {
-    size_t pos;
-    int depth;
-  } arstack[MAX_ARITH];
 
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
   arlen = 0;
-  depth = 0;
-startarith:
   for (;;) {
     int ch;
     if ((ch = shgetchar()) == SHEOF) {
       notclosed = 1;
       return SHEOF;
     }
-    if (ch == '(') {
+    if (ch == '(')
       depth++;
-      if (arlen >= sizeof(arbuf) - 1) {
-        shwarn_arg("arithmetic", arbuf, "expression too long");
-        return SHEOF;
-      }
-      arbuf[arlen++] = ch;
-    } else if (ch == '$') {
-      if ((n = shgetchar()) == '(') {
-        if ((n2 = shgetchar()) == '(') {
-          if (arsp < MAX_ARITH) {
-            arstack[arsp].pos = arlen;
-            arstack[arsp].depth = depth;
-            arsp++;
-          }
-          depth = 0;
-          goto startarith;
-        }
-        shungetc(n2);
-      }
-      shungetc(n);
-      arbuf[arlen++] = ch;
-    } else if (ch == ')') {
-      if (depth > 0) {
+    else if (ch == ')') {
+      if (depth > 0)
         depth--;
-        arbuf[arlen++] = ')';
-      } else if (arsp > 0) {
-        if ((ch = shgetchar()) == ')') {
-          size_t start, rlen, inlen;
-          u64 val;
-          char res[32];
-          start = arstack[arsp - 1].pos;
-          val = arith_eval(arbuf + start, arlen - start);
-          rlen = lltoa(val, res);
-          inlen = arlen - start;
-          if (rlen != inlen)
-            memmove(arbuf + start + rlen,
-                    arbuf + start + inlen,
-                    arlen - start - inlen);
-          memcpy(arbuf + start, res, rlen);
-          arlen = start + rlen;
-          arsp--;
-          depth = arstack[arsp].depth;
-        } else {
-          shungetc(ch);
-          arbuf[arlen++] = ')';
-        }
-      } else {
-        if ((ch = shgetchar()) == ')')
-          break;
+      else if ((ch = shgetchar()) == ')')
+        break;
+      else
         shungetc(ch);
-        arbuf[arlen++] = ')';
-      }
-    } else {
-      if (arlen >= sizeof(arbuf) - 1) {
-        shwarn_arg("arithmetic", arbuf, "expression too long");
-        return SHEOF;
-      }
-      arbuf[arlen++] = ch;
     }
+    if (arlen >= sizeof(arbuf) - 1) {
+      shwarn_arg("arithmetic", arbuf, "expression too long");
+      return SHEOF;
+    }
+    arbuf[arlen++] = ch;
   }
   arbuf[arlen] = '\0';
-  char *exprtxt;
-  exprtxt = st_strndup(arbuf, arlen);
+  char *exprtxt = st_strndup(arbuf, arlen);
   append_wf(&head, &tail, exprtxt, arlen, QARITH);
   if ((c = eatbnl()) == SHEOF)
     return SHEOF;
@@ -723,32 +705,165 @@ static int
 lexvbrace(void)
 {
   char *w;
-  int c, depth = 0;
-  flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
+  int c;
   size_t nlen = 0;
+  int hasop = 0, ch;
+  flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
   stcheck(32);
-  for (int ch = shgetchar();; ch = shgetchar()) {
-    if (ch == SHEOF) {
+
+  ch = shgetchar();
+  if (ch == SHEOF) {
+    notclosed = 1;
+    return SHEOF;
+  }
+
+  /* ${#param} length expansion: header is the whole content */
+  if (ch == '#') {
+    int depth = 0;
+    st_putc(ch);
+    nlen++;
+    for (;;) {
+      ch = shgetchar();
+      if (ch == SHEOF) {
+        notclosed = 1;
+        return SHEOF;
+      }
+      if (ch == '}') {
+        if (!depth)
+          break;
+        depth--;
+        st_putc(ch);
+        nlen++;
+        continue;
+      }
+      if (ch == '$') {
+        int n = shgetchar();
+        if (n == '{')
+          depth++;
+        if (n != SHEOF)
+          shungetc(n);
+      }
+      st_putc(ch);
+      nlen++;
+    }
+    w = grab_str(nlen);
+    append_wf(&head, &tail, w, nlen, cctx == M_DQUOTE ? QBRACE_DQ : QBRACE);
+    if ((c = eatbnl()) == SHEOF)
+      return SHEOF;
+    shungetc(c);
+    return 0;
+  }
+
+  st_putc(ch);
+  nlen++;
+
+  /* parameter name */
+  if (isdigit_(ch)) {
+    for (;;) {
+      int n = shgetchar();
+      if (n == SHEOF) {
+        notclosed = 1;
+        return SHEOF;
+      }
+      if (!isdigit_(n)) {
+        shungetc(n);
+        break;
+      }
+      st_putc(n);
+      nlen++;
+    }
+  } else if (isalpha_(ch) || ch == '_') {
+    for (;;) {
+      int n = shgetchar();
+      if (n == SHEOF) {
+        notclosed = 1;
+        return SHEOF;
+      }
+      if (!isalnum_(n) && n != '_') {
+        shungetc(n);
+        break;
+      }
+      st_putc(n);
+      nlen++;
+    }
+  }
+
+  /* operator at the name boundary */
+  c = shgetchar();
+  if (c == SHEOF) {
+    notclosed = 1;
+    return SHEOF;
+  }
+  if (c == ':') {
+    int n = shgetchar();
+    if (n == SHEOF) {
       notclosed = 1;
       return SHEOF;
     }
-    if (ch == '}') {
-      if (!depth)
-        break;
-      depth--;
-      st_putc(ch);
-      nlen++;
-      continue;
+    if (n == '-' || n == '=' || n == '?' || n == '+') {
+      st_putc(c);
+      st_putc(n);
+      nlen += 2;
+      hasop = 1;
+    } else {
+      shungetc(n);
+      shungetc(c);
     }
-    if (ch == '$') {
-      int n = shgetchar();
-      if (n == '{')
-        depth++;
+  } else if (c == '-' || c == '=' || c == '?' || c == '+') {
+    st_putc(c);
+    nlen++;
+    hasop = 1;
+  } else if (c == '#' || c == '%') {
+    int n = shgetchar();
+    if (n == c) {
+      st_putc(c);
+      st_putc(n);
+      nlen += 2;
+    } else {
       if (n != SHEOF)
         shungetc(n);
+      st_putc(c);
+      nlen++;
     }
-    st_putc(ch);
-    nlen++;
+    hasop = 1;
+  } else {
+    shungetc(c);
+  }
+
+  if (hasop) {
+    w = grab_str(nlen);
+    append_wf(&head, &tail, w, nlen, cctx == M_DQUOTE ? QBRACE_DQ : QBRACE);
+    pshctx(M_BRACE);
+    return 0;
+  }
+
+  /* no operator: rest of the content is the header (old behavior) */
+  {
+    int depth = 0;
+    for (;;) {
+      ch = shgetchar();
+      if (ch == SHEOF) {
+        notclosed = 1;
+        return SHEOF;
+      }
+      if (ch == '}') {
+        if (!depth)
+          break;
+        depth--;
+        st_putc(ch);
+        nlen++;
+        continue;
+      }
+      if (ch == '$') {
+        int n = shgetchar();
+        if (n == '{')
+          depth++;
+        if (n != SHEOF)
+          shungetc(n);
+      }
+      st_putc(ch);
+      nlen++;
+    }
   }
   w = grab_str(nlen);
   append_wf(&head, &tail, w, nlen, cctx == M_DQUOTE ? QBRACE_DQ : QBRACE);
@@ -844,7 +959,7 @@ static int
 lexbtick(void)
 {
   /* `cmd`*/
-  enum qs cstate;
+  int cstate;
   size_t cmdlen;
   int c;
   char *w;
@@ -895,6 +1010,27 @@ cmdsubend:
   }
   shungetc(c);
   return 0;
+}
+
+wf *
+lex_heredoc(const char *body, size_t len)
+{
+  wf *f;
+  int c;
+  setinputstrn((char *)body, len);
+  pshctx(M_HEREDOC);
+  c = shgetchar();
+  if (c == SHEOF) {
+    popctx();
+    notclosed = 0;
+    popinput();
+    return NULL;
+  }
+  f = get_wf(c);
+  popctx();
+  notclosed = 0;
+  popinput();
+  return f;
 }
 
 static void

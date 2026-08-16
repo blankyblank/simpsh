@@ -116,7 +116,7 @@ main(int argc, char **argv)
   else if ((flags & FLAG_c) || (!sflag && *argv))
     iflag = mflag = 0;
   else
-    iflag = mflag = (int)isatty(STDIN_FILENO);
+    iflag = mflag = (isatty(STDIN_FILENO) && isatty(STDERR_FILENO));
 
   /* all the set up functions for the shell */
   if (iflag)
@@ -150,20 +150,20 @@ main(int argc, char **argv)
     if ((fd = open(*argv, O_RDONLY)) < 0) {
       exittrap(sherrx(1, "open"));
     }
-    SHARGV0 = argv0;
+    SHARGV0 = *argv;
     SHARGV = argv + 1;
     SHARGC = argc - 1;
     sh_script(fd, *argv);
     exittrap(LSTATUS);
-  } else if (!iflag || sflag) {
+  } else if (iflag && !sflag) {
+    SHARGV0 = argv0;
+    /* run the main loop */
+    exittrap(sh_interactive());
+  } else {
     SHARGV0 = argv0;
     SHARGV = argv;
     SHARGC = argc;
     sh_stdin();
     exittrap(LSTATUS);
-  } else {
-    SHARGV0 = argv0;
-    /* run the main loop */
-    exittrap(sh_interactive());
   }
 }

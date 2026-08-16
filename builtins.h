@@ -29,7 +29,13 @@ extern const limit limits[];
 #define SBLTN (1 << 0)
 extern int bltin_atoi(char *, char *, char *);
 extern void init_builtins(void);
+
+/* needed elsewhere */
+extern int commandcmd(char **);
+extern int dotcmd(char **);
 extern int returncmd(char **);
+extern int execcmd(char **);
+extern int evalcmd(char **);
 
 static inline const builtin *
 findbuiltin(const char *args)

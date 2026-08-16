@@ -34,7 +34,13 @@ int selfpipe[2] = { -1, -1 };
 int sigpipe[2] = { -1, -1 };
 
 #define init_eventloop(e) ((e)->nsrc = 0, (e)->running = 1)
-static void restoreterm(void) { tcsetattr(tty_fd, TCSADRAIN, &sh_termios); }
+
+static inline void
+restoreterm(void)
+{
+  if (tty_fd >= 0)
+    tcsetattr(tty_fd, TCSADRAIN, &sh_termios);
+}
 
 void
 init_sig(void)
@@ -79,10 +85,13 @@ init_job(void)
 
   tcgetattr(tty_fd, &sh_termios);
   tcsetattr(tty_fd, TCSADRAIN, &sh_termios);
-  sh_pgid = getpgrp();  //
+  sh_pgid = getpid();
+  setpgid(0, sh_pgid);
+  if (iflag)
+    if (tcgetpgrp(tty_fd) == getpgrp())
+      tcsetpgrp(tty_fd, sh_pgid);
   atexit(restoreterm);
 }
-
 
 sighandler_t
 __signal(int sig, sighandler_t handler)
@@ -371,7 +380,7 @@ cleartraps(void)
 
   while (tm) {
     int i = __builtin_ctzll(tm);
-    tm &= tm - i;
+    tm &= tm - 1;
     sfree(trap[i]);
     trap[i] = NULL;
     if (i && sigmode[i] != S_HIGN)

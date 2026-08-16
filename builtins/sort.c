@@ -37,6 +37,7 @@ enum {
   rev = 1 << 4,
   strtb = 1 << 5,
   endb = 1 << 6,
+  ver = 1 << 7,
 };
 
 enum {
@@ -55,10 +56,15 @@ static int hasout;
 static unsigned flags;
 static unsigned mode;
 
+static int bytecmp(const char *a, size_t la, const char *b, size_t lb);
 static int parsekey(char *s, keydef *kd);
 static int frange(const char *, size_t , const keydef *, const char **, const char **);
 static int keycmp(const char *, size_t , const char *, size_t, int);
 static ln *sortmerge(const ln *, size_t, const ln *, size_t, size_t *);
+static int vcmpc(int, int);
+static int vcmpv(const char *, size_t, const char *, size_t);
+static size_t vsfx(const char *, const char *);
+static int vercmp(const char *, size_t, const char *, size_t);
 
 static inline int
 sortcmp(const void *a, const void *b)
@@ -106,6 +112,9 @@ sortcmd(char *argv[])
       break;
     case 'r':
       flags |= rev;
+      break;
+    case 'V':
+      flags |= ver;
       break;
     case 'k':
         if (!(kdstr = EARGF(no_opt(argv0, ARGC()))))
@@ -274,6 +283,9 @@ parsekey(char *s, keydef *kd)
       case 'r':
         kd->flags |= rev;
         break;
+      case 'V':
+        kd->flags |= ver;
+        break;
       default:
         return -1;
     }
@@ -307,6 +319,9 @@ parsekey(char *s, keydef *kd)
           break;
         case 'r':
           kd->flags |= rev;
+          break;
+        case 'V':
+          kd->flags |= ver;
           break;
         default:
           return -1;
@@ -555,6 +570,127 @@ dictcmp(const char *a, size_t la, const char *b, size_t lb, int flg)
 }
 
 static int
+vcmpc(int c1, int c2)
+{
+  if (c1 == c2)
+    return 0;
+  if (c1 == '~')
+    return -1;
+  if (c2 == '~')
+    return 1;
+  if (isdigit_(c1) || !c1)
+    return (isdigit_(c2) || !c2) ? 0 : -1;
+  if (isdigit_(c2) || !c2)
+    return 1;
+  if (isalpha_(c1) && c1 != '_')
+    return ((isalpha_(c2) && c2 != '_')) ? (int)c1 - c2 : -1;
+  if (isalpha_(c2) && c2 != '_')
+    return 1;
+  return (int)c1 - c2;
+}
+
+static size_t
+vsfx(const char *s, const char *e)
+{
+  int expect, sfx;
+  size_t clen, len;
+  expect = sfx = clen = len = 0;
+
+  for (; s < e; s++) {
+    if (expect) {
+      expect = 0;
+      if (!(isalpha_(*s) && *s != '_') && *s != '~')
+        sfx = 0;
+    } else if (*s == '.') {
+      expect = 1;
+      if (!sfx) {
+        sfx = 1;
+        len = clen;
+      }
+    } else if (!((isalpha_(*s) && *s != '_') || isdigit_(*s)) && *s != '~') {
+     sfx = 0;
+    }
+    clen++;
+  }
+  return sfx ? len : clen;
+}
+
+static int
+vcmpv(const char *a, size_t la, const char *b, size_t lb)
+{
+  const char *ae = a + la, *be = b + lb;
+  int cmp, diff;
+
+  while (a < ae || b < be) {
+    diff = 0;
+    while ((a < ae && !isdigit_(*a)) || (b < be && !isdigit_(*b))) {
+      cmp = vcmpc((a < ae) ? *a : 0, (b < be) ? *b : 0);
+      if (cmp)
+        return cmp;
+      if (a < ae)
+        a++;
+      if (b < be)
+        b++;
+    }
+    while (a < ae && *a == '0')
+      a++;
+    while (b < be && *b == '0')
+      b++;
+    while ((a < ae && isdigit_(*a)) && b < be && isdigit_(*b)) {
+      if (!diff)
+        diff = (int)*a - (int)*b;
+      a++, b++;
+    }
+    if (a < ae && isdigit_(*a))
+      return 1;
+    if (b < be && isdigit_(*b))
+      return -1;
+    if (diff)
+      return diff;
+  }
+  return 0;
+}
+
+static int
+vercmp(const char *a, size_t la, const char *b, size_t lb)
+{
+  size_t len1, len2;
+  int res, cmp;
+
+  res = bytecmp(a, la, b, lb);
+  if (!res)
+    return 0;
+  if (la < 1)
+    return -1;
+  if (lb < 1)
+    return 1;
+  if (la == 1 && *a == '.')
+    return -1;
+  if (lb == 1 && *b == '.')
+    return 1;
+  if (la == 2 && a[0] == '.' && a[1] == '.')
+    return -1;
+  if (lb == 2 && b[0] == '.' && b[1] == '.')
+    return 1;
+  if (*a == '.' && *b != '.')
+    return -1;
+  if (*a != '.' && *b == '.')
+    return 1;
+  if (*a == '.' && *b == '.') {
+    a++;
+    la--;
+    b++;
+    lb--;
+  }
+  len1 = vsfx(a, a + la);
+  len2 = vsfx(b, b + lb);
+  if (len1 == len2 && !bytecmp(a, len1, b, len2))
+    return res;
+  cmp = vcmpv(a, len1, b, len2);
+  return cmp ? cmp : res;
+}
+
+static int
 bytecmp(const char *a, size_t la, const char *b, size_t lb)
 {
   const char *aend, *bend, *p, *q;
@@ -594,7 +730,9 @@ keycmp(const char *a, size_t la, const char *b, size_t lb, int full)
     las = pntlen(astrt, aend);
     lbs = pntlen(bstrt, bend);
     flag = (keys[i].own) ? keys[i].flags : (int)flags;
-    if (flag & num)
+    if (flag & ver)
+      res = vercmp(astrt, las, bstrt, lbs);
+    else if (flag & num)
       res = numcmp(astrt, las, bstrt, lbs);
     else if (flag & (dict | icase | inprnt))
       res = dictcmp(astrt, las, bstrt, lbs, flag);
@@ -604,7 +742,9 @@ keycmp(const char *a, size_t la, const char *b, size_t lb, int full)
       return (flag & rev) ? -res : res;
   }
   if (!nkeyd) {
-    if (flags & num)
+    if (flags & ver)
+      res = vercmp(a, la, b, lb);
+    else if (flags & num)
       res = numcmp(a, la, b, lb);
     else if (flags & (dict | icase | inprnt))
       res = dictcmp(a, la, b, lb, flags);

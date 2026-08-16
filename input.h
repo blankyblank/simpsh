@@ -114,6 +114,18 @@ shpeek(const char **p)
   }
   if (shinpt->strpush)
     return 0;
+  if (shinpt->fd >= 0 && shinpt->b.lleft > 0) {
+    size_t nl;
+    nl = memchr_(shinpt->nchar, shinpt->b.lleft, '\n');
+    if (nl < shinpt->b.lleft)
+      shinpt->nleft = nl + 1, shinpt->b.lleft -= shinpt->nleft;
+    else
+      shinpt->nleft = shinpt->b.lleft, shinpt->b.lleft = 0;
+    if (*shinpt->nchar == '\n')
+      shinpt->linenum++;
+    *p = shinpt->nchar;
+    return shinpt->nleft;
+  }
   if (shreadbuf()) {
     *p = shinpt->nchar;
     return shinpt->nleft;

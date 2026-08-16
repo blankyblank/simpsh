@@ -37,12 +37,8 @@ extern int aliascmd(char **);
 extern int bgcmd(char **);
 static int breakcmd(char **);
 extern int cdcmd(char **);
-static int commandcmd(char **);
 static int continuecmd(char **);
-static int dotcmd(char **);
 static int echocmd(char **);
-static int evalcmd(char **);
-extern int execcmd(char **);
 static int exitcmd(char **);
 extern int exportcmd(char **);
 static int falsecmd(char **);
@@ -382,7 +378,7 @@ breakcmd(char **argv)
   return 0;
 }
 
-static int
+int
 commandcmd(char **argv)
 {
   int flags = 0, argc = 0;
@@ -461,12 +457,12 @@ continuecmd(char **argv)
   return 0;
 }
 
-static int
+int
 dotcmd(char **argv)
 {
   size_t argc = 0;
   char *file;
-  int fd;
+  int fd, status;
 
   array_len(argv, argc);
 
@@ -501,8 +497,6 @@ dotcmd(char **argv)
   SHARGV0 = strdup_(file);
 
   if (argc > 2) {
-    if (ALLOCED)
-      freeshargv();
     SHARGC = argc - 2;
     SHARGV = salloc(sizeof(char *) * (SHARGC + 1));
     for (int i = 0; i < SHARGC; i++)
@@ -516,12 +510,26 @@ dotcmd(char **argv)
   RETNOW = 0;
   popinput();
 
+  status = LSTATUS;
+  if (argc == 2) {
+    char **pargv;
+    int pargc, palloced;
 
-  if (ALLOCED)
-    freeshargv();
-  sfree(SHARGV0);
-  popframe();
-  return LSTATUS;
+    pargv = SHARGV;
+    pargc = SHARGC;
+    palloced = ALLOCED;
+    sfree(SHARGV0);
+    popframe();
+    SHARGV = pargv;
+    SHARGC = pargc;
+    ALLOCED = palloced;
+  } else {
+    if (argc > 2)
+      freeshargv();
+    sfree(SHARGV0);
+    popframe();
+  }
+  return status;
 }
 
 static int

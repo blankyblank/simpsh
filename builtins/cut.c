@@ -219,7 +219,7 @@ getrange(char *list, size_t *restrict nrange)
 
   rngs = st_alloc(++ccnt * sizeof(range));
 
-  for (cur = list; *cur; cur++) {
+  for (cur = list; *cur;) {
     char *dash, sv;
     int s, e;
     start = cur;
@@ -259,6 +259,9 @@ getrange(char *list, size_t *restrict nrange)
         return NULL;
       rngs[idx++] = (range) { s, e };
     }
+    if (*cur == '\0')
+      break;
+    cur++;
   }
 
   *nrange = idx;

@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "errmsg.h"
+#include "main.h"
 
 int
 dirnamecmd(char *argv[])
@@ -18,7 +19,7 @@ dirnamecmd(char *argv[])
   for (char *d = *argv++; d; d = *argv++) {
     char *path;
     if ((path = dirname(d)))
-      puts(path);
+      fputs(path, shout);
   }
   return 0;
 }

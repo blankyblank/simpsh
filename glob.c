@@ -101,8 +101,7 @@ retry:
       case '?':
         if (pfl && (!*s || *s == '/'))
           goto backtrack;
-        p++;
-        s++;
+        p++, s++;
         continue;
       case '[':
         if (!*s)
@@ -117,10 +116,20 @@ retry:
           }
         }
         continue;
+      case '\\':
+        if (p[1] && *s == p[1]) {
+          p += 2;
+          s++;
+          continue;
+        }
+        if (p[1] && *s == '\\') {
+          p++, s++;
+          continue;
+        }
+        goto backtrack;
       default:
         if (*p == *s) {
-          p++;
-          s++;
+          p++, s++;
         } else {
 backtrack:
           if (!sp || ss >= send)

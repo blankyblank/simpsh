@@ -187,7 +187,8 @@ init_rc(int flag)
     size_t elen;
     shvar *e;
     if ((e = findvar_n("ENV", 3))) {
-      f = exp_str(shvar_val(e), vallen(e), &elen);
+      wf *ew = lex_heredoc(shvar_val(e), vallen(e));
+      f = ew ? join_wf(exp_word(ew, &elen), 0) : st_strndup("", 0);
       source_file(f);
     }
   }
@@ -623,6 +624,7 @@ input_notify(EditLine *e, wchar_t *wc)
   fds[0].fd = STDIN_FILENO;
   fds[0].events = POLLIN;
   fds[1].fd = selfpipe[0];
+  fds[1].events = POLLIN;
   fds[2].fd = sigpipe[0];
   fds[2].events = POLLIN;
 

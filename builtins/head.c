@@ -41,6 +41,7 @@ ARGNUM:
   f = *argv;
   svln = ln;
   if (f) {
+    hm = stack_mark();
     for (size_t i = 0; i < argc; i++) {
       FILE *fp;
       f = *argv++;
@@ -51,7 +52,6 @@ ARGNUM:
       }
       if (argc > 1)
         fprintf(shout,"%s==> %s <==\n", (i > 0) ? "\n" : "", f);
-      hm = stack_mark();
       while (ln > 0) {
         char *line;
         size_t len;

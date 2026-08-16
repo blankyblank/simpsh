@@ -96,6 +96,8 @@ chkpath(const char *restrict path, const char *restrict name, int mode, unsigned
   char *e;
   struct stat statbuf;
 
+  if (!name)
+    return NULL;
   flen = strlen(name);
   s = path;
 
@@ -134,7 +136,7 @@ chkpath(const char *restrict path, const char *restrict name, int mode, unsigned
       if (cdmode) {
         if (!stat(buf, &statbuf) && S_ISDIR(statbuf.st_mode))
           return st_strdup(buf);
-      } else {
+      } else if (!stat(buf, &statbuf)  && !S_ISDIR(statbuf.st_mode)) {
         return st_strdup(buf);
       }
     }

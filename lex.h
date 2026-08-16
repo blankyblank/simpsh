@@ -71,6 +71,7 @@ typedef enum {
   QCMDSUB = 1 << 8,
   QCMDSUB_DQ = 1 << 9,
   QARITH = 1 << 10,
+  QBRACE_END = 1 << 11,
 } quoted;
 
 typedef enum {
@@ -79,6 +80,12 @@ typedef enum {
   WFCMDSUB = 1 << 2,
   WFREDIRFD = 1 << 3,
 } wf_flags;
+
+enum qs {
+  insq = (1 << 0),
+  indq = (1 << 1),
+  esc = (1 << 2),
+};
 
 /**
  * word fragment
@@ -143,7 +150,8 @@ enum rdr {
 extern sh_tok tokenize(void);
 extern void pushstring(char *, size_t, int);
 extern void popstring(void);
-extern char *join_wf(wf *wordf);
+extern char *join_wf(wf *, int);
+extern wf *lex_heredoc(const char *, size_t);
 
 static inline wf *
 wfalloc(void)
