@@ -13,6 +13,7 @@ tests/bench.sh
 tests/forbench.sh
 tests/script-test.sh
 /tests/testfiles/source.sh
+/tests/testfiles/suid*
 /tests/quotetest.sh
 /tests/pgo
 /pgo
@@ -45,3 +46,5 @@ reports
 perf.data*
 heaptrack.*
 .aider*
+/tools/dump_wf.c
+/tests/pctest.sh
