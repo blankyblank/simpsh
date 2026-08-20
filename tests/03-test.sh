@@ -52,13 +52,8 @@ out=$(../simpsh -c '[ ! 1 -eq 2 ] && echo y || echo n')
 [ "$out" = "y" ] || { msg_fail "! 1 -eq 2: got '$out'"; exit 1; }
 test_pass "out" "matches" "y"
 
-suid_mode=$(stat -c '%a' /usr/bin/sudo 2>/dev/null | head -c1)
-if [ "${suid_mode:-0}" = "4" ] || [ "${suid_mode:-0}" = "7" ]; then
-    check "-u"  "-u /usr/bin/sudo" y
-else
-    check "-u"  "-u /usr/bin/sudo" n
-fi
-
+f=./testfiles/suidtest.$$
+: > "$f"
 # === All flags loop: quiet on success, identifies which flag failed ===
 msg_run 'all [ ] flags'
 check "file exists"     "-e /etc/passwd"        y
@@ -74,8 +69,10 @@ check "writable"        "-w /tmp"               y
 check "executable"      "-x /bin/sh"            y
 check "size > 0"        "-s /etc/passwd"        y
 check "string non-empty" "-n hello"             y
-check "setuid"          "-u /usr/bin/sudo"      y
-check "setgid"          "-g /usr/bin/sudo"      n
+chmod u+s "$f"
+check "setuid"          "-u $f"      y
+chmod g+s "$f"
+check "setgid"          "-g $f"      y
 check "sticky"          "-k /tmp"               y
 check "owned by me"     "-O $HOME"              y
 check "group of me"     "-G $HOME"              y
@@ -89,4 +86,5 @@ check "int le"          "1 -le 1"               y
 check "int ge"          "1 -ge 1"               y
 check "file eq"         "/etc/passwd -ef /etc/passwd" y
 # Don't add -nt/-ot as those depend on file mtimes
+rm "$f"
 msg_pass "all flags pass"

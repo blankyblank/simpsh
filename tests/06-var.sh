@@ -118,9 +118,9 @@ msg_run '${var:?msg} error on unset'
 out=$(../simpsh -c 'unset x; echo ${x:?oops}' 2>&1)
 rc=$?
 if [ $rc -ne 0 ] && echo "$out" | grep -q "oops"; then
-  test_pass "out" "error with message" ""
+  test_pass "out" "matches" "oops"
 else
-  test_fail "out" "expected error" "$out"
+  test_fail "out" "expected" "oops"
   exit 1
 fi
 

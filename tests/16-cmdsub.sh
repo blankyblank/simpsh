@@ -73,3 +73,12 @@ if [ "$out" != "HI" ]; then
 else
   test_pass "out" "matches" "HI"
 fi
+
+msg_run 'case inside cmdsub: $(case x in a) echo hi;; esac)'
+export x=a
+out=$(../simpsh -c 'echo $(case $x in a) echo hi;; esac)')
+if [ "$out" !=  'hi' ]; then
+  test_fail "out" "expected" "hi"; exit 1
+else
+  test_pass "out" "matches" "hi"
+fi
