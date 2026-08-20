@@ -6,8 +6,8 @@ include config.mk
 PROFILE = $$(case "$(BUILD):$(CC)" in \
 	"release:gcc")    echo "-march=native -falign-functions=16 -fno-plt -O2 -flto=auto -s" ;; \
 	"release:clang")  echo "-march=native -fno-plt -flto -O2 -fvectorize -flto=full" ;; \
-	"debug:gcc")      echo "-Og -g3 -fno-omit-frame-pointer -DDEBUG -flto=auto -ggdb" ;; \
-	"debug:clang")    echo "-Og -g3 -fno-omit-frame-pointer -DDEBUG -flto -glldb -fstandalone-debug" ;; \
+	"debug:gcc")      echo "-Og -g3 -fno-omit-frame-pointer -flto=auto -ggdb" ;; \
+	"debug:clang")    echo "-Og -g3 -fno-omit-frame-pointer -flto -glldb -fstandalone-debug" ;; \
 	"sanitize:gcc")   echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined" ;; \
 	"sanitize:clang") echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined -fsanitize=integer" ;; \
 	valgrind:*)       echo "-Og -g3 -fno-omit-frame-pointer -DENABLE_VALGRIND" ;; \
@@ -33,7 +33,7 @@ LINK = $$(case "$(BUILD_LINK)" in static) echo "-static" ;; esac)
 LIBEDITFLAGS = $$(case "$(BUILD_LINK):$(LIBEDIT)" in "static:1") echo "-DLIBEDIT -DSTATICLIBEDIT" ;; *:1) echo "-DLIBEDIT" ;; *) echo "" ;; esac)
 LIBEDITLIBS = $$(case "$(BUILD_LINK):$(LIBEDIT)" in "static:1") echo "-ledit -lncurses" ;; *:1) echo "-ldl" ;; *) echo "" ;; esac)
 
-CFLAGS  = $(BASE) $(PROFILE) $(LIBEDITFLAGS) $(GCOV) $(PGOFLAGS)
+CFLAGS  = $(BASE) $(PROFILE) $(LIBEDITFLAGS) $(GCOV) $(PGOFLAGS) $(EXTRA)
 LDFLAGS = -Wl,-z,now $(LDFLAG) $(LINK) $(GCOV) $(PGOFLAGS)
 LDLIBS  = $(LIBEDITLIBS)
 
@@ -45,7 +45,7 @@ OBJS = obj/alloc.o obj/arith.o obj/builtins.o obj/env.o obj/errmsg.o obj/exec.o 
 OBJDIR = obj
 TARGET = simpsh
 
-.PHONY: all clean pgo test install uninstall analyze examine bench
+.PHONY: all clean pgo test install uninstall analyze examine bench bench-a bench-e bench-f bench-p bench-q
 
 all: $(TARGET)
 
@@ -238,7 +238,7 @@ obj/builtins/wc.o: builtins/wc.c $(HDR)
 
 $(TARGET): $(OBJS)
 	@echo "  $(CC) $@ $(CFLAGS) $(LDFLAGS) $(LDLIBS)"
-	@$(CC) -o $@ obj/*.o obj/builtins/*.o $(CFLAGS) $(LDFLAGS) $(LDLIBS)
+	@$(CC) -o $@ obj/*.o `ls obj/builtins/*.o 2>/dev/null` $(CFLAGS) $(LDFLAGS) $(LDLIBS)
 
 install:
 	rm -f $(BINDIR)/simpsh
@@ -277,4 +277,14 @@ test:
 	cd tests && ./runtests.sh
 
 bench:
-	hyperfine --warmup 4 './simpsh profile/bench.sh'
+	hyperfine --warmup 4 'simpsh profile/bench.sh'
+bench-a:
+	hyperfine --warmup 4 'simpsh ./profile/arith-bench.sh'
+bench-e:
+	hyperfine --warmup 4 'simpsh ./profile/benchwecho.sh'
+bench-f:
+	hyperfine --warmup 4 'simpsh ./profile/forbench.sh'
+bench-p:
+	hyperfine --warmup 4 'simpsh ./profile/printf-bench.sh'
+bench-q:
+	hyperfine --warmup 4 'simpsh ./profile/quote-bench.sh'
