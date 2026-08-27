@@ -83,7 +83,7 @@ fkrestore(fakestate *fs)
       int r = __builtin_ctzll(bits);
       struct rlimit cur;
       getrlimit(r, &cur);
-      if (cur.rlim_cur != fs->rlim[r].cur || cur.rlim_max != fs->rlim[r].max) {
+      if (cur.rlim_cur != (rlim_t)fs->rlim[r].cur || cur.rlim_max != (rlim_t)fs->rlim[r].max) {
         cur.rlim_cur = fs->rlim[r].cur;
         cur.rlim_max = fs->rlim[r].max;
         setrlimit(r, &cur);
