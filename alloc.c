@@ -183,8 +183,10 @@ stack_clear(void)
 void
 init_stack(void)
 {
-  mallopt(M_ARENA_MAX, 1); // these two seem fine for now
+#ifdef __linux__
+  mallopt(M_ARENA_MAX, 1);
   mallopt(M_TRIM_THRESHOLD, 128);
+#endif /* __linux__ */
   memset(stackbase.buf, 0, sizeof(stackbase.buf));
   current = &stackbase;
   stnext = stackbase.buf;
