@@ -14,6 +14,7 @@ tests/forbench.sh
 tests/script-test.sh
 /tests/testfiles/source.sh
 /tests/testfiles/suid*
+/tests/testfiles/*grubtest*
 /tests/quotetest.sh
 /tests/pgo
 /pgo
