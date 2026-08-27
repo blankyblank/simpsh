@@ -1,4 +1,6 @@
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <stdio.h>

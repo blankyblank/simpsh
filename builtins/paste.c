@@ -1,5 +1,7 @@
 #include "config.h"
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 #if ENABLE_PASTE
 
 #include "arg.h"

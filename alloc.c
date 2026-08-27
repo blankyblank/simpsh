@@ -1,5 +1,7 @@
 /*  alloc.c - stack arena allocator and otther malloc functions */
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 #include <malloc.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -202,7 +204,7 @@ newslab(int ci)
   void *base;
 
   if ((base = mmap(NULL, slotsz[ci].sbsz, PROT_READ | PROT_WRITE,
-                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)) == MAP_FAILED)
+                   MAP_PRIVATE | MAP_ANON, -1, 0)) == MAP_FAILED)
     return NULL;
   slab *s;
   s = (slab *)base;

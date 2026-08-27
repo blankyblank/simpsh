@@ -1,7 +1,9 @@
 /* util.h - misc helper functions */
 #ifndef UTILS_H
 #define UTILS_H
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 
 #include <ctype.h>
 #include <stdio.h>

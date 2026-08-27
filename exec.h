@@ -2,7 +2,9 @@
 #ifndef EXEC_H
 #define EXEC_H
 
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 #include <sys/wait.h>
 #include <signal.h>
 

@@ -1,7 +1,9 @@
 #ifndef ALLOC_H
 #define ALLOC_H
 
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 #include <stddef.h>
 #include <sys/mman.h>
 #include <stdint.h>
@@ -188,7 +190,7 @@ if (stacksl) {
   large:
     sz = align_mem(n) + sizeof(slab *) + sizeof(size_t);
     sz = (sz + MEMSIZE - 1) & ~(size_t)(MEMSIZE - 1);
-    p = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    p = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (p == MAP_FAILED)
       return NULL;
     *(size_t *)p = sz;

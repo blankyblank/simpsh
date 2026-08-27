@@ -1,6 +1,8 @@
 #include "config.h"
 #if ENABLE_EXPAND
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 
 #include <stdio.h>
 

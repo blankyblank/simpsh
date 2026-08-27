@@ -1,6 +1,8 @@
 #ifndef JOB_H
 #define JOB_H
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 
 #include <signal.h>
 #include <sys/wait.h>

@@ -1,7 +1,9 @@
 /* lex.c - tokenizer functions */
 
 /* NOLINTBEGIN(readability-function-cognitive-complexity) */
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>

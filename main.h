@@ -1,7 +1,9 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 #ifdef HAVE_PATHS_H
   #include <paths.h>
 #endif

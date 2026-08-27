@@ -1,6 +1,8 @@
 #include "config.h"
 #if ENABLE_TAIL
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 #define _DEFAULT_SOURCE
 
 #include <sys/stat.h>

@@ -1,5 +1,7 @@
 /* arith.c - shell arithmetic handling functions */
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 #include <ctype.h>
 #include <stddef.h>
  

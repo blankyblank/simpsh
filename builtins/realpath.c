@@ -1,6 +1,8 @@
 #include "config.h"
 #if ENABLE_REALPATH
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 #define _XOPEN_SOURCE 700
 
 #include <stdlib.h>

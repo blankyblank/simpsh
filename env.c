@@ -1,5 +1,7 @@
 /*  env.c - functions surrounding various parts of the shell environment  */
-#define _POSIX_C_SOURCE 200809L
+#ifdef __linux__
+  #define _POSIX_C_SOURCE 200809L
+#endif /* __linux__ */
 #include <stdlib.h>
 #include <limits.h>
 #include <stddef.h>
