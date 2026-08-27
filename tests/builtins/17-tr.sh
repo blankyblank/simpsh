@@ -175,7 +175,7 @@ else
 fi
 
 msg_run 'tr squeeze survives buffer boundary'
-n=$(head -c 20000 /dev/zero | ../simpsh -c "tr -s '\0'" | wc -c)
+n=$(head -c 20000 /dev/zero | ../simpsh -c "tr -s '\0'" | wc -c | tr -d ' ')
 if [ "$n" = "1" ]; then
   test_pass "n" "matches" "1"
 else
@@ -184,7 +184,7 @@ else
 fi
 
 msg_run 'tr translate across buffer boundary'
-n=$(yes ab | head -c 20000 | ../simpsh -c "tr ab xy" | wc -c)
+n=$(yes ab | head -c 20000 | ../simpsh -c "tr ab xy" | wc -c | tr -d ' ')
 if [ "$n" = "20000" ]; then
   test_pass "n" "matches" "20000"
 else
