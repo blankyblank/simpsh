@@ -193,7 +193,9 @@ init_traps(void)
   signame[SIGPROF] = "PROF";
   signame[SIGWINCH] = "WINCH";
   signame[SIGIO] = "IO";
+#ifdef SIGPWR
   signame[SIGPWR] = "PWR";
+#endif /* SIGPWR */
   signame[SIGSYS] = "SYS";
 #ifdef SIGSTKFLT
   signame[SIGSTKFLT] = "STKFLT";
