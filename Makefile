@@ -138,7 +138,7 @@ obj/builtins/wc.o: builtins/wc.c $(HDR) obj/builtins
 
 $(TARGET): $(OBJS)
 	@echo "  $(CC) $@ $(CFLAGS) $(LDFLAGS) $(LDLIBS)"
-	@$(CC) -o $@ obj/*.o `ls obj/builtins/*.o 2>/dev/null` $(CFLAGS) $(LDFLAGS) $(LDLIBS)
+	@$(CC) -o $@ $(OBJS) $(CFLAGS) $(LDFLAGS) $(LDLIBS)
 
 install:
 	rm -f $(BINDIR)/simpsh
