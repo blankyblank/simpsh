@@ -55,6 +55,7 @@ newredirnode(cmd_tree * restrict l, redir * restrict r)
   n->left = l;
   CREDR(n) = r;
   n->flags = 0;
+  n->right = NULL;
   n->line = curline;
   return n;
 }
@@ -84,6 +85,7 @@ newcmdnode(wf ** restrict args, int flags, wf ** restrict sh_vars, size_t vc)
   CARGS(n) = args;
   CVARS(n) = sh_vars;
   CVARC(n) = vc;
+  n->right = n->left = NULL;
   n->flags = flags;
   n->line = curline;
   return n;
@@ -93,11 +95,12 @@ newcmdnode(wf ** restrict args, int flags, wf ** restrict sh_vars, size_t vc)
 static int
 is_assn(wf *cmd)
 {
-  char *eq = memchr(cmd->word, '=', cmd->len);
-  const char *p;
-
   if (cmd->qs != QNONE)
     return 0;
+  char *eq;
+  const char *p;
+
+  eq = memchr(cmd->word, '=', cmd->len);
   if (!eq || eq == cmd->word)
     return 0;
 
@@ -296,24 +299,29 @@ parse_andor(void)
     gettok(CHKALIAS | CHKKWD | CHKNL);
     if (!(r = parse_pipe()))
       return NULL;
-    if (eflag) {
-      l->flags |= EFLAG_SAFE;
-      if (l->right)
-        l->right->flags |= EFLAG_SAFE;
-    }
+    l->flags |= EFLAG_SAFE;
+    if (l->right)
+      l->right->flags |= EFLAG_SAFE;
     l = newoppnode(op, l, r);
   }
+}
+
+cmd_tree *
+parse_cmdsub(void)
+{
+  cmd_tree *n = NULL;
+  return n;
 }
 
 static cmd_tree *
 parse_subsh(void)
 {
-  cmd_tree *sub;
-  sub = parse_list(1);
+  cmd_tree *n;
+  n = parse_list(1);
   if (tbuf.type != TRP)
     return synexpected(curline, tbuf, TRP);
   gettok(0);
-  return sub;
+  return n;
 }
 
 static inline cmd_tree *
@@ -372,6 +380,9 @@ parse_pipe(void)
     p = gettailredir(p);
     stages[n++] = p;
   }
+  for (size_t i = 0; i + 1 < n; i++)
+    stages[i]->flags |= EFLAG_SAFE;
+
   cmd_tree *l;
 
   if (n > 1) {
@@ -379,6 +390,7 @@ parse_pipe(void)
     l->type = OP;
     COPP(l) = TPIPE;
     l->flags = 0;
+    l->left = l->right = NULL;
     l->line = curline;
     cmd_tree **list = st_alloc(n * sizeof(cmd_tree *));
     memcpy(list, stages, n * sizeof(cmd_tree *));
@@ -595,6 +607,7 @@ parse_case(void)
   CCASE(n).word = word;
   CCASE(n).clauses = headcl;
   n->flags = 0;
+  n->left = n->right = NULL;
   n->line = curline;
   return n;
 }
@@ -605,6 +618,7 @@ parse_if(void)
   cmd_tree *cond, *then, *else_;
 
   cond = parse_list(1);
+  cond->flags |= EFLAG_SAFE;
   if (tbuf.type != TTHEN)
     return synexpected(curline, tbuf, TTHEN);
   then = parse_list(1);
@@ -653,7 +667,7 @@ parse_for(void)
     return synunexpected(curline, tbuf);
   name = tbuf.cmd;
 
-  gettok(CHKALIAS | CHKKWD);
+  gettok(CHKALIAS | CHKKWD | CHKNL);
   if (tbuf.type == TIN) {
     cap = WFCAP;
     words = st_alloc(cap * sizeof(wf *));
@@ -668,12 +682,12 @@ parse_for(void)
       words[wc++] = tbuf.cmd;
     }
     words[wc] = NULL;
-    if (!wc)
-      return syntxerr(curline, "expected list before", TSEMI);
   }
 
+  if (tbuf.type == TNL)
+    gettok(CHKALIAS | CHKKWD | CHKNL);
   if (tbuf.type == TSEMI) {
-    gettok(CHKALIAS | CHKKWD);
+    gettok(CHKALIAS | CHKKWD | CHKNL);
     if (tbuf.type != TDO)
       return synexpected(curline, tbuf, TDO);
   }
@@ -690,6 +704,7 @@ parse_for(void)
   CFOR(n).name = name;
   CFOR(n).words = words;
   n->right = body;
+  n->left = NULL;
   n->flags = 0;
   n->line = curline;
   return n;
@@ -702,6 +717,7 @@ parse_while(token tok)
 
   if (!(condition = parse_list(1)))
     return NULL;
+  condition->flags |= EFLAG_SAFE;
   if (tbuf.type != TDO)
     return synexpected(curline, tbuf, TDO);
   if (tbuf.type == TSEMI)
@@ -742,6 +758,7 @@ parse_cmd(void)
       l->left = sub;
       l->flags = 0;
       l->line = curline;
+      l->right = NULL;
       return l;
     case TLB:
       l = st_alloc(sizeof(cmd_tree));
@@ -749,6 +766,7 @@ parse_cmd(void)
       if (!(l->left = parse_group()))
         return NULL;
       l->flags = 0;
+      l->right = NULL;
       l->line = curline;
       return l;
     case TCASE:
@@ -817,10 +835,10 @@ synunexpected(int ln, sh_tok wrong)
 
   if ((fn = shinpt ? shinpt->name : NULL))
     fprintf(stderr, "%s: %s: %s: syntax error: unexpected token \"%s\"\n",
-            shname, geterrline(ln), fn, errtok(wrong));
+            SHARGV0, geterrline(ln), fn, errtok(wrong));
   else
     fprintf(stderr, "%s: syntax error: unexpected token \"%s\"\n",
-            shname, errtok(wrong));
+            SHARGV0, errtok(wrong));
   LSTATUS = 2;
   return NULL;
 }
@@ -832,10 +850,10 @@ synexpected(int ln, sh_tok wrong, token t)
 
   if ((fn = shinpt ? shinpt->name : NULL))
     fprintf(stderr, "%s: %s: %s: syntax error:  found \"%s\" expected \"%s\"\n",
-            shname, geterrline(ln), fn, errtok(wrong), tokstr(t));
+            SHARGV0, geterrline(ln), fn, errtok(wrong), tokstr(t));
   else
     fprintf(stderr, "%s: syntax error: found \"%s\" expected \"%s\"\n",
-            shname, errtok(wrong), tokstr(t));
+            SHARGV0, errtok(wrong), tokstr(t));
   LSTATUS = 2;
   return NULL;
 }
@@ -848,10 +866,10 @@ syntxerr(int ln, char *msg, token t)
 
   if ((fn = shinpt ? shinpt->name : NULL))
     fprintf(stderr, "%s: %s: %s: syntax error: %s \"%s\"\n",
-            shname, geterrline(ln), fn, msg, tokstr(t));
+            SHARGV0, geterrline(ln), fn, msg, tokstr(t));
   else
     fprintf(stderr, "%s: syntax error: %s \"%s\"\n",
-            shname, msg, tokstr(t));
+            SHARGV0, msg, tokstr(t));
   LSTATUS = 2;
   return NULL;
 }

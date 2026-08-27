@@ -15,7 +15,7 @@ struct strpush {
     char *saved_nchar;
     size_t saved_nleft;
     int saved_unget;
-    unsigned char saved_ungetbuf[2];
+    int saved_ungetbuf[2];
     int alias;
 };
 
@@ -26,7 +26,7 @@ struct shinput {
   char *name;       /* current filename */
   size_t nleft;     /* Remaining chars in buf */
   int unget;        /* number to pushback */
-  char ungetbuf[2]; /* Small pushback buffer */
+  int ungetbuf[2]; /* Small pushback buffer */
   char *buf;        /* The raw read buffer */
   shinput *prev;    /* Links to previous input */
   int fd;           /* File descriptor for script file input */
@@ -64,11 +64,11 @@ shgetchar(void)
   shinput *in = shinpt;
   if (doexpect(in->unget > 0)) {
     in->unget--;
-    return (unsigned char)in->ungetbuf[shinpt->unget];
+    return in->ungetbuf[shinpt->unget];
   }
   if (doexpect(in->nleft > 0)) {
     in->nleft--;
-    return (unsigned char)*in->nchar++;
+    return *in->nchar++;
   }
   return charfill();
 }

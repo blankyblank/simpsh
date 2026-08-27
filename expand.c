@@ -1,5 +1,6 @@
 /* expand.c - variable/string expandsion logic */
 #define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE
 #include <errno.h>
 #include <limits.h>
 #include <stddef.h>
@@ -23,11 +24,16 @@
 #include "var.h"
 
 char ifschar[256];
+int incmdsub;
+int cmdsubdone;
 #define _INCHLD (1 << 0)
 
+static char *exp_var(const char *name, size_t nlen, size_t *vlen, shvar **vp);
 static int run_cmdsub(const cmd_tree *);
 static char **splitnglob(wf *restrict, size_t *restrict);
-int incmdsub = 0;
+static char **getfield(char **out, size_t *argc, size_t *cap,
+                       char *buf, size_t bpos, int hasglob, size_t *);
+
 
 /** get the pid shell variable */
 #define varpid() (st_strdup(gvar.pid_s))
@@ -85,7 +91,7 @@ get_posparam(int n)
     return SHARGV0 ? SHARGV0 : "";
 
   if (n < 0 || n > SHARGC)
-    return "";
+    return NULL;
   return SHARGV[n - 1] ? SHARGV[n - 1] : "";
 }
 
@@ -120,7 +126,7 @@ run_cmdsub(const cmd_tree *restrict n)
     goto cleanup;
   }
 
-  fflush(shout);
+  fflush_unlocked(shout);
   pid = fork();
   switch (pid) {
     case -1:
@@ -143,9 +149,10 @@ run_cmdsub(const cmd_tree *restrict n)
         signal(SIGTTOU, SIG_DFL);
       }
       incmdsub = 1;
+      predir = NULL;
       LSTATUS = run_commands(n, _INCHLD);
       incmdsub = 0;
-      fflush(NULL);
+      fflush_unlocked(NULL);
       _exit(LSTATUS);
     default:
       {
@@ -205,6 +212,7 @@ run_cmdsub(const cmd_tree *restrict n)
         do {
           r = waitpid(pid, &wstatus, 0);
         } while (r < 0 && errno == EINTR);
+        cmdsubdone = 1;
         if (r > 0)
           LSTATUS = WIFEXITED(wstatus) ? WEXITSTATUS(wstatus) : 1;
         else
@@ -315,6 +323,10 @@ splitnglob(wf *f, size_t * restrict tlen)
         bpos += cf->len;
         epos += escput(ebuf + epos, cf->word, cf->len, 1);
       }
+      if ((cf->flags & WFAT) && cf->next && (cf->next->flags & WFAT)) {
+        out = getfield(out, &argc, &cap, buf, bpos, hasglob, &ttl);
+        epos = bpos = hasglob = 0;
+      }
       cf = cf->next;
       fpos = 0;
       continue;
@@ -366,27 +378,7 @@ splitnglob(wf *f, size_t * restrict tlen)
           continue;
         case M_IFSWS:
           if (bpos > 0) {
-            buf[bpos] = '\0';
-            if (hasglob && !fflag) {
-              char **match = NULL;
-              int mc = globexpand(buf, &match);
-              if (mc > 0) {
-                if (argc + mc > cap) {
-                  while (argc + mc > cap)
-                    cap *= 2;
-                  streallocar(out, cap, argc, char *);
-                }
-                for (int k = 0; k < mc; k++)
-                  out[argc++] = match[k];
-              } else {
-                chk_cap(argc, cap, out, char *);
-                out[argc++] = st_strndup(buf, bpos);
-              }
-            } else {
-              chk_cap(argc, cap, out, char *);
-              out[argc++] = st_strndup(buf, bpos);
-            }
-            ttl += bpos;
+            out = getfield(out, &argc, &cap, buf, bpos, hasglob, &ttl);
             bpos = 0;
             hasglob = 0;
           }
@@ -394,27 +386,7 @@ splitnglob(wf *f, size_t * restrict tlen)
           sz = fpos;
           continue;
         case M_IFSN:
-          buf[bpos] = '\0';
-          if (hasglob && !fflag) {
-            char **match = NULL;
-            int mc = globexpand(buf, &match);
-            if (mc > 0) {
-              if (argc + mc > cap) {
-                while (argc + mc > cap)
-                  cap *= 2;
-                streallocar(out, cap, argc, char *);
-              }
-              for (int k = 0; k < mc; k++)
-                out[argc++] = match[k];
-            } else {
-              chk_cap(argc, cap, out, char *);
-              out[argc++] = st_strndup(buf, bpos);
-            }
-          } else {
-            chk_cap(argc, cap, out, char *);
-            out[argc++] = st_strndup(buf, bpos);
-          }
-          ttl += bpos;
+          out = getfield(out, &argc, &cap, buf, bpos, hasglob, &ttl);
           epos = bpos = hasglob = 0;
           fpos++;
           sz = fpos;
@@ -436,35 +408,43 @@ splitnglob(wf *f, size_t * restrict tlen)
     fpos = 0;
   }
   if (bpos > 0) {
-    buf[bpos] = '\0';
-    if (hasglob && !fflag) {
-      char **match = NULL;
-      int mc = globexpand(buf, &match);
-      if (mc > 0) {
-        if (argc + mc > cap) {
-          while (argc + mc > cap)
-            cap *= 2;
-          streallocar(out, cap, argc, char *);
-        }
-        for (int k = 0; k < mc; k++)
-          out[argc++] = match[k];
-      } else {
-        chk_cap(argc, cap, out, char *);
-        out[argc++] = st_strndup(buf, bpos);
-      }
-    } else {
-      chk_cap(argc, cap, out, char *);
-      out[argc++] = st_strndup(buf, bpos);
-    }
-    ttl += bpos;
+    out = getfield(out, &argc, &cap, buf, bpos, hasglob, &ttl);
   } else if (empty) {
     chk_cap(argc, cap, out, char *);
     out[argc++] = st_strndup("", 0);
-    ttl += 0;
+    // ttl += 0;
   }
   if (tlen)
     *tlen = ttl;
   out[argc] = NULL;
+  return out;
+}
+
+static char **
+getfield(char **out, size_t *argc, size_t *cap,
+         char *buf, size_t bpos, int hasglob, size_t *ttl)
+{
+  buf[bpos] = '\0';
+  if (hasglob && !fflag) {
+    char **match = NULL;
+    int mc = globexpand(buf, &match);
+    if (mc > 0) {
+      if (*argc + mc > *cap) {
+        while (*argc + mc > *cap)
+          *cap *= 2;
+        streallocar(out, *cap, *argc, char *);
+      }
+      for (int k = 0; k < mc; k++)
+        out[(*argc)++] = match[k];
+    } else {
+      chk_cap(*argc, *cap, out, char *);
+      out[(*argc)++] = st_strndup(buf, bpos);
+    }
+  } else {
+    chk_cap(*argc, *cap, out, char *);
+    out[(*argc)++] = st_strndup(buf, bpos);
+  }
+  *ttl += bpos;
   return out;
 }
 
@@ -516,6 +496,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
     char *val = NULL;
     size_t vlen = 0;
     shvar *v;
+    v = NULL;
     switch (f->qs) {
       case QDOUBLE:
       case QSINGLE:
@@ -569,10 +550,27 @@ exp_word(wf *wordf, size_t * restrict rlen)
       case QCMDSUB:
       case QCMDSUB_DQ:
         {
-          size_t sublen = 0;
-          char *cmdsub;
-          cmdsub = exp_cmdsub(f->word, f->len, &sublen);
-          append_wf(&head, &tail, cmdsub, sublen, f->qs);
+          int sublen;
+          char *cmdsubpos;
+          stmark csmark;
+          cmd_tree *dup;
+
+          if (!f->cmdsub)
+            break;
+          csmark = stack_mark();
+          cmdsubpos = stnext;
+
+          dup = tree_dup(f->cmdsub);
+          if ((sublen = run_cmdsub(dup)) < 0) {
+            free_tree(dup);
+            break;
+          }
+          cmdsubpos = current->buf + (cmdsubpos - csmark.current->buf);
+          free_tree(dup);
+
+          append_wf(&head, &tail, cmdsubpos, sublen,
+                    f->qs == QCMDSUB_DQ ? QDOUBLE : QNONE);
+          len += sublen;
           break;
         }
       case QHEREDOC:
@@ -588,8 +586,10 @@ exp_word(wf *wordf, size_t * restrict rlen)
       case QBRACE_DQ:
         if (f->word[0] == '#') {
           size_t rlen;
-          if ((v = findvar_n(f->word + 1, f->len - 1))) {
-            rlen = strlen(shvar_val(v));
+          if (f->len == 1 ||
+              (f->len == 2 && (f->word[1] == '@' || f->word[1] == '*'))) {
+            vlen = lltoa(SHARGC, buf);
+          } else if ((exp_var(f->word + 1, f->len - 1, &rlen, &v))) {
             vlen = lltoa(rlen, buf);
           } else {
             vlen = 1;
@@ -610,24 +610,28 @@ exp_word(wf *wordf, size_t * restrict rlen)
           } else if ((f->word[j] == '#' || f->word[j] == '%') && j > 0) {
             op = nlen = j;
             break;
+          } else if (j > 0 && (f->word[j] == '-' || f->word[j] == '=' ||
+                               f->word[j] == '?' || f->word[j] == '+')) {
+            op = nlen = j;
+            break;
           }
         }
         if (op > 0) {
           int isnull;
           quoted bqs = f->qs;
           wf *sub = NULL, *marker;
-          v = findvar_n(f->word, nlen);
-          val = v ? shvar_val(v) : NULL;
-          vlen = val ? vallen(v) : 0;
-          isnull = (val == NULL || *val == '\0');
+          val = exp_var(f->word, nlen, &vlen, &v);
+          if (op > 0 && f->word[op - 1] == ':')
+            isnull = (val == NULL || *val == '\0');
+          else
+            isnull = (val == NULL);
 
           /* collect the word part: fragments up to QBRACE_END */
           for (marker = f->next; marker && marker->qs != QBRACE_END;
-               marker = marker->next)
-            ;
+               marker = marker->next) ;
           if (marker && marker != f->next) {
             wf *g, *prev = NULL;
-            for (g = f->next; g != marker; g = g->next) {
+            for (g = f->next; g != marker->next; g = g->next) {
               wf *cp = st_alloc(sizeof(wf));
               memcpy(cp, g, sizeof(wf));
               cp->next = NULL;
@@ -668,7 +672,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
                 wf *subres = exp_word(sub, &vlen);
                 val = subres ? join_wf(subres, 0) : st_strndup("", 0);
                 vlen = val ? strlen(val) : 0;
-                name = st_strndup(f->word, op - 1);
+                name = st_strndup(f->word, nlen);
                 setvar(name, val, 0);
               }
               break;
@@ -819,32 +823,23 @@ exp_word(wf *wordf, size_t * restrict rlen)
       /* falls through */
       case QVAR:
       case QVAR_DQ:
-        if (f->len == 1) {
-          switch (f->word[0]) {
-            case '$':
-              val = varpid();
-              vlen = strlen(val);
-              break;
-            case '?':
-              val = varstatus(&vlen);
-              break;
-            case '!':
-              val = varbgpid();
-              vlen = strlen(val);
-              break;
-            case '-':
-              val = vardash(&vlen);
-              break;
-            case '#':
-              vlen = lltoa(SHARGC, buf);
-              val = st_strndup(buf, vlen);
-              break;
-            default:
-              break;
-          }
-        }
-
         if (f->len == 1 && (f->word[0] == '*' || f->word[0] == '@')) {
+          if (f->word[0] == '@' && (f->qs & (QVAR_DQ | QBRACE_DQ))) {
+            for (size_t j = 1; j <= (size_t)SHARGC; j++) {
+              char *p;
+              size_t l;
+
+              p = get_posparam(j);
+              l = p ? strlen(p) : 0;
+              append_wf(&head, &tail, p ? p : "", l, QDOUBLE);
+              tail->flags |= WFAT;
+              len += l;
+            }
+            if (!head)
+              goto append;
+            goto fin;
+          }
+
           size_t total = 0, j;
           int ifsc = ' ';
           char *s, *p;
@@ -869,24 +864,16 @@ exp_word(wf *wordf, size_t * restrict rlen)
           vlen = total;
           goto append;
         }
-        if (is_posparam(f->word, f->len)) {
-          size_t n = 0;
-          for (size_t i = 0; i < f->len; i++)
-            n = n * 10 + (f->word[i] - '0');
-          val = get_posparam(n);
-          vlen = val ? strlen(val) : 0;
+
+        if ((val = exp_var(f->word, f->len, &vlen, &v)))
           goto append;
-        }
-        v = findvar_n(f->word, f->len);
-        if (v) {
-          val = shvar_val(v);
-          vlen = vallen(v);
-        } else if (uflag && f->len > 0) {
-          char name[64];
+        if (uflag && f->len > 0) {
+          char name[256];
           nmemcpy(name, f->word, f->len);
           UFLAGMSG(name);
           gstate.nounseterr = 1;
         }
+
 append:
         if (val) {
           int qs = (f->qs == QVAR || f->qs == QBRACE) ? QNONE : f->qs;
@@ -897,6 +884,7 @@ append:
           append_wf(&head, &tail, "", 0, qs);
           len += val ? vlen : 0;
         }
+fin:
         break;
     }
   }
@@ -925,7 +913,7 @@ expand_argv(wf **args, size_t *restrict t)
       *t += w->len;
       continue;
     }
-    if (SHARGC && w->len == 1 && (w->word[0] == '@' || w->word[0] == '*') &&
+    if (w->len == 1 && !w->next && (w->word[0] == '@' || w->word[0] == '*') &&
         (w->qs & (QVAR | QVAR_DQ | QBRACE | QBRACE_DQ))) {
       if (w->word[0] == '@' && (w->qs & (QVAR_DQ | QBRACE_DQ))) {
         for (int j = 1; j <= SHARGC; j++) {
@@ -1083,6 +1071,7 @@ expand_ps1(char *p)
   size_t i, varlen, cbrace, flen;
   char *s, *val = NULL;
   static char f[4096], vcpy[256];
+  shvar *v;
 
   if (!p)
     return NULL;
@@ -1127,43 +1116,8 @@ expand_ps1(char *p)
       }
 
       size_t vlen = 0;
-      if (vcpy[0] == '$' && vcpy[1]) {
-        switch (vcpy[1]) {
-          case '$':
-            val = varpid();
-            vlen = strlen(val);
-            break;
-          case '?':
-            val = varstatus(&vlen);
-            break;
-          case '!':
-            val = varbgpid();
-            vlen = strlen(val);
-            break;
-          case '-':
-            val = vardash(&vlen);
-            break;
-          case '#':
-            {
-              char buf[16];
-              vlen = lltoa(SHARGC, buf);
-              val = buf;
-              break;
-            }
-          default:
-            if (isdigit_(vcpy[1])) {
-              int n = atoi(vcpy + 1);
-              val = get_posparam(n);
-              vlen = val ? strlen(val) : 0;
-            } else {
-              shvar *v = findvar_n(vcpy + 1, strlen(vcpy + 1));
-              if (v) {
-                val = shvar_val(v);
-                vlen = vallen(v);
-              }
-            }
-        }
-      }
+      if (vcpy[0] == '$' && vcpy[1])
+        val = exp_var(vcpy + 1, strlen(vcpy + 1), &vlen, &v);
 
       if (val) {
         for (s = val; *s; s++) {
@@ -1188,5 +1142,49 @@ done:
   s = st_alloc(flen + 1);
   memcpy(s, f, flen + 1);
   return s;
+}
+
+static char *
+exp_var(const char *name, size_t nlen, size_t *vlen, shvar **vp)
+{
+  char *val;
+
+  *vp = NULL;
+  if (nlen == 1) {
+    switch (name[0]) {
+      case '$':
+        val = varpid();
+        *vlen = strlen(val);
+        return val;
+      case '?':
+        return varstatus(vlen);
+      case '!':
+        val = varbgpid();
+        *vlen = strlen(val);
+        return val;
+      case '-':
+        return vardash(vlen);
+      case '#':
+        {
+          char buf[16];
+          *vlen = lltoa(SHARGC, buf);
+          return st_strndup(buf, *vlen);
+        }
+    }
+  }
+  if (is_posparam(name, nlen)) {
+    size_t n = 0;
+    for (size_t i = 0; i < nlen; i++)
+      n = n * 10 + (name[i] - '0');
+    val = get_posparam(n);
+    *vlen = val ? strlen(val) : 0;
+    return val;
+  }
+  if ((*vp = findvar_n(name, nlen))) {
+    val = shvar_val(*vp);
+    *vlen = val ? vallen(*vp) : 0;
+    return val;
+  }
+  return NULL;
 }
 

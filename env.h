@@ -49,7 +49,7 @@ redirdup(redir *s)
   n->name = wfdup(s->name);
   n->type = s->type;
   n->next = redirdup(s->next);
-  n->heredoc = NULL;
+  n->heredoc = s->heredoc ? strdup_(s->heredoc) : NULL;
   n->heredoc_next = NULL;
   return n;
 }

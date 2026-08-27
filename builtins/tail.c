@@ -1,6 +1,7 @@
 #include "config.h"
 #if ENABLE_TAIL
 #define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE
 
 #include <sys/stat.h>
 #include <stdio.h>
@@ -26,10 +27,13 @@ struct tinfo {
   ino_t ino;
 };
 
+const char *tailn = "tail";
+static int pls;
+
+
 FILE *fline(int n, char *f);
 int ftail(int, char **, size_t);
 int sttail(int);
-const char *tailn = "tail";
 
 static inline void
 shsleep(unsigned ms)
@@ -42,10 +46,12 @@ shsleep(unsigned ms)
 int
 tailcmd(char *argv[])
 {
-  int ln = -1, f_flag = 0;
+  int ln, f_flag;
   size_t argc = 0;
   char *file;
 
+  ln = -1;
+  f_flag = pls = 0;
   array_len(argv, argc);
   ARGBEGIN
   {
@@ -56,6 +62,8 @@ tailcmd(char *argv[])
     case 'n':
       if (!(arg = EARGF(usage(argv0, helpmsgs[TAILH].usage))))
         return 1;
+      if (*arg == '+')
+        pls = 1, arg++;
       ln = bltin_atoi(arg, argv0, "requires a number");
       break;
 ARGNUM:
@@ -65,6 +73,12 @@ ARGNUM:
       return bad_opt(argv0, ARGC());
   }
   ARGEND
+
+  if (argv[0] && **argv == '+' && (*argv)[1] &&  isdigit_((*argv)[1])) {
+    pls = 1;
+    ln = bltin_atoi((*argv) + 1, argv0, "requires a number");
+    argv++, argc--;
+  }
 
   if (ln < 0)
     ln = 10;
@@ -109,6 +123,30 @@ fline(int ln, char *file)
   fseek(fp, 0, SEEK_END);
   pos = ftell(fp);
 
+  if (pls) {
+    int need, seen;
+    long fpos, lp;
+    size_t got;
+
+    need = (ln > 1) ? ln -1 : 0;
+    seen = fpos = lp = 0;
+
+    fseek(fp, 0, SEEK_SET);
+    while (seen < need && fpos < pos) {
+      size_t chunk;
+      chunk = min(BUFSIZ, (size_t)(pos - fpos));
+      fseek(fp, fpos, SEEK_SET);
+      got = fread(buf, 1, chunk, fp);
+      for (size_t i = 0; i < got && seen < need; i++)
+        if (buf[i] == '\n')
+          seen++, lp = fpos + i + 1;
+      fpos += got;
+      if (!got)
+        break;
+    }
+    fseek(fp, (seen < need) ? pos : lp, SEEK_SET);
+    return fp;
+  }
   if (pos > 0) {
     fseek(fp, -1, SEEK_END);
     if (fgetc(fp) == '\n')
@@ -185,7 +223,7 @@ ftail(int ln, char **files, size_t argc)
           fwrite(buf, 1, n, shout);
         }
         fe[i].pos = ftell(fp);
-        fflush(shout);
+        fflush_unlocked(shout);
         if (ferror(fp))
           return 1;
       }
@@ -198,13 +236,40 @@ ftail(int ln, char **files, size_t argc)
   return 0;
 }
 
+static int
+sttail_beg(int ln)
+{
+  int need, c;
+  char buf[BUFSIZ];
+  size_t n;
+
+  n = c = 0;
+  need = (ln > 1) ? ln - 1 : 0;
+
+  while (need > 0) {
+    c = fgetc(shin);
+    if (c == EOF)
+      return 0;
+    if (c == '\n')
+      need--;
+  }
+  while ((n = fread(buf, 1, sizeof(buf), shin)) > 0)
+    fwrite(buf, 1, n, shout);
+  if (ferror(shin))
+    return sherr(1, tailn, "Bad file descriptor");
+  return 0;
+}
+
 int
 sttail(int ln)
 {
-  int s, c = 0, cnt = 0, n = 0;
-  size_t off = 0;
+  int s, c, cnt, n;
+  size_t off;
   char *rng[ln], buf[BUFSIZ];
 
+  off = c = cnt = n = 0;
+  if (pls)
+    return sttail_beg(ln);
   for (int in = 0; in < ln; ++in)
     rng[in] = NULL;
   while ((n = fread(buf + off, 1, sizeof(buf) - off, shin)) > 0) {

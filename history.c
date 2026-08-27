@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE
 
 #include <err.h>
 #include <limits.h>
@@ -29,6 +30,8 @@ int histsize;
 int histcnt;
 int histcur;
 int histnum;
+
+static const char shname[] = "simpsh";
 #define HISTDIR ".local/state/simpsh"
 #define HISTLOC "/.local/state/simpsh/simpsh_history"
 
@@ -452,7 +455,7 @@ fccmd(char **argv)
         fputc('\n', tmp);
       }
 
-    fflush(tmp);
+    fflush_unlocked(tmp);
     switch (pid = fork()) {
       case -1:
         err = 1;

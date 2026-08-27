@@ -20,7 +20,6 @@
 #include "simpsh.h"
 #include "var.h"
 
-const char shname[] = "simpsh";
 const char shusg[43] = "[-abCefhiImnosvVx] [-o longopt] [-c 'cmd']";
 const char defpathn[80] = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 GSTATE gstate = { .shparm.optind = 1, .shparm.optoff = -1 };
@@ -79,7 +78,7 @@ main(int argc, char **argv)
       nflag = 1;
       break;
     case 'o':
-      oarg = EARGF(usage(shname, shusg));
+      oarg = EARGF(usage(SHARGV0, shusg));
       i = chkopt(oarg);
       if (i >= 0)
         SETSHOPT(i);

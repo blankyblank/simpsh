@@ -16,15 +16,16 @@
 #include "simd.h"
 #include "utils.h"
 
-wf *wf_chunk = NULL;
-static wf *head = NULL;
-static wf *tail = NULL;
-static int wfredir = 0;
+wf *wf_chunk;
+static wf *head;
+static wf *tail;
+static int wfredir;
 static size_t wflen;
-unsigned int wf_chunk_left = 0;
-int alias_depth = 0;
-int notclosed = 0;
-int chkwd = 0;
+static int btdepth;
+unsigned int wf_chunk_left;
+int alias_depth;
+int notclosed;
+int chkwd;
 
 #define CTX_MAX     8
 /* current context */
@@ -173,9 +174,9 @@ static void skipcomment(void);
 static inline int
 eatbnl(void)
 {
-  char c, n;
+  int c, n;
 
-  while ((c = (char)shgetchar()) == '\\') {
+  while ((c = shgetchar()) == '\\') {
     if ((n = shgetchar()) == '\n') {
       shinpt->linenum++;
       continue;
@@ -250,6 +251,7 @@ get_wf(int c)
       if (stleft < 32)
         grow_stack(32);
       while (nchars[(unsigned char)c] == C_WORD) {
+        stcheck(32);
         *(unsigned char *)stnext++ = c, stleft--;
         wflen++;
         c = eatbnl();
@@ -308,6 +310,11 @@ get_wf(int c)
           break;
         }
       case C_BTICK:
+        if (btdepth > 0) {
+          flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
+          shungetc(c);
+          goto done;
+        }
         c = lexbtick();
         if (c == SHEOF)
           goto done;
@@ -320,13 +327,17 @@ get_wf(int c)
           append_wf(&head, &tail, grab_str(0), 0, QBRACE_END);
           break;
         }
+        if (cctx == M_NORMAL) {
+          st_putc(c);
+          wflen++;
+          break;
+        }
         /* falls through */
       case C_AMP:
       case C_PIPE:
       case C_SEMI:
       case C_LP:
       case C_RP:
-      case C_LB:
       case C_LT:
       case C_GT:
         if ((c == '<' || c == '>') && wflen > 0 && cctx == M_NORMAL) {
@@ -370,7 +381,7 @@ done:
   if (wflen) { /* clang-format off */
     w = grab_str(wflen);
     append_wf(&head, &tail, w, wflen, (cctx == M_SQUOTE) ? QSINGLE : (cctx == M_DQUOTE) ? QDOUBLE : QNONE);
-  } else if (!notclosed) {
+  } else if (!head && !notclosed) {
     w = grab_str(0);
     append_wf(&head, &tail, w, 0, (cctx == M_SQUOTE) ? QSINGLE : (cctx == M_DQUOTE) ? QDOUBLE : QNONE);
   }
@@ -439,6 +450,12 @@ tokenize(void)
         }
         if (n != SHEOF)
           shungetc(n);
+      /* falls through */
+      case C_BTICK:
+        if (btdepth > 0) {
+          btdepth--;
+          return SHTOK(TBTICK);
+        }
       /* falls through */
       default:
         f = get_wf(c);
@@ -589,75 +606,118 @@ lexbslash(int c)
 static int
 lexcmdsub(void)
 {
-  /* $() */
-  int cmdsubd = 1, c;
-  size_t cmdlen;
-  int cstate;
-  char *w;
-  cstate = 0;
-  cmdlen = 0;
+  wf *svhead, *svtail, *f;
+  size_t svwflen;
+  int svctx, svbt, svcctx, svlinenum;
+  cmd_tree *n;
+
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
 
-  stcheck(32);
-  for (int ch = shgetchar();; ch = shgetchar()) {
-    if (ch == SHEOF) {
-      notclosed = 1;
-      return SHEOF;
-    }
-    stcheck(32);
-    switch (cstate) {
-      qescape(ch)
-    }
-    switch (ch) {
-      case '\'':
-        cstate |= insq;
-        stcheck(32);
-        st_putc(ch);
-        cmdlen++;
-        break;
-      case '"':
-        stcheck(32);
-        st_putc(ch);
-        cmdlen++;
-        cstate |= indq;
-        break;
-      case '\\':
-        cstate |= esc;
-        stcheck(32);
-        st_putc(ch);
-        cmdlen++;
-        break;
-      case '(':
-        stcheck(32);
-        st_putc(ch);
-        cmdlen++;
-        cmdsubd++;
-        break;
-      case ')':
-        cmdsubd--;
-        if (!cmdsubd) {
-          goto end;
-        }
-        stcheck(32);
-        st_putc(ch);
-        cmdlen++;
-        break;
-      default:
-        stcheck(32);
-        st_putc(ch);
-        cmdlen++;
-        break;
-    }
-  }
-end:
-  w = grab_str(cmdlen);
-  append_wf(&head, &tail, w, cmdlen, (cctx == M_DQUOTE) ? QCMDSUB_DQ : QCMDSUB);
-  if ((c = eatbnl()) == SHEOF) {
-    if (cctx != M_NORMAL)
-      notclosed = 1;
+  svhead = head;
+  svtail = tail;
+  svwflen = wflen;
+  svctx = ctx_depth;
+  svcctx = cctx;
+  svbt = btdepth;
+  svlinenum = shinpt->linenum;
+
+  head = NULL;
+  tail = NULL;
+  wflen = 0;
+  ctx_depth = btdepth = 0;
+
+  n = parse_list(1);
+  if (tbuf.type != TRP) {
+    notclosed = 1;
+    head = svhead;
+    tail = svtail;
+    wflen = svwflen;
+    ctx_depth = svctx;
+    cctx = svcctx;
+    btdepth = svbt;
+    shinpt->linenum = svlinenum;
     return SHEOF;
   }
-  shungetc(c);
+
+  f = wfalloc();
+  f->cmdsub = n;
+  f->qs = (svcctx == M_DQUOTE) ? QCMDSUB_DQ : QCMDSUB;
+  f->len = 0;
+  f->next = NULL;
+  f->flags = 0;
+
+  head = svhead;
+  tail = svtail;
+  wflen = svwflen;
+  ctx_depth = svctx;
+  cctx = svcctx;
+  btdepth = svbt;
+  shinpt->linenum = svlinenum;
+  if (head)
+    tail->next = f;
+  else
+    head = f;
+  tail = f;
+
+  return 0;
+}
+
+static int
+lexbtick(void)
+{
+  wf *svhead, *svtail, *f;
+  size_t svwflen;
+  int svctx, svbt, svcctx, svlinenum;
+  cmd_tree *n;
+
+  flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
+
+  svhead = head;
+  svtail = tail;
+  svwflen = wflen;
+  svctx = ctx_depth;
+  svcctx = cctx;
+  svlinenum = shinpt->linenum;
+
+  head = NULL;
+  tail = NULL;
+  wflen = 0;
+  ctx_depth = 0;
+
+  svbt = btdepth;
+  btdepth = 1;
+  n = parse_list(1);
+  btdepth = svbt;
+
+  if (tbuf.type != TBTICK) {
+    notclosed = 1;
+    head = svhead;
+    tail = svtail;
+    wflen = svwflen;
+    ctx_depth = svctx;
+    cctx = svcctx;
+    shinpt->linenum = svlinenum;
+    return SHEOF;
+  }
+  f = wfalloc();
+  f->cmdsub = n;
+  f->qs = (svcctx == M_DQUOTE) ? QCMDSUB_DQ : QCMDSUB;
+  f->len = 0;
+  f->next = NULL;
+  f->flags = 0;
+
+  head = svhead;
+  tail = svtail;
+  wflen = svwflen;
+  ctx_depth = svctx;
+  cctx = svcctx;
+  shinpt->linenum = svlinenum;
+  if (head)
+    tail->next = f;
+  else
+    head = f;
+  tail = f;
+
   return 0;
 }
 
@@ -953,63 +1013,6 @@ lexsquote(void)
     popctx();
   else
     pshctx(M_SQUOTE);
-}
-
-static int
-lexbtick(void)
-{
-  /* `cmd`*/
-  int cstate;
-  size_t cmdlen;
-  int c;
-  char *w;
-
-  cstate = 0;
-  cmdlen = 0;
-  flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
-  stcheck(32);
-  for (int ch = shgetchar();; ch = shgetchar()) {
-    if (ch == SHEOF) {
-      notclosed = 1;
-      return SHEOF;
-    }
-    switch (cstate) {
-      qescape(ch)
-    }
-    switch (ch) {
-      case '\'':
-        cstate |= insq;
-        st_putc(ch);
-        cmdlen++;
-        break;
-      case '"':
-        st_putc(ch);
-        cmdlen++;
-        cstate |= indq;
-        break;
-      case '\\':
-        cstate |= esc;
-        st_putc(ch);
-        cmdlen++;
-        break;
-      case '`':
-        goto cmdsubend;
-      default:
-        st_putc(ch);
-        cmdlen++;
-        break;
-    }
-  }
-cmdsubend:
-  w = grab_str(cmdlen);
-  append_wf(&head, &tail, w, cmdlen, (cctx == M_DQUOTE) ? QCMDSUB_DQ : QCMDSUB);
-  if ((c = eatbnl()) == SHEOF) {
-    if (cctx != M_NORMAL)
-      notclosed = 1;
-    return SHEOF;
-  }
-  shungetc(c);
-  return 0;
 }
 
 wf *

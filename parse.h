@@ -16,7 +16,6 @@ struct redir {
 
 typedef struct clause clause;
 
-typedef struct cmd_tree cmd_tree;
 /* AST node for commands */
 struct cmd_tree {
   cmd_tree *left;

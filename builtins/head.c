@@ -9,19 +9,41 @@
 #include "utils.h"
 #include "errmsg.h"
 
+static inline void
+headbytc(lr_t *lr, int n)
+{
+  char buf[BUFSIZ];
+  while (n > 0) {
+    size_t r;
+    r = fread(buf, 1, (size_t)n < sizeof(buf) ? (size_t)n : sizeof(buf), lr->fp);
+    if (!r)
+      break;
+    fwrite(buf, 1, r, shout);
+    n -= (int)r;
+  }
+}
+
 int
 headcmd(char *argv[])
 {
-  int svln, ln = 10, status = 0;
+  int cfl, svln, ln, status;
   char *f;
-  size_t argc = 0;
+  size_t argc;
   lr_t lr;
   stmark hm;
 
+  ln = 10;
+  argc = cfl = status = 0;
   array_len(argv, argc);
   ARGBEGIN
   {
     char *arg;
+    case 'c':
+      if (!(arg = EARGF(usage(argv0, helpmsgs[HEADH].usage))))
+        return 1;
+      ln = bltin_atoi(arg, argv0, "requires a number");
+      cfl = 1;
+      break;
     case 'n':
       if (!(arg = EARGF(usage(argv0, helpmsgs[HEADH].usage))))
         return 1;
@@ -52,15 +74,19 @@ ARGNUM:
       }
       if (argc > 1)
         fprintf(shout,"%s==> %s <==\n", (i > 0) ? "\n" : "", f);
-      while (ln > 0) {
-        char *line;
-        size_t len;
-        if (!(line = lrread(&lr, &len)))
-          break;
-        fwrite(line, 1, len, shout);
-        fputc('\n', shout);
-        ln--;
-        stack_restore(hm);
+      if (cfl) {
+        headbytc(&lr, ln);
+      } else {
+        while (ln > 0) {
+          char *line;
+          size_t len;
+          if (!(line = lrread(&lr, &len)))
+            break;
+          fwrite(line, 1, len, shout);
+          fputc('\n', shout);
+          ln--;
+          stack_restore(hm);
+        }
       }
       fclose(fp);
     }
@@ -71,6 +97,10 @@ ARGNUM:
   lr.fp = shin;
   lr.pos = lr.end = 0;
   hm = stack_mark();
+  if (cfl) {
+    headbytc(&lr, ln);
+    return status;
+  }
   while (ln > 0) {
     char *line;
     size_t len;

@@ -29,7 +29,10 @@ wfdup(wf *s)
   if (!s)
     return NULL;
   n = salloc(sizeof(wf));
-  n->word = strndup_(s->word, s->len);
+  if (s->qs == QCMDSUB || s->qs == QCMDSUB_DQ)
+    n->cmdsub = s->cmdsub ? tree_dup(s->cmdsub) : NULL;
+  else
+    n->word = strndup_(s->word, s->len);
   n->len = s->len;
   n->qs = s->qs;
   n->next = wfdup(s->next);
@@ -71,6 +74,7 @@ tree_dup(cmd_tree *s)
     return NULL;
   n->type = s->type;
   n->flags = s->flags;
+  n->left = n->right = NULL;
 
   switch (n->type) {
     case OP:
@@ -160,7 +164,10 @@ free_wf(wf *f)
 {
   if (!f)
     return;
-  sfree(f->word);
+  if (f->qs == QCMDSUB || f->qs == QCMDSUB_DQ)
+    free_tree(f->cmdsub);
+  else
+    sfree(f->word);
   free_wf(f->next);
   sfree(f);
 }
@@ -173,6 +180,8 @@ free_redir(redir *r)
     tmp = r;
     r = r->next;
     free_wf(tmp->name);
+    if (tmp->heredoc)
+      sfree(tmp->heredoc);
     sfree(tmp);
   }
   return;

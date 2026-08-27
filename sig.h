@@ -11,8 +11,12 @@
 
 #define EVMAX 16
 #ifndef NSIG
-  #define NSIG 64
-#endif /* NSIG */
+  #ifdef _NSIG
+    #define NSIG _NSIG
+  #else
+    #define NSIG 64
+  #endif
+#endif
 #define signal(sig, handler) __signal(sig, handler)
 
 typedef struct {

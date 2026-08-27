@@ -48,7 +48,7 @@ sherrx(int r, const char *msg)
 int
 shwarn(const char *str, const char *msg)
 {
-  fprintf(stderr, "%s: %s: %s\n", shname, str, msg);
+  fprintf(stderr, "%s: %s: %s\n", SHARGV0, str, msg);
   return 1;
 }
 
@@ -56,13 +56,16 @@ shwarn(const char *str, const char *msg)
 int
 shwarn_arg(char *str, const char *arg, const char *msg)
 {
-  fprintf(stderr, "%s: %s: %s: %s\n", shname, str, arg, msg);
+  fprintf(stderr, "%s: %s: %s: %s\n", SHARGV0, str, arg, msg);
   return 1;
 }
 
 static const char caseusg[] = "WORD in [PATTERN [| PATTERN]) COMMANDS ;;] ... esac";
 static const char execusg[] = "[redirection] [command [arg]]";
 static const char forusg[] = "NAME [in WORDS ...] ; do COMMANDs; done";
+#if ENABLE_HEAD
+static const char headusg[] = "[-n count] [-c bytes] [file ...]";
+#endif /* ENABLE_HEAD */
 static const char ifusg[] = "COMMANDS; then COMMANDS; [elif COMMANDS; then COMMANDS;]... [else COMMANDS;] fi";
 static const char killusg[] = "[ -s sigspec | -signum | -signame ] [ pid | job ] ... or \n" " kill -l [exitstatus]...";
 static const char setusg[] = "[-abCefhiImnsuvVx] [-o option] [-- args]";
@@ -790,7 +793,7 @@ static const char headhelp[] =
   "\n"
   "    Print the first lines of files.\n"
   "\n"
-  "    Writes the first COUNT (default 10) lines of each FILE to\n"
+  "    Writes the first COUNT (default 10) lines (or bytes) of each FILE to\n"
   "    stdout. If no FILE is given, reads from stdin.\n"
   "\n"
   "Exit Status:\n"
@@ -909,13 +912,15 @@ static const char sorthelp[] =
 
 #if ENABLE_TAIL
 static const char tailhelp[] =
-  "tail [-f] [-n count] [file ...]\n"
+  "tail [-f] [-n [+]count] [file ...]\n"
   "\n"
   "    Print the last lines of files.\n"
   "\n"
   "    Writes the last COUNT (default 10) lines of each FILE to\n"
-  "    stdout. With -f, follows new data as it is appended. If no\n"
-  "    FILE is given, reads from stdin.\n"
+  "    stdout. A count prefixed with '+', or the obsolete +NUM form,\n"
+  "    starts printing at line NUM from the start of the file instead.\n"
+  "    With -f, follows new data as it is appended. If no FILE is\n"
+  "    given, reads from stdin.\n"
   "\n"
   "Exit Status:\n"
   "    Returns 0 on success, 1 on error.";
@@ -1117,7 +1122,7 @@ const builtinhelp helpmsgs[] = {
   [FOLDH] =     { "fold",     "[OPTION]... [FILE]...",  foldhelp        },
 #endif
 #if ENABLE_HEAD
-  [HEADH] =     { "head",     "[-n count] [file ...]",  headhelp        },
+  [HEADH] =     { "head",     headusg,                  headhelp        },
 #endif
 #if ENABLE_PASTE
   [PASTEH] =    { "paste",   "[OPTION]... [FILE]...",   pastehelp       },

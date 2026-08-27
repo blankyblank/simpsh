@@ -12,6 +12,7 @@ typedef struct {
 
 extern char ifschar[256];
 extern int incmdsub;
+extern int cmdsubdone;
 
 extern char *exp_tilde(char *restrict, size_t, size_t *restrict, size_t *restrict);
 extern char *homedir(char *);

@@ -1,5 +1,6 @@
 /* simpsh.c - functions for running the shell */
 #define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -241,7 +242,7 @@ simpsh_run(void)
     }
     if (!nflag)
       run_commands(c, 0);
-    fflush(shout);
+    fflush_unlocked(shout);
     if (RETNOW) {
       RETNOW = 0;
       stack_restore(mark);
@@ -592,7 +593,7 @@ _lineread_(int ps1)
     addeventloop(&el, STDIN_FILENO, POLLIN, stdin_cb, NULL);
     prompt = update_prompt(ps1);
     fputs(prompt, shout);
-    fflush(shout);
+    fflush_unlocked(shout);
     nxtline = NULL;
     el.running = 1;
     while (el.running) {
@@ -601,7 +602,7 @@ _lineread_(int ps1)
         intsig = 0;
         putchar('\n');
         fputs(prompt, shout);
-        fflush(shout);
+        fflush_unlocked(shout);
         nxtline = NULL;
         el.running = 1;
         continue;

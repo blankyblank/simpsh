@@ -1,5 +1,6 @@
 /* exec.c - functions surrounding running external programs or builtins */
 #define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE
 #include <errno.h>
 #include <fcntl.h>
 #include <spawn.h>
@@ -52,7 +53,9 @@ static const struct redirtable redir_tab[] = {
   [RDAPP] = { O_WRONLY | O_CREAT | O_APPEND, OPENRW },
   [RDRW] = { O_RDWR | O_CREAT, OPENRW },
 };
-redir *predir = NULL;
+
+redir *predir;
+static int errsafe;
 
 static char *bg_cmd(const cmd_tree *);
 static pid_t forkrun(int);
@@ -337,6 +340,7 @@ forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
     posix_spawnattr_setpgroup(&attr, 0);
     posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
   }
+  fflush_unlocked(NULL);
   err = posix_spawn(&pid, path, NULL, &attr, argv, env);
   posix_spawnattr_destroy(&attr);
   signal(SIGQUIT, oldquit);
@@ -363,6 +367,7 @@ forkrun(int bg)
 {
   pid_t pid;
 
+  fflush_unlocked(NULL);
   switch (pid = fork()) {
     case -1:
       return sherr(-1, "fork", "create child process");
@@ -492,7 +497,7 @@ runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
   jmploc jmploc;
 
   if (predir) {
-    fflush(shout);
+    fflush_unlocked(shout);
     if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
       return 1;
   }
@@ -521,7 +526,7 @@ runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
     handler = svhandler;
   }
   if ((int)st > 0) {
-    if (!iflag && b->fn != returncmd) {
+    if (!errsafe && !iflag && b->fn != returncmd && b->fn != evalcmd) {
       if (fakectx)
         return 1;
       else
@@ -530,7 +535,7 @@ runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
   }
   if (predir) {
     if (!(b && b->fn == &execcmd && !final[1])) {
-      fflush(NULL);
+      fflush_unlocked(NULL);
       restore_fd(sfd, sfdc);
     }
   }
@@ -549,7 +554,7 @@ runshcmd(shfunc *restrict f, const builtin *restrict b, char **restrict final, w
   int status;
 
   if (predir) {
-    fflush(shout);
+    fflush_unlocked(shout);
     if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
       return 1;
   }
@@ -583,7 +588,7 @@ runshcmd(shfunc *restrict f, const builtin *restrict b, char **restrict final, w
     poptmpvars(tmp, vc);
   if (predir) {
     if (!(b && b->fn == &execcmd && !final[1])) {
-      fflush(NULL);
+      fflush_unlocked(NULL);
       restore_fd(sfd, sfdc);
     }
   }
@@ -626,17 +631,18 @@ runextcmd(char **restrict final, wf **restrict vars, const cmd_tree *restrict n,
 __attribute__((hot)) static int
 run_cmd(const cmd_tree *n, int inchld)
 {
-  size_t i, len, evarcap;
+  size_t i, len;
   char ifl, efl;
-  char **final, **evars;
-  const builtin *volatile b;
+  char **final;
   shfunc *f;
   shvar *v;
   stmark cm;
+  size_t volatile evarcap;
+  const builtin *volatile b;
 
   ifl = iflag, efl = eflag;
   evarcap = 8;
-  final = evars = NULL;
+  final = NULL;
   f = NULL, b = NULL;
   gstate.lineno = n->line;
   cm = stack_mark();
@@ -671,8 +677,11 @@ run_cmd(const cmd_tree *n, int inchld)
     }
   }
 
-  int status = 0;
+  int status;
+  char **evars;
 
+  status = 0;
+  evars = NULL;
   if (!final || !final[0] || !final[0][0]) { /*  if no command only name=value  */
     if (CVARS(n) && CVARS(n)[0]) {
       size_t nass = 0;
@@ -726,14 +735,20 @@ run_cmd(const cmd_tree *n, int inchld)
         fprintf(stderr, "%s%s\n", getvar("PS4"), xline);
       }
     }
+    if (!status && cmdsubdone)
+      status = LSTATUS;
     if (predir)
       status = apply_redir(predir);
+    if (CNEG(n))
+      status = !status;
     goto done;
   }
 #ifdef DEBUG
   stack_state(final[0]);
 #endif /* DEBUG */
 
+  if (n->flags & EFLAG_SAFE)
+    errsafe++;
   if ((b = findbuiltin(*final)) && (b->flags & SBLTN)) {
     status = runsbltn(b, final, CVARS(n));
   } else if ((f = findfunc(final[0]))) {
@@ -743,9 +758,11 @@ run_cmd(const cmd_tree *n, int inchld)
   } else {
     status = runextcmd(final, CVARS(n), n, inchld);
   }
+  if (n->flags & EFLAG_SAFE)
+    errsafe--;
   if (CNEG(n))
     status = !status;
-  if (efl && status != 0 && !ifl && !(n->flags & EFLAG_SAFE) && !CNEG(n))
+  if (efl && status != 0 && !ifl && !errsafe && !(n->flags & EFLAG_SAFE) && !CNEG(n))
     exit(status);
 done:
   stack_restore(cm);
@@ -756,12 +773,14 @@ static int
 run_if(const cmd_tree *n)
 {
   int status;
+  errsafe++;
   status = run_commands(n->left, 0);
+  errsafe--;
   if (status == 0)
     return run_commands(n->right, 0);
   if (CELSE(n))
     return run_commands(CELSE(n), 0);
-  return status;
+  return 0;
 }
 
 static int
@@ -862,7 +881,9 @@ run_while(const cmd_tree *n)
       return LOOPERR;
     }
     w = stack_mark();
+    errsafe++;
     cond = run_commands(n->left, 0);
+    errsafe--;
     if ((n->flags & UNTIL) ? cond == 0 : cond != 0)
       break;
     status = run_commands(n->right, 0);
@@ -942,7 +963,7 @@ run_bg(const cmd_tree *n)
       return 1;
     case 0:
       status = run_commands(n->left, _INCHLD);
-      fflush(NULL);
+      fflush_unlocked(NULL);
       _exit(status);
     default:
       if (mflag)
@@ -978,11 +999,11 @@ run_redir(const cmd_tree *n, int nchld)
   if (apply_redir(r))
     return 1;
   status = run_commands(n->left, nchld);
-  fflush(NULL);
+  fflush_unlocked(NULL);
   if (restore_fd(sfd, sfdc))
     return 1;
 
-  if (eflag && LSTATUS != 0 && !iflag && !(n->flags & EFLAG_SAFE))
+  if (eflag && LSTATUS != 0 && !iflag && !errsafe && !(n->flags & EFLAG_SAFE))
     exit(LSTATUS);
   return status;
 }
@@ -1001,7 +1022,7 @@ run_subsh(const cmd_tree *n, int chld)
     if (predir && apply_redir(predir))
       _exit(1);
     status = run_commands(n->left, _INCHLD);
-    fflush(NULL);
+    fflush_unlocked(NULL);
     _exit(status);
   }
 
@@ -1025,7 +1046,7 @@ run_subsh(const cmd_tree *n, int chld)
     restore_fd(sfd, sfdc);
   eflag = svefl, iflag = svifl;
   if (!(svefl && status && !svifl))
-    fflush(NULL);
+    fflush_unlocked(NULL);
   fkrestore(&ps);
   LOOPBREAK = LOOPCONT = RETNOW = 0;
   fakectx = svctx, fkstate = sv;
@@ -1045,9 +1066,9 @@ realsubsh:
       if (predir && apply_redir(predir))
         _exit(1);
       status = run_commands(n->left, _INCHLD);
-      if (efl && status != 0 && !ifl)
+      if (efl && status != 0 && !ifl && !errsafe)
         _exit(status);
-      fflush(NULL);
+      fflush_unlocked(NULL);
       _exit(status);
     default:
       if (mfl && getpid() == sh_pgid) {
@@ -1059,14 +1080,14 @@ realsubsh:
         status = fgwait(j);
         if (CNEG(n))
           status = !status;
-        if (efl && status != 0 && !ifl)
+      if (efl && status != 0 && !ifl && !errsafe)
           exit(status);
         return status;
       }
       status = _wait_(pid);
       if (CNEG(n))
         status = !status;
-      if (efl && status != 0 && !ifl && !(n->flags & EFLAG_SAFE))
+      if (efl && status != 0 && !ifl && errsafe && !(n->flags & EFLAG_SAFE))
         exit(status);
       return status;
   }
@@ -1100,7 +1121,7 @@ run_pipe(const cmd_tree *n)
       cleanbuf = lastbuf;
     }
     if (i < CPIPEC(n) - 1) {
-      fflush(shout);
+      fflush_unlocked(shout);
       stdoutbk = shout;
       shout = open_memstream(&outbuf, &outlen);
     }
@@ -1132,6 +1153,7 @@ realpipe:
     if (i < CPIPEC(n) - 1 && pipe(pipefd) < 0) {
       err(1, "pipe");
     }
+    fflush_unlocked(NULL);
     pids[i] = fork();
     switch (pids[i]) {
       case -1:
@@ -1140,6 +1162,7 @@ realpipe:
         child_setup_fg(i > 0 ? pids[0] : 0);
         if (prevr >= 0)
           DUPFD(prevr, STDIN_FILENO);
+        shin = freopen(NULL, "r", shin);
         if (i < CPIPEC(n) - 1) {
           CLOSEFD(pipefd[0]);
           DUPFD(pipefd[1], STDOUT_FILENO);
@@ -1148,7 +1171,7 @@ realpipe:
         if (prevr >= 0)
           CLOSEFD(prevr);
         int _st = run_commands(CPIPE(n)[i], _INCHLD);
-        fflush(NULL);
+        fflush_unlocked(NULL);
         _exit(_st);
       default:
         if (mfl && i == 0)
@@ -1225,7 +1248,7 @@ realpipe:
 
   if (CNEG(n))
     status = !status;
-  if (eflag && status != 0 && !iflag && !(n->flags & EFLAG_SAFE))
+  if (eflag && status != 0 && !iflag && !errsafe && !(n->flags & EFLAG_SAFE))
     exit(status);
   return status;
 }

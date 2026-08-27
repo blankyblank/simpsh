@@ -23,6 +23,8 @@
     kill((pid), SIGQUIT); \
   }
 
+extern redir *predir;
+
 extern int run_commands(const cmd_tree *, int);
 extern int forkexec(char *, char **, char **, const char *, redir *r);
 

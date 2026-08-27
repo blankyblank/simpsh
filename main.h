@@ -92,7 +92,6 @@ typedef struct {
 
 extern const char defpathn[80];
 extern GSTATE gstate;
-extern const char shname[];
 extern const char shusg[43];
 extern char **environ;
 extern FILE *shin;

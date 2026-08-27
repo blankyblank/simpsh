@@ -42,6 +42,7 @@ typedef enum {
   TBKGRND,
   TREDIR,
   TCMDSUB,
+  TBTICK,
   TIF,
   TTHEN,
   TELIF,
@@ -79,6 +80,7 @@ typedef enum {
   WFDOUBLE = 1 << 1,
   WFCMDSUB = 1 << 2,
   WFREDIRFD = 1 << 3,
+  WFAT = 1 << 4,
 } wf_flags;
 
 enum qs {
@@ -86,6 +88,8 @@ enum qs {
   indq = (1 << 1),
   esc = (1 << 2),
 };
+
+typedef struct cmd_tree cmd_tree;
 
 /**
  * word fragment
@@ -97,7 +101,10 @@ enum qs {
 typedef struct wf wf;
 struct wf {
   wf *next;
-  char *word;
+  union {
+    char *word;
+    cmd_tree *cmdsub;
+  };
   size_t len;
   quoted qs;
   int flags;
@@ -175,10 +182,12 @@ append_wf(wf **restrict head, wf **restrict tail, char *restrict w, size_t len, 
     perror("st_alloc failed");
     return;
   }
+
   f->word = w;
   f->len = len;
   f->qs = quoted;
   f->next = NULL;
+  f->flags = 0;
   if (!*head)
     *head = f;
   else

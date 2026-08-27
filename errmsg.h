@@ -122,18 +122,18 @@ typedef enum {
 extern const builtinhelp helpmsgs[];
 static const char dmsg[] = "\nUse \"exit\" to leave the shell \n";
 
-#define UFLAGMSG(v) fprintf(stderr, "%s: %s: unbound variable\n", shname, (v))
+#define UFLAGMSG(v) fprintf(stderr, "%s: %s: unbound variable\n", SHARGV0, (v))
 
 /* unknow cli flag error message */
 // check that the , 1 will work correctly
-#define bad_opt(p, c) (fprintf(stderr, "%s: %s: bad option %c\n", shname, (p), (c)), 1)
-#define bad_optx(c) fprintf(stderr, "%s: unknown option %c\n", shname, (c))
+#define bad_opt(p, c) (fprintf(stderr, "%s: %s: bad option %c\n", SHARGV0, (p), (c)), 1)
+#define bad_optx(c) fprintf(stderr, "%s: unknown option %c\n", SHARGV0, (c))
 
 /*  missing required argument error message */
-#define no_opt(p, c) (fprintf(stderr, "%s: %s: %c: requires argument\n", shname, (p), (c)))
+#define no_opt(p, c) (fprintf(stderr, "%s: %s: %c: requires argument\n", SHARGV0, (p), (c)))
 
 #define usage(prog, usg) fprintf(stderr, "Usage: %s %s\n",(prog), (usg))
-#define syntaxmsg(l, m) fprintf(stderr, "%s: %s: %s\n", shname, geterrline(l), (m))
+#define syntaxmsg(l, m) fprintf(stderr, "%s: %s: %s\n", SHARGV0, geterrline(l), (m))
 
 extern char * geterrline(int);
 extern int sherr(int r,const char *str,const char *msg);

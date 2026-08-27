@@ -37,7 +37,7 @@ pushstring(char *s, size_t len, int alias)
   sp->saved_nchar = shinpt->nchar;
   sp->saved_nleft = shinpt->nleft;
   sp->saved_unget = shinpt->unget;
-  memcpy(sp->saved_ungetbuf, shinpt->ungetbuf, 2);
+  memcpy(sp->saved_ungetbuf, shinpt->ungetbuf, 2 * sizeof(int));
   sp->alias = alias;
   shinpt->nchar = s;
   shinpt->nleft = len;
@@ -55,7 +55,7 @@ popstring(void)
   shinpt->nchar = sp->saved_nchar;
   shinpt->nleft = sp->saved_nleft;
   shinpt->unget = sp->saved_unget;
-  memcpy(shinpt->ungetbuf, sp->saved_ungetbuf, 2);
+  memcpy(shinpt->ungetbuf, sp->saved_ungetbuf, 2 * sizeof(int));
   shinpt->strpush = sp->prev;
   if (sp->alias)
     alias_depth--;
@@ -83,7 +83,7 @@ charfill(void)
   shinput *in = shinpt;
   if (in->strpush) {
     popstring();
-    return (unsigned char)shgetchar();
+    return shgetchar();
   }
 
   if (in->fd < 0 && in->b.mapsize)
@@ -100,7 +100,7 @@ charfill(void)
     in->nleft--;
     if (*in->nchar == '\n')
       in->linenum++;
-    return (unsigned char)*in->nchar++;
+    return *in->nchar++;
   }
 
   if (shreadbuf() == 0)
@@ -108,7 +108,7 @@ charfill(void)
   in->nleft--;
   if (*in->nchar == '\n')
     in->linenum++;
-  return (unsigned char)*in->nchar++;
+  return *in->nchar++;
 }
 
 void
