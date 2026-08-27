@@ -35,6 +35,7 @@ readlinkcmd(char *argv[])
     ssize_t len;
     if ((len = readlink(argv[i], buf, sizeof(buf) - 1)) < 0)
       return 1;
+    buf[len] = '\0';
     if (nonl)
       fwrite(buf, 1, len, shout);
     else
