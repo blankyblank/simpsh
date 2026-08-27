@@ -45,6 +45,7 @@ EXTRAS = builtins/basename.c builtins/cat.c builtins/comm.c builtins/cut.c built
 HDR = alloc.h arg.h arith.h builtins.h config.h env.h errmsg.h exec.h expand.h glob.h histeditshm.h history.h input.h job.h lex.h lineio.h main.h opts.h parse.h path.h pipe.h sig.h simd.h simpsh.h utils.h var.h
 OBJS = obj/alloc.o obj/arith.o obj/builtins.o obj/env.o obj/errmsg.o obj/exec.o obj/expand.o obj/glob.o obj/history.o obj/input.o obj/job.o obj/lex.o obj/lineio.o obj/main.o obj/opts.o obj/parse.o obj/path.o obj/pipe.o obj/printf.o obj/sig.o obj/simpsh.o obj/test.o obj/var.o obj/builtins/basename.o obj/builtins/cat.o obj/builtins/comm.o obj/builtins/cut.o obj/builtins/dirname.o obj/builtins/expand.o obj/builtins/fold.o obj/builtins/head.o obj/builtins/paste.o obj/builtins/readlink.o obj/builtins/realpath.o obj/builtins/sleep.o obj/builtins/sort.o obj/builtins/tail.o obj/builtins/tee.o obj/builtins/tr.o obj/builtins/uniq.o obj/builtins/wc.o
 
+.OBJDIR: .
 OBJDIR = obj
 TARGET = simpsh
 
