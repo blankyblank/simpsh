@@ -4,6 +4,9 @@
 #ifdef __linux__
   #define _POSIX_C_SOURCE 200809L
 #endif /* __linux__ */
+#ifdef __FreeBSD__
+  #define __BSD_VISIBLE 1
+#endif /* __FreeBSD__ */
 #include <stddef.h>
 #include <sys/mman.h>
 #include <stdint.h>
