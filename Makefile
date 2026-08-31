@@ -3,7 +3,7 @@
 include config.mk
 
 
-CCNAME != case "$($(CC) --version 2>/dev/null)" in \
+CCNAME != case "$$($(CC) --version 2>/dev/null)" in \
 	*clang*) echo "clang" ;; \
 	*gcc*|*GCC*) echo gcc ;; \
 	*) echo "other" ;; \
@@ -22,7 +22,7 @@ PROFILE != case "$(BUILD):$(CCNAME)" in \
 	*)                echo "-march=native -O2 -flto=auto";;\
 	esac
 
-LDFLAG != case "$(BUILD):$(CC)" in \
+LDFLAG != case "$(BUILD):$(CCNAME)" in \
 	"release:gcc")    echo "-flto=auto" ;; \
 	"release:clang")  echo "-flto=full -Wl,--strip-all" ;; \
 	"debug:gcc")      echo "-flto=auto" ;; \
