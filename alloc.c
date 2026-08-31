@@ -2,7 +2,9 @@
 #ifdef __linux__
   #define _POSIX_C_SOURCE 200809L
 #endif /* __linux__ */
-#include <malloc.h>
+#ifdef __gnu_linux__
+  #include <malloc.h>
+#endif /* __gnu_linux__ */
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -184,9 +186,11 @@ void
 init_stack(void)
 {
 #ifdef __linux__
+  #ifdef __gnu_linux__
   mallopt(M_ARENA_MAX, 1);
   mallopt(M_TRIM_THRESHOLD, 128);
-#endif /* __linux__ */
+  #endif /* __gnu_linux__ */
+#endif   /* __linux__ */
   memset(stackbase.buf, 0, sizeof(stackbase.buf));
   current = &stackbase;
   stnext = stackbase.buf;
