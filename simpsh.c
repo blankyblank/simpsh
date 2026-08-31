@@ -569,6 +569,7 @@ need_more(const char *lines, size_t llen)
   return 0;
 }
 
+/* callback function used in interactive mode passed to the event loop */
 static void
 stdin_cb(void *data)
 {

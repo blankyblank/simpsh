@@ -155,7 +155,6 @@ getpath(char *file)
 {
   char *fullpath;
 
-  // XXX: consider hashing full paths
   if ((strchr(file, '/')) && access(file, X_OK) == 0)
     return (st_strdup(file));
 
@@ -163,10 +162,7 @@ getpath(char *file)
     return st_strdup(fullpath);
 
   const char *path = getvar("PATH");
-  if (path)
-    fullpath = chkpath(path, file, X_OK, 0);
-  else
-    fullpath = chkpath(defpath, file, X_OK, 0);
+  fullpath = chkpath(path ? path : defpath, file, X_OK, 0);
 
   if (!fullpath)
     return NULL;
@@ -179,9 +175,9 @@ getpath(char *file)
    * INFO:
    *     we collaps any // to a single /, for .. when encountered
    *     we move back a path segment (between slashes /here/)
-   *     for . we collapse it like the // case. we get rid of any 
+   *     for . we collapse it like the // case. we get rid of any
    *     trailing / also we get rid of any . in the beginning
-   *     like ./dir 
+   *     like ./dir
    *     we are modifying the string in place using res as the result
    *     buffer chars are getting copied to (and overwriting things we
    *     want to get rid of) and src is the pointer we copy from. it moves
