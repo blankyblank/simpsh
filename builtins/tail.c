@@ -31,7 +31,7 @@ struct tinfo {
 
 const char *tailn = "tail";
 static int pls;
-
+static int quiet;
 
 FILE *fline(int n, char *f);
 int ftail(int, char **, size_t);
@@ -49,16 +49,17 @@ int
 tailcmd(char *argv[])
 {
   int ln, f_flag;
-  size_t argc = 0;
+  size_t argc;
   char *file;
 
   ln = -1;
-  f_flag = pls = 0;
+  f_flag = pls = argc = quiet = 0;
   array_len(argv, argc);
   ARGBEGIN
   {
     char *arg;
     case 'f':
+    case 'F':
       f_flag = 1;
       break;
     case 'n':
@@ -67,6 +68,9 @@ tailcmd(char *argv[])
       if (*arg == '+')
         pls = 1, arg++;
       ln = bltin_atoi(arg, argv0, "requires a number");
+      break;
+    case 'q':
+      quiet = 1;
       break;
 ARGNUM:
       ln = ARGNUMF();
@@ -99,7 +103,8 @@ ARGNUM:
     if (!(fp = fline(ln, file)))
       return 1;
     if (argc > 1)
-      fprintf(shout,"%s==> %s <==\n", (i > 0) ? "\n" : "", file);
+      if (!quiet)
+        fprintf(shout,"%s==> %s <==\n", (i > 0) ? "\n" : "", file);
     while ((n = fread(buf, 1, BUFSIZ, fp)) > 0)
       fwrite(buf, 1, n, shout);
     if (ferror(fp))
@@ -221,7 +226,8 @@ ftail(int ln, char **files, size_t argc)
       if (fp) {
         while ((n = fread(buf, 1, BUFSIZ, fp)) > 0) {
           if (argc > 1)
-            fprintf(shout, "\n==> %s <==\n", fe[i].name);
+            if (!quiet)
+              fprintf(shout, "\n==> %s <==\n", fe[i].name);
           fwrite(buf, 1, n, shout);
         }
         fe[i].pos = ftell(fp);
