@@ -449,16 +449,53 @@ int
 unaliascmd(char **argv)
 {
   alias *e;
-  /* int i;
-   char *n, *v; */
+  int status;
+  char *argv0;
 
-  e = findalias(argv[1]);
-  if (e) {
-    rmalias(argv[1]);
-  } else {
-    shwarn(argv[0], "alias not found");
-    return 1;
+  status = 0;
+  argv0 = *argv++;
+  if (**argv == '-') {
+    switch ((*argv)[1]) {
+      case 'a':
+        alias *e, *n;
+        for (size_t i = 0; i < ENV_BUCKETS; i++) {
+          e = alias_tab[i];
+          while (e) {
+            n = e->next;
+            sfree(e->name);
+            sfree(e->value);
+            sfree(e);
+            e = n;
+          }
+          alias_tab[i] = NULL;
+        }
+        return 0;
+      case '-':
+        if ((*argv)[2] == '\0')
+          argv++;
+        else
+          return bad_opt(argv0, (*argv)[2]);
+        break;
+      case '\0':
+        break;
+      default:
+        return bad_opt(argv0, (*argv)[1]);
+    }
+  }
+  if (!*argv) {
+    usage(argv0, helpmsgs[UNALIASH].usage);
+    return 2;
   }
 
-  return 0;
+  for (size_t i = 0; argv[i]; i++) {
+    e = findalias(argv[i]);
+    if (e) {
+      rmalias(argv[i]);
+    } else {
+      shwarn_arg(argv0, argv[i], "alias not found");
+      status = 1;
+    }
+  }
+
+  return status;
 }
