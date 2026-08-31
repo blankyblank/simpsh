@@ -3,7 +3,13 @@
 include config.mk
 
 
-PROFILE != case "$(BUILD):$(CC)" in \
+CCNAME != case "$($(CC) --version 2>/dev/null)" in \
+	*clang*) echo "clang" ;; \
+	*gcc*|*GCC*) echo gcc ;; \
+	*) echo "other" ;; \
+esac
+
+PROFILE != case "$(BUILD):$(CCNAME)" in \
 	"release:gcc")    echo "-march=native -falign-functions=16 -fno-plt -O2 -flto=auto -s" ;; \
 	"release:clang")  echo "-march=native -fno-plt -flto -O2 -fvectorize -flto=full" ;; \
 	"debug:gcc")      echo "-Og -g3 -fno-omit-frame-pointer -flto=auto -ggdb" ;; \
@@ -13,7 +19,7 @@ PROFILE != case "$(BUILD):$(CC)" in \
 	valgrind:*)       echo "-Og -g3 -fno-omit-frame-pointer -DENABLE_VALGRIND" ;; \
 	"profile:gcc")    echo "-O2 -g3 -pg -fxray-instrument -fvar-tracking-assignments -fno-analyzer-state-merge" ;; \
 	"profile:clang")  echo "-O2 -g3 -fprofile-instr-generate -fcoverage-mapping -fxray-instrument" ;; \
-	*)                echo "error: unknown BUILD/CC ($(BUILD)/$(CC))" >&2 ;; \
+	*)                echo "-march=native -O2 -flto=auto";;\
 	esac
 
 LDFLAG != case "$(BUILD):$(CC)" in \
@@ -101,44 +107,44 @@ obj/test.o: test.c $(HDR) obj/builtins
 obj/var.o: var.c $(HDR) obj/builtins
 	$(CC) $(CFLAGS) -c var.c -o $@
 obj/builtins/basename.o: builtins/basename.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_basename 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/basename.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_basename 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/basename.c -o $@; else rm -f $@; fi
 obj/builtins/cat.o: builtins/cat.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_cat 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/cat.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_cat 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/cat.c -o $@; else rm -f $@; fi
 obj/builtins/comm.o: builtins/comm.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_comm 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/comm.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_comm 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/comm.c -o $@; else rm -f $@; fi
 obj/builtins/cut.o: builtins/cut.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_cut 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/cut.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_cut 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/cut.c -o $@; else rm -f $@; fi
 obj/builtins/dirname.o: builtins/dirname.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_dirname 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/dirname.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_dirname 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/dirname.c -o $@; else rm -f $@; fi
 obj/builtins/expand.o: builtins/expand.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_expand 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/expand.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_expand 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/expand.c -o $@; else rm -f $@; fi
 obj/builtins/fold.o: builtins/fold.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_fold 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/fold.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_fold 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/fold.c -o $@; else rm -f $@; fi
 obj/builtins/head.o: builtins/head.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_head 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/head.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_head 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/head.c -o $@; else rm -f $@; fi
 obj/builtins/paste.o: builtins/paste.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_paste 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/paste.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_paste 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/paste.c -o $@; else rm -f $@; fi
 obj/builtins/readlink.o: builtins/readlink.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_readlink 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/readlink.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_readlink 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/readlink.c -o $@; else rm -f $@; fi
 obj/builtins/realpath.o: builtins/realpath.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_realpath 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/realpath.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_realpath 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/realpath.c -o $@; else rm -f $@; fi
 obj/builtins/sleep.o: builtins/sleep.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_sleep 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/sleep.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_sleep 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/sleep.c -o $@; else rm -f $@; fi
 obj/builtins/sort.o: builtins/sort.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_sort 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/sort.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_sort 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/sort.c -o $@; else rm -f $@; fi
 obj/builtins/tail.o: builtins/tail.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_tail 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/tail.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_tail 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/tail.c -o $@; else rm -f $@; fi
 obj/builtins/tee.o: builtins/tee.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_tee 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/tee.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_tee 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/tee.c -o $@; else rm -f $@; fi
 obj/builtins/tr.o: builtins/tr.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_tr 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/tr.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_tr 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/tr.c -o $@; else rm -f $@; fi
 obj/builtins/uniq.o: builtins/uniq.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_uniq 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/uniq.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_uniq 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/uniq.c -o $@; else rm -f $@; fi
 obj/builtins/wc.o: builtins/wc.c $(HDR) obj/builtins
-	@if grep -qi "^#define ENABLE_wc 1" config.h; then echo "$(CC)" "$(CFLAGS)"  -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/wc.c -o $@; else rm -f $@; fi
+	@if grep -qi "^#define ENABLE_wc 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/wc.c -o $@; else rm -f $@; fi
 
 $(TARGET): $(OBJS)
-	@echo "  $(CC) $@ $(CFLAGS) $(LDFLAGS) $(LDLIBS)"
+	@echo "$(CC) $@ $(CFLAGS) $(LDFLAGS) $(LDLIBS)"
 	@$(CC) -o $@ $(OBJS) $(CFLAGS) $(LDFLAGS) $(LDLIBS)
 
 install:

@@ -2,8 +2,8 @@
 PREFIX = /usr/local
 BINDIR = $(DESTDIR)$(PREFIX)/bin
 
-## compiler: gcc | clang
-CC = gcc
+## compiler: cc | gcc | clang
+CC = cc
 
 ## build profile: release | debug | sanitize | valgrind | profile
 BUILD = release
