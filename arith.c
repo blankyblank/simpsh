@@ -75,18 +75,22 @@ static const int lbp_tab[] = {
 /* NOLINTBEGIN(readability-magic-numbers) */
 #define get_lbp(t) ((t) < A_END ? lbp_tab[t] : 0)
 
-static const char *ap;     // current position
-static size_t alen;        // remaining bytes
-static int atok;           // current token type
-static i64 aval;        // numeric value (for A_NUM)
-static const char *aname;  // name pointer (for A_NAME)
-static size_t anlen;       // name length (for A_NAME)
+static const char *ap;     /* current position */
+static size_t alen;        /* remaining bytes */
+static int atok;           /* current token type */
+static i64 aval;           /* numeric value (for A_NUM) */
+static const char *aname;  /* name pointer (for A_NAME) */
+static size_t anlen;       /* name length (for A_NAME) */
 static char *lname;
 static size_t lnlen;
+static const char *rpy;    /* pending sliced text */
+static size_t rlen;        /* bytes left in rpy */
 
 static i64 expr_bp(int);
 static void next_tok(void);
+static void scan_tok(void);
 static i64 nud(void);
+static int arith_dollar(i64 *num, const char **txt, size_t *tlen);
 static i64 led(i64);
 static i64 lookupavar(void);
 
@@ -105,8 +109,89 @@ avarval(const char *name, size_t nlen)
   return res;
 }
 
+static inline const char *
+avarstr(const char *name, size_t nlen, size_t *vlen)
+{
+  shvar *v;
+
+  if (!(v = findvar_n(name, nlen)))
+    return NULL;
+  *vlen = vallen(v);
+  return shvar_val(v);
+}
+
 static void
 next_tok(void)
+{
+  for (;;) {
+    if (rlen > 0) {
+      const char *sap;
+      size_t salen, skip;
+
+      sap = ap;
+      salen = alen;
+      skip = sskipspace(rpy, rlen);
+      if (rlen - skip == 0) {
+        rpy += skip;
+        rlen = 0;
+        ap = sap;
+        alen = salen;
+        continue;
+      }
+      ap = rpy;
+      alen = rlen;
+      scan_tok();
+      rpy = ap;
+      rlen = alen;
+      ap = sap;
+      alen = salen;
+      return;
+    }
+
+    {
+      size_t skip;
+      skip = sskipspace(ap, alen);
+      ap += skip;
+      alen -= skip;
+    }
+    if (!alen) {
+      atok = A_EOF;
+      return;
+    }
+
+    if (*ap == '$') {
+      i64 num;
+      const char *txt;
+      size_t tlen;
+
+      txt = NULL;
+      tlen = 0;
+
+      ap++;
+      alen--;
+      switch (arith_dollar(&num, &txt, &tlen)) {
+        case 1:
+          atok = A_NUM;
+          aval = num;
+          return;
+        case 0:
+          if (!tlen)
+            continue;
+          rpy = txt;
+          rlen = tlen;
+          continue;
+        default:
+          atok = A_EOF;
+          return;
+      }
+    }
+    scan_tok();
+    return;
+  }
+}
+
+static void
+scan_tok(void)
 {
   size_t skip;
   char c;
@@ -195,8 +280,9 @@ next_tok(void)
       atok = A_RPAREN;
       break;
     case '$':
-      atok = A_DOLLAR;
-      break;
+      shwarn_arg("arithmetic", ap, "unexpected $");
+      atok = A_EOF;
+      return;
     case '<':
       if (alen > 0 && ap[0] == '<') {
         atok = A_LSHIFT;
@@ -293,155 +379,6 @@ nud(void)
       }
       next_tok();
       return val;
-    case A_DOLLAR:
-      lname = NULL;
-      {
-        i64 dval = 0;
-        size_t j = 2, k, elen;
-
-        if (alen > 0 && ap[0] == '(') {
-          i64 rv;
-          j = 1;
-          {
-            size_t d = 0;
-            for (; j < alen && !(ap[j] == ')' && d == 0); j++) {
-              if (ap[j] == '(')
-                d++;
-              else if (ap[j] == ')')
-                d--;
-            }
-          }
-          if (j >= alen) {
-            shwarn_arg("arithmetic", ap, "missing ')'");
-            atok = A_EOF;
-          } else if (ap[1] == '(') {
-            if (ap[j - 1] != ')') {
-              shwarn_arg("arithmetic", ap, "missing '))'");
-              atok = A_EOF;
-            } else {
-              const char *sap, *saname;
-              char *slname;
-              size_t salen, sanlen, slnlen;
-              int satok;
-              i64 saval;
-
-              sap = ap, salen = alen, saval = aval, satok = atok;
-              saname = aname, sanlen = anlen;
-              slname = lname, slnlen = lnlen;
-              rv = arith_eval(ap + 2, j - 2);
-              ap = sap, alen = salen, atok = satok, aval = saval;
-              aname = saname, anlen = sanlen;
-              lname = slname, lnlen = slnlen;
-
-              ap += j + 2, alen -= j + 2;
-              dval = rv;
-            }
-
-          } else {
-            char *cmdsub;
-            size_t sublen = 0;
-            if ((cmdsub = exp_cmdsub(ap + 1, j - 1, &sublen))) {
-              char *sbuf = st_strndup(cmdsub, sublen);
-              if (atoll_(sbuf, &dval) < 0)
-                dval = 0;
-            }
-            ap += j + 1;
-            alen -= j + 1;
-          }
-        } else if (alen > 0 && ap[0] == '{') {
-          j = 1;
-          {
-            size_t d = 0;
-            for (; j < alen && !(ap[j] == '}' && d == 0); j++) {
-              if (ap[j] == '{')
-                d++;
-              else if (ap[j] == '}')
-                d--;
-            }
-          }
-          if (j >= alen) {
-            shwarn_arg("arithmetic", ap, "missing '}'");
-            atok = A_EOF;
-          } else {
-            size_t clen = j - 1;
-            int plain = clen > 0;
-            for (k = 1; k < j; k++) {
-              char cc = ap[k];
-              if (!(isalpha_(cc) || isdigit_(cc) || cc == '_')) {
-                plain = 0;
-                break;
-              }
-            }
-            if (plain && isdigit_(ap[1])) {
-              size_t n = 0, t = 0;
-              while (t < clen && isdigit_(ap[1 + t]))
-                n = n * 10 + (ap[1 + t++] - '0');
-              if (n > 0 && n <= (size_t)SHARGC && SHARGV[n - 1])
-                atoll_(SHARGV[n - 1], &dval);
-            } else if (plain) {
-              dval = avarval(ap + 1, clen);
-            } else {
-              wf f;
-              f.qs = QBRACE_DQ;
-              f.word = (char *)ap;
-              f.len = j + 1;
-              f.next = NULL;
-              f.flags = 0;
-              {
-                wf *ew = exp_word(&f, &elen);
-                char *estr = ew ? join_wf(ew, 0) : (char *)"";
-                if (atoll_(estr, &dval) < 0)
-                  dval = 0;
-              }
-            }
-            ap += j + 1;
-            alen -= j + 1;
-          }
-        } else if (alen > 0 && (isalpha_(ap[0]) || ap[0] == '_')) {
-          size_t nlen = sscnword(ap, alen);
-          dval = avarval(ap, alen);
-          ap += nlen;
-          alen -= nlen;
-        } else if (alen > 0) {
-          switch (ap[0]) {
-            case '?':
-              dval = LSTATUS;
-              ap++, alen--;
-              break;
-            case '$':
-              if (atoll_(gvar.pid_s, &dval) < 0)
-                dval = 0;
-              ap++, alen--;
-              break;
-            case '!':
-              if (atoll_(gvar.bgpid_s, &dval) < 0)
-                dval = 0;
-              ap++, alen--;
-              break;
-            case '#':
-              dval = SHARGC;
-              ap++, alen--;
-              break;
-            case '-':
-              ap++, alen--;
-              break;
-            default:
-              if (isdigit_(ap[0])) {
-                size_t n = 0, k = 0;
-                while (k < alen && isdigit_(ap[k]))
-                  n = n * 10 + (ap[k++] - 0);
-                if (n > 0 && n <= (size_t)SHARGC && SHARGV[n - 1])
-                  atoll_(SHARGV[n - 1], &dval);
-                ap += k, alen -= k;
-              } else {
-                shwarn_arg("arithmetic", ap, "unexpected $");
-              }
-              break;
-          }
-        }
-        next_tok();
-        return dval;
-      }
     case A_MINUS:
       lname = NULL;
       next_tok();
@@ -462,6 +399,170 @@ nud(void)
       shwarn_arg("arithmetic syntax", ap, "unexpected token");
       atok = A_EOF;
       return 0;
+  }
+}
+
+static int
+arith_dollar(i64 *num, const char **txt, size_t *tlen)
+{
+  if (!alen) {
+    shwarn_arg("arithmetic", ap, "unexpected $");
+    return -1;
+  }
+  if (ap[0] == '(') {
+    size_t j = 2, d = 0;
+
+    for (; j < alen && !(ap[j] == ')' && d == 0); j++) {
+      if (ap[j] == '(')
+        d++;
+      else if (ap[j] == ')')
+        d--;
+    }
+    if (j >= alen) {
+      shwarn_arg("arithmetic", ap, "missing ')'");
+      return -1;
+    } else if (ap[1] == '(') {
+      const char *sap, *saname;
+      char *slname;
+      size_t salen, sanlen, slnlen;
+      int satok;
+      i64 saval, rv;
+
+      sap = ap, salen = alen, saval = aval, satok = atok;
+      saname = aname, sanlen = anlen;
+      slname = lname, slnlen = lnlen;
+      rv = arith_eval(ap + 2, j - 2);
+      ap = sap, alen = salen, atok = satok, aval = saval;
+      aname = saname, anlen = sanlen;
+      lname = slname, lnlen = slnlen;
+      ap += j + 2, alen -= j + 2;
+      *num = rv;
+      return 1;
+    } else {
+      char *cmdsub;
+      if ((cmdsub = exp_cmdsub(ap + 1, j - 1, tlen))) {
+        *txt = cmdsub;
+        ap += j + 1;
+        alen -= j + 1;
+        return 0;
+      }
+      return -1;
+    }
+  } else if (ap[0] == '{') {
+    size_t j = 1, d = 0, k, clen;
+    int plain;
+
+    for (; j < alen && !(ap[j] == '}' && d == 0); j++) {
+      if (ap[j] == '{')
+        d++;
+      else if (ap[j] == '}')
+        d--;
+    }
+    if (j >= alen) {
+      shwarn_arg("arithmetic", ap, "missing '}'");
+      return -1;
+    }
+    clen = j - 1;
+    plain = clen > 0;
+    for (k = 1; k < j; k++) {
+      char cc = ap[k];
+      if (!(isalpha_(cc) || isdigit_(cc) || cc == '_')) {
+        plain = 0;
+        break;
+      }
+    }
+    if (plain && isdigit_(ap[1])) {
+      size_t n = 0, t = 0;
+      while (t < clen && isdigit_(ap[1 + t]))
+        n = n * 10 + (ap[1 + t++] - '0');
+      if (n > 0 && n <= (size_t)SHARGC && SHARGV[n - 1]) {
+        *txt = SHARGV[n - 1];
+        *tlen = strlen(SHARGV[n - 1]);
+      } else {
+        *tlen = 0;
+      }
+    } else if (plain) {
+      if (!(*txt = avarstr(ap + 1, clen, tlen)))
+        *tlen = 0;
+    } else {
+      wf f, *ew;
+      char *estr;
+
+      f.qs = QBRACE_DQ;
+      f.word = (char *)ap;
+      f.len = j + 1;
+      f.next = NULL;
+      f.flags = 0;
+      ew = exp_word(&f, &clen);
+      estr = ew ? join_wf(ew, 0) : NULL;
+      if (estr) {
+        *txt = estr;
+        *tlen = strlen(estr);
+      } else {
+        *tlen = 0;
+      }
+    }
+    ap += j + 1;
+    alen -= j + 1;
+    return 0;
+  } else if (isalpha_(ap[0]) || ap[0] == '_') {
+    size_t nlen = sscnword(ap, alen);
+
+    if ((*txt = avarstr(ap, nlen, tlen)) == NULL)
+      *tlen = 0; /* unset -> empty splice */
+    ap += nlen;
+    alen -= nlen;
+    return 0;
+  } else if (isdigit_(ap[0])) {
+    size_t n = 0, k = 0;
+    while (k < alen && isdigit_(ap[k]))
+      n = n * 10 + (ap[k++] - '0'); /* fixed: - '0' */
+    if (n > 0 && n <= (size_t)SHARGC && SHARGV[n - 1]) {
+      *txt = SHARGV[n - 1];
+      *tlen = strlen(SHARGV[n - 1]);
+    } else {
+      *tlen = 0;
+    }
+    ap += k;
+    alen -= k;
+    return 0;
+  } else {
+    switch (ap[0]) {
+      case '?':
+        ap++, alen--;
+        *num = LSTATUS;
+        return 1;
+      case '$':
+        ap++, alen--;
+        if (atoll_(gvar.pid_s, num) < 0)
+          *num = 0;
+        return 1;
+      case '!':
+        ap++, alen--;
+        if (atoll_(gvar.bgpid_s, num) < 0)
+          *num = 0;
+        return 1;
+      case '#':
+        ap++, alen--;
+        *num = SHARGC;
+        return 1;
+      case '-':
+        {
+          static const char dashopts[] = "abCefhiImnsuvVx";
+          static char dashbuf[16];
+          size_t k;
+
+          ap++, alen--;
+          for (k = 0; k < 15; k++)
+            dashbuf[k] = GETSHOPT(k) ? dashopts[k] : 0;
+          *txt = dashbuf;
+          *tlen = strlen(dashbuf);
+          return 0;
+        }
+      default:
+        shwarn_arg("arithmetic", ap, "unexpected $");
+        return -1;
+    }
   }
 }
 

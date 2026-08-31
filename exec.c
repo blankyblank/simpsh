@@ -77,8 +77,7 @@ static int runsbltn(const builtin *restrict, char **restrict, wf **restrict);
 static int runshcmd(shfunc *restrict, const builtin *restrict, char **restrict, wf **restrict);
 static int runextcmd(char **restrict, wf **restrict, const cmd_tree *restrict, int);
 static int save_fd(redir *, fdlist *, size_t * restrict);
-static void shexec(char ** restrict, char ** restrict, redir *)
-  __attribute__((noreturn));
+static void shexec(char ** restrict, char ** restrict, redir *) __attribute__((noreturn));
 int execcmd(char **);
 static int shfexec(char ** restrict, char ** restrict, const char * restrict, redir *);
 
@@ -315,6 +314,25 @@ _wait_(pid_t pid)
            (WIFSIGNALED(wstatus) ? 128 + WTERMSIG(wstatus) : 1);
 }
 
+static char *bin_sh;
+
+static char **
+execscript(char *path, char **restrict argv)
+{
+  size_t argc, i;
+  char **shargv;
+
+  argc = 0;
+  array_len(argv, argc);
+  shargv = st_alloc((argc + 2) * sizeof(char *));
+  shargv[0] = bin_sh;
+  shargv[1] = path;
+  for (i = 1; i < argc; i++)
+    shargv[i + 1] = argv[i];
+  shargv[i + 1] = NULL;
+  return shargv;
+}
+
 int
 forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
 {
@@ -344,6 +362,10 @@ forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
   }
   fflush_unlocked(NULL);
   err = posix_spawn(&pid, path, NULL, &attr, argv, env);
+  if (err == ENOEXEC) {
+    bin_sh = getpath("sh");
+    err = posix_spawn(&pid, bin_sh, NULL, &attr, execscript(path, argv), env);
+  }
   posix_spawnattr_destroy(&attr);
   signal(SIGQUIT, oldquit);
   signal(SIGTTOU, oldttou);
@@ -396,6 +418,10 @@ shexec(char **restrict args, char **restrict env, redir *r)
   if (r && apply_redir(r))
     _exit(1);
   if (execve(fpath, args, env) < 0) {
+    if (errno == ENOEXEC) {
+      bin_sh = getpath("sh");
+      execve(bin_sh, execscript(fpath, args), env);
+    }
     perror(args[0]);
     _exit(1);
   }
@@ -1269,8 +1295,13 @@ execcmd(char **argv)
   fullpath = getpath(argv[1]);
   if (!fullpath)
     goto fail;
-  if (execve(fullpath, &argv[1], env) < 0)
+  if (execve(fullpath, &argv[1], env) < 0) {
+    if (errno == ENOEXEC) {
+      bin_sh = getpath("sh");
+      execve(bin_sh, execscript(fullpath, &argv[1]), env);
+    }
     goto fail;
+  }
   return 0;
 
 fail:

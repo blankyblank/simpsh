@@ -124,7 +124,6 @@ static wf *get_wf(int);
 static sh_tok tokword(wf *, int*);
 static void tokws(void);
 static sh_tok toklt(void);
-static sh_tok toknl(void);
 static sh_tok tokgt(void);
 static void lexsquote(void);
 static void lexdquote(void);
@@ -411,7 +410,18 @@ tokenize(void)
       case C_NL:
         if (wd & CHKNL)
           continue;
-        return toknl();
+        if (!heredoc_head) {
+          const char *buf;
+          size_t avail, skip;
+          while ((avail = shpeek(&buf)) > 0) {
+            skip = sskipnl(buf, avail);
+            if (skip > 0)
+              shadvance(skip);
+            if (skip < avail)
+              break;
+          }
+        }
+        return SHTOK(TNL);
       case C_AMP:
         n = eatbnl();
         if (n == '&')
@@ -438,13 +448,23 @@ tokenize(void)
       case C_RP:
         return SHTOK(TRP);
       case C_LB:
-        return SHTOK(TLB);
+        if (wd & CHKBRACE)
+          return SHTOK(TLB);
+        goto word;
       case C_RB:
-        return SHTOK(TRB);
+        if (wd & CHKBRACE)
+          return SHTOK(TRB);
+        goto word;
       case C_LT:
         return toklt();
       case C_GT:
         return tokgt();
+      case C_BTICK:
+        if (btdepth > 0) {
+          btdepth--;
+          return SHTOK(TBTICK);
+        }
+        goto word;
       case C_BSLASH:
         if ((n = shgetchar()) == '\n') {
           shinpt->linenum++;
@@ -452,13 +472,8 @@ tokenize(void)
         }
         if (n != SHEOF)
           shungetc(n);
-      /* falls through */
-      case C_BTICK:
-        if (btdepth > 0) {
-          btdepth--;
-          return SHTOK(TBTICK);
-        }
-      /* falls through */
+        /* falls through */
+word:
       default:
         f = get_wf(c);
         if (!f)
@@ -526,25 +541,25 @@ tokws(void)
   }
 }
 
-static sh_tok
-toknl(void)
-{
-  int c;
-  const char *buf;
-  size_t avail;
-  while ((avail = shpeek(&buf)) > 0) {
-    size_t skip;
-    skip = sskipnl(buf, avail);
-    if (skip > 0)
-      shadvance(skip);
-    if (skip < avail)
-      break;
-  }
-  c = shgetchar();
-  if (c != '\n' && c != SHEOF)
-    shungetc(c);
-  return SHTOK(TNL);
-}
+// static sh_tok
+// toknl(void)
+// {
+//   int c;
+//   const char *buf;
+//   size_t avail;
+//   while ((avail = shpeek(&buf)) > 0) {
+//     size_t skip;
+//     skip = sskipnl(buf, avail);
+//     if (skip > 0)
+//       shadvance(skip);
+//     if (skip < avail)
+//       break;
+//   }
+//   c = shgetchar();
+//   if (c != '\n' && c != SHEOF)
+//     shungetc(c);
+//   return SHTOK(TNL);
+// }
 
 static sh_tok
 toklt(void)

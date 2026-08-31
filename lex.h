@@ -89,6 +89,8 @@ enum qs {
   esc = (1 << 2),
 };
 
+struct redir;
+extern struct redir *heredoc_head;
 typedef struct cmd_tree cmd_tree;
 
 /**
@@ -140,6 +142,7 @@ enum {
   CHKALIAS = 1 << 0,
   CHKNL = 1 << 1,
   CHKKWD = 1 << 2,
+  CHKBRACE = 1 << 3,
 };
 
 enum rdr {

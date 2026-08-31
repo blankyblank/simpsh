@@ -7,6 +7,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "glob.h"
 #include "alloc.h"
@@ -162,27 +163,49 @@ cmp(const void *a, const void *b)
 int
 globexpand(const char *restrict pattern, char ***result)
 {
-  size_t lsep = 0, len = 0;
+  size_t lsep, len, dlen;
   size_t cnt;
-  int sep = 0, pfl = 0;
+  int sep, pfl, rd;
   const char *p;
   char *dir;
   DIR *d;
   struct dirent *f;
 
+  lsep = sep = pfl = dlen = rd = 0;
+  len = strlen(pattern);
   *result = NULL;
-  for (; pattern[len]; len++) {
-      if (pattern[len] == '/') {
-        lsep = len;
+
+  if (len > 0 && pattern[len - 1] == '/') {
+    rd = 1;
+    len--;
+  }
+
+  {
+    size_t i;
+    for (i = 0; i < len; i++) {
+      if (pattern[i] == '/') {
+        lsep = i;
         sep = 1;
       }
+    }
   }
+
   if (sep) {
     p = pattern + lsep + 1;
-    dir = st_strndup(pattern, lsep);
+    dir = st_strndup(pattern, lsep + 1);
+    dlen = lsep + 1;
   } else {
     p = pattern;
     dir = ".";
+  }
+  {
+    size_t llen;
+    char *lp;
+    llen = &pattern[len] - p;
+    lp = st_alloc(llen + 1);
+    memcpy(lp, p, llen);
+    lp[llen] = '\0';
+    p = lp;
   }
 
   if (!(d = opendir(dir)))
@@ -196,6 +219,24 @@ globexpand(const char *restrict pattern, char ***result)
       continue;
     if (!globmatch(p, f->d_name, pfl))
       continue;
+    if (rd) {
+      struct stat sb;
+      size_t o, tlen, flen;
+      char tmp[PATH_MAX];
+
+      flen = strlen(f->d_name);
+      tlen = dlen + flen + 2;
+      if (tlen >= sizeof(tmp))
+        continue;
+      if (dlen)
+        memcpy(tmp, dir, dlen);
+      memcpy(tmp + dlen, f->d_name, flen);
+      o = dlen + flen;
+      tmp[o++] = '/';
+      tmp[o] = '\0';
+      if (stat(tmp, &sb) < 0 || !S_ISDIR(sb.st_mode))
+        continue;
+    }
     cnt++;
   }
   *result = st_alloc((cnt + 1) * sizeof(char *));
@@ -213,13 +254,25 @@ globexpand(const char *restrict pattern, char ***result)
       continue;
 
     flen = strlen(f->d_name);
-    if (sep) {
-      size_t tlen = flen + lsep + 1;
-      char *fpath = st_alloc(tlen + 1);
-      memcpy(fpath, dir, lsep);
-      fpath[lsep] = '/';
-      memcpy(fpath + lsep + 1, f->d_name, flen);
-      fpath[tlen] = '\0';
+    if (sep || rd) {
+      size_t o, tlen;
+      char *fpath;
+
+      tlen = dlen + flen + (rd ? 2 : 1);
+      fpath = st_alloc(tlen + 1);
+      if (dlen)
+        memcpy(fpath, dir, dlen);
+      memcpy(fpath + dlen, f->d_name, flen);
+      o = dlen + flen;
+      if (rd) {
+        struct stat sb;
+        fpath[o++] = '/';
+        fpath[o] = '\0';
+        if (stat(fpath, &sb) < 0 || !S_ISDIR(sb.st_mode))
+          continue;
+      } else {
+        fpath[o] = '\0';
+      }
       (*result)[i++] = fpath;
     } else {
       (*result)[i++] = st_strndup(f->d_name, flen);

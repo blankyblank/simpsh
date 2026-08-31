@@ -19,7 +19,7 @@
 
 #define WFCAP 8
 
-static redir *heredoc_head;
+redir *heredoc_head;
 static redir **heredoc_tail = &heredoc_head;
 sh_tok tbuf = { .type = TNONE };
 #define gettok(f) (chkwd = (f), tbuf = tokenize())
@@ -160,7 +160,7 @@ parse_list(int multi)
   cmd_tree *l = NULL;
 
   for (;;) {
-    gettok(CHKALIAS | CHKKWD | (multi ? CHKNL : 0));
+    gettok(CHKALIAS | CHKKWD | (multi ? CHKNL : 0) | CHKBRACE);
     if (tbuf.type == TEOF)
       return NULL;
     if (tbuf.type != TNL)
@@ -178,12 +178,12 @@ parse_list(int multi)
 
     if (tbuf.type == TBKGRND) {
       l = newoppnode(TSEMI, l ? l : newoppnode(TBKGRND, r, NULL), l ? r : NULL);
-      gettok(CHKALIAS | CHKKWD | (multi ? CHKNL : 0));
+      gettok(CHKALIAS | CHKKWD | (multi ? CHKNL : 0) | CHKBRACE);
       continue;
     }
     if (tbuf.type == TSEMI || (multi && tbuf.type == TNL)) {
       l = l ? newoppnode(TSEMI, l, r) : r;
-      gettok(CHKALIAS | CHKKWD | (multi ? CHKNL : 0));
+      gettok(CHKALIAS | CHKKWD | (multi ? CHKNL : 0) | CHKBRACE);
       continue;
     }
       return l ? newoppnode(TSEMI, l, r) : r;
@@ -298,7 +298,7 @@ parse_andor(void)
     if (tbuf.type != TAND && tbuf.type != TOR)
       return l;
     token op = tbuf.type;
-    gettok(CHKALIAS | CHKKWD | CHKNL);
+    gettok(CHKALIAS | CHKKWD | CHKNL | CHKBRACE);
     if (!(r = parse_pipe()))
       return NULL;
     l->flags |= EFLAG_SAFE;
@@ -366,7 +366,7 @@ parse_pipe(void)
 
   while (tbuf.type == TNOT) {
     neg++;
-    gettok(CHKALIAS | CHKKWD);
+    gettok(CHKALIAS | CHKKWD | CHKBRACE);
   }
   if (!(cmd = parse_cmd()))
     return NULL;
@@ -376,7 +376,7 @@ parse_pipe(void)
   for (;;) {
     if (tbuf.type != TPIPE)
       break;
-    gettok(CHKALIAS | CHKKWD | CHKNL);
+    gettok(CHKALIAS | CHKKWD | CHKNL | CHKBRACE);
     if (!(p = parse_cmd()))
       return NULL;
     p = gettailredir(p);
@@ -420,7 +420,7 @@ parse_group(void)
 static cmd_tree *
 parse_func(void)
 {
-  gettok(CHKNL);
+  gettok(CHKNL | CHKBRACE);
   if (tbuf.type == TLB) {
     return parse_group();
   }
@@ -539,21 +539,21 @@ parse_case(void)
   tailcl = NULL;
   headcl = NULL;
   clauses = NULL;
-  gettok(CHKALIAS | CHKKWD);
+  gettok(CHKALIAS | CHKKWD | CHKBRACE);
   if (tbuf.type != TWORD)
     return synunexpected(curline, tbuf);
   word = tbuf.cmd;
 
-  gettok(CHKALIAS | CHKKWD);
+  gettok(CHKALIAS | CHKKWD | CHKBRACE);
   if (tbuf.type == TIN) {
     cap = WFCAP;
     for (;;) {
-      gettok(CHKALIAS | CHKKWD | CHKNL);
+      gettok(CHKALIAS | CHKKWD | CHKNL | CHKBRACE);
       if (tbuf.type == TESAC) {
         break;
       }
       if (tbuf.type == TLP)
-        gettok(CHKALIAS | CHKKWD);
+        gettok(CHKALIAS | CHKKWD | CHKBRACE);
 
       clauses = st_alloc(sizeof(clause));
       clauses->ptrn = st_alloc(cap * sizeof(wf *));
@@ -598,7 +598,7 @@ parse_case(void)
       }
       return synexpected(curline, tbuf, TESAC);
     }
-    gettok(CHKALIAS | CHKKWD);
+    gettok(CHKALIAS | CHKKWD | CHKBRACE);
   } else {
     return synexpected(curline, tbuf, TIN);
   }
@@ -634,11 +634,11 @@ parse_if(void)
       else_ = parse_list(1);
       if (tbuf.type != TFI)
         return synexpected(curline, tbuf, TFI);
-      gettok(CHKALIAS | CHKKWD);
+      gettok(CHKALIAS | CHKKWD | CHKBRACE);
       break;
     case TFI:
       else_ = NULL;
-      gettok(CHKALIAS | CHKKWD);
+      gettok(CHKALIAS | CHKKWD | CHKBRACE);
       break;
     default:
       return synunexpected(curline, tbuf);
@@ -664,12 +664,12 @@ parse_for(void)
 
   words = NULL;
   wc = 0;
-  gettok(CHKALIAS | CHKKWD);
+  gettok(CHKALIAS | CHKKWD | CHKBRACE);
   if (tbuf.type != TWORD)
     return synunexpected(curline, tbuf);
   name = tbuf.cmd;
 
-  gettok(CHKALIAS | CHKKWD | CHKNL);
+  gettok(CHKALIAS | CHKKWD | CHKNL | CHKBRACE);
   if (tbuf.type == TIN) {
     cap = WFCAP;
     words = st_alloc(cap * sizeof(wf *));
@@ -687,7 +687,7 @@ parse_for(void)
   }
 
   if (tbuf.type == TNL)
-    gettok(CHKALIAS | CHKKWD | CHKNL);
+    gettok(CHKALIAS | CHKKWD | CHKNL | CHKBRACE);
   if (tbuf.type == TSEMI) {
     gettok(CHKALIAS | CHKKWD | CHKNL);
     if (tbuf.type != TDO)
@@ -698,7 +698,7 @@ parse_for(void)
     return NULL;
   if (tbuf.type != TDONE)
     return synexpected(curline, tbuf, TDONE);
-  gettok(CHKALIAS | CHKKWD);
+  gettok(CHKALIAS | CHKKWD | CHKBRACE);
 
   /* new for loop node */
   n = st_alloc(sizeof(cmd_tree));
@@ -729,7 +729,7 @@ parse_while(token tok)
     return NULL;
   if (tbuf.type != TDONE)
     return synexpected(curline, tbuf, TDONE);
-  gettok(CHKALIAS | CHKKWD);
+  gettok(CHKALIAS | CHKKWD | CHKBRACE);
 
   cmd_tree *n = st_alloc(sizeof(cmd_tree));
   n->type = WHILE;
