@@ -49,3 +49,4 @@ heaptrack.*
 .aider*
 /tools/dump_wf.c
 /tests/pctest.sh
+/reminder
