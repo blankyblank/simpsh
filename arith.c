@@ -496,7 +496,6 @@ arith_dollar(i64 *num, const char **txt, size_t *tlen)
       pshctx(M_BRACE);
       ch = shgetchar();
       ewx = get_wf(ch);
-      popctx();
       popinput();
       ew = ewx ? exp_word(ewx, &clen) : NULL;
       if ((estr = ew ? join_wf(ew, 0) : NULL)) {
