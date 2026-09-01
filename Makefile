@@ -2,21 +2,26 @@
 
 include config.mk
 
-CCNAME != p="$$(command -v $(CC) 2>/dev/null)"; \
-	r="$$(readlink "$$p" 2>/dev/null)";\
-	if [ -n "$$r" ]; then\
-		case "$$r" in\
-			*clang*) echo clang;;\
-			*gcc*) echo gcc;;\
-			*) echo other;;\
-		esac;\
-	else\
-		v="$$($(CC) --version 2>/dev/null)";\
-			case "$$v" in\
+CCNAME != \
+	if [ "$(CC)" = "cc" ]; then \
+		p="$$(command -v $(CC) 2>/dev/null)"; \
+		r="$$(readlink "$$p" 2>/dev/null)";\
+		if [ -n "$$r" ]; then\
+			case "$$r" in\
 				*clang*) echo clang;;\
 				*gcc*) echo gcc;;\
 				*) echo other;;\
 			esac;\
+		else\
+			v="$$($(CC) --version 2>/dev/null)";\
+				case "$$v" in\
+					*clang*) echo clang;;\
+					*gcc*) echo gcc;;\
+					*) echo other;;\
+				esac;\
+		fi \
+	else \
+		echo $(CC); \
 	fi
 
 PROFILE != case "$(BUILD):$(CCNAME)" in \
