@@ -102,7 +102,7 @@ retry:
         p++;
         continue;
       case '?':
-        if (pfl && (!*s || *s == '/'))
+        if (!*s || (pfl && (!*s || *s == '/')))
           goto backtrack;
         p++, s++;
         continue;
