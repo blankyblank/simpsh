@@ -491,9 +491,11 @@ arith_dollar(i64 *num, const char **txt, size_t *tlen)
       char *wbuf, *estr;
       int ch;
 
-      wbuf = st_strndup(ap, j + 1);
-      setinputstrn(wbuf, j + 1);
-      pshctx(M_BRACE);
+      wbuf = st_alloc(j + 3);
+      wbuf[0] = '$';
+      memcpy(wbuf + 1, ap, j + 1);
+      wbuf[j + 2] = '\0';
+      setinputstrn(wbuf, j + 2);
       ch = shgetchar();
       ewx = get_wf(ch);
       popinput();
