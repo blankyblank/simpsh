@@ -9,6 +9,8 @@
 #include "errmsg.h"
 #include "alloc.h"
 #include "expand.h"
+#include "lex.h"
+#include "input.h"
 #include "var.h"
 #include "main.h"
 #include "simd.h"
@@ -485,17 +487,19 @@ arith_dollar(i64 *num, const char **txt, size_t *tlen)
       if (!(*txt = avarstr(ap + 1, clen, tlen)))
         *tlen = 0;
     } else {
-      wf f, *ew;
-      char *estr;
+      wf *ew, *ewx;
+      char *wbuf, *estr;
+      int ch;
 
-      f.qs = QBRACE_DQ;
-      f.word = (char *)ap;
-      f.len = j + 1;
-      f.next = NULL;
-      f.flags = 0;
-      ew = exp_word(&f, &clen);
-      estr = ew ? join_wf(ew, 0) : NULL;
-      if (estr) {
+      wbuf = st_strndup(ap, j + 1);
+      setinputstrn(wbuf, j + 1);
+      pshctx(M_BRACE);
+      ch = shgetchar();
+      ewx = get_wf(ch);
+      popctx();
+      popinput();
+      ew = ewx ? exp_word(ewx, &clen) : NULL;
+      if ((estr = ew ? join_wf(ew, 0) : NULL)) {
         *txt = estr;
         *tlen = strlen(estr);
       } else {

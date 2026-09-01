@@ -125,18 +125,14 @@ struct kw {
   token tok;
 };
 
-extern wf *wf_chunk;
-extern unsigned int wf_chunk_left;
-extern int alias_depth;
-extern int notclosed;
-extern int chkwd;
-extern const struct kw kw[32];
-
 #define WF_CHUNK_SIZE 4
-#define kwhash(s, n) (((u8)(s)[0] * 1 + (u8)(s)[(n)-1] * 2 + (n) * 22) & 31)
-#define SHTOK(t) ((sh_tok){ .type = t, .sub = 0 })
-#define SHREDIR(s) ((sh_tok){ .type = TREDIR, .sub = (s) })
-#define SHWORD(w) ((sh_tok) { .type = TWORD, .cmd = w, .sub = 0 })
+#define CTX_MAX     8
+#define kwhash(s, n)  (((u8)(s)[0] * 1 + (u8)(s)[(n) - 1] * 2 + (n) * 22) & 31)
+#define SHTOK(t)      ((sh_tok) { .type = t, .sub = 0 })
+#define SHREDIR(s)    ((sh_tok) { .type = TREDIR, .sub = (s) })
+#define SHWORD(w)     ((sh_tok) { .type = TWORD, .cmd = w, .sub = 0 })
+#define pshctx(m)     (ctx_stack[++ctx_depth] = (m))
+#define popctx()      (ctx_depth--)
 
 enum {
   CHKALIAS = 1 << 0,
@@ -157,11 +153,30 @@ enum rdr {
   RDHERE_D = 1 << 8,
 };
 
+typedef enum {
+  M_NORMAL,
+  M_DQUOTE,
+  M_SQUOTE,
+  M_BRACE,
+  M_HEREDOC
+} tokmode;
+
+extern wf *wf_chunk;
+extern unsigned int wf_chunk_left;
+extern int alias_depth;
+extern int notclosed;
+extern int chkwd;
+extern const struct kw kw[32];
+extern int ctx_depth;
+extern tokmode ctx_stack[CTX_MAX];
+
+
 extern sh_tok tokenize(void);
 extern void pushstring(char *, size_t, int);
 extern void popstring(void);
 extern char *join_wf(wf *, int);
 extern wf *lex_heredoc(const char *, size_t);
+extern wf *get_wf(int);
 
 static inline wf *
 wfalloc(void)

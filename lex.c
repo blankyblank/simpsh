@@ -29,11 +29,8 @@ int alias_depth;
 int notclosed;
 int chkwd;
 
-#define CTX_MAX     8
 /* current context */
 #define cctx      (ctx_stack[ctx_depth])
-#define pshctx(m) (ctx_stack[++ctx_depth] = (m))
-#define popctx()  (ctx_depth--)
 #define NCHR(c)   (nchars[(unsigned char)(c)])
 #define DCHR(c)   (dqchars[(unsigned char)(c)])
 #define SCHR(c)   (sqchars[(unsigned char)(c)])
@@ -44,14 +41,6 @@ int chkwd;
       wflen = 0; \
     } \
   } while (0)
-
-typedef enum {
-  M_NORMAL,
-  M_DQUOTE,
-  M_SQUOTE,
-  M_BRACE,
-  M_HEREDOC
-} tokmode;
 
 /* clang-format off */
 static const unsigned char nchars[256] = {
@@ -117,10 +106,9 @@ const struct kw kw[32] = {
   [27] = { "until", 5,TUNTIL },
 }; /* clang-format on */
 
-static int ctx_depth;
-static tokmode ctx_stack[CTX_MAX] = { M_NORMAL };
+int ctx_depth;
+tokmode ctx_stack[CTX_MAX] = { M_NORMAL };
 
-static wf *get_wf(int);
 static sh_tok tokword(wf *, int*);
 static void tokws(void);
 static sh_tok toklt(void);
@@ -237,7 +225,7 @@ join_wf(wf *wordf, int esc)
 // join_esc
 
 /** Get wf's from input */
-__attribute__((hot)) static wf *
+__attribute__((hot)) wf *
 get_wf(int c)
 {
   char *w;
