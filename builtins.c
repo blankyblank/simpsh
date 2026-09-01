@@ -618,11 +618,20 @@ falsecmd(char **args)
 }
 
 static int
+fdgetc(int fd)
+{
+  unsigned char c;
+  ssize_t n;
+  n = read(fd, &c, 1);
+  return n == 1 ? (int)c : EOF;
+}
+
+static int
 readcmd(char **argv)
 {
   int rflag = 1 << 0;
   int pflag = 1 << 1;
-  int flag = 0;
+  int flag = 0, rfd;
   size_t argc = 0;
   char *prompt = NULL;
 
@@ -644,6 +653,7 @@ readcmd(char **argv)
   if (!argc)
     return shwarn_arg(argv0, "1", "requires variable name");
 
+  rfd = fileno(shin);
   stmark rmark;
   int c, status = 0;
   size_t len = 0, ifslen, cleft, nws = 0;
@@ -658,7 +668,7 @@ readcmd(char **argv)
   }
   stcheck(32);
   clearerr(shin);
-  while ((c = fgetc(shin))) {
+  while ((c = (rfd >= 0 ? fdgetc(rfd) : fgetc(shin)))) {
     switch (c) {
       case EOF:
         status = 1;
@@ -666,7 +676,7 @@ readcmd(char **argv)
       case '\0':
         continue;
       case '\\':
-        if ((c = fgetc(shin)) == EOF) {
+        if ((c = (rfd >= 0 ? fdgetc(rfd) : fgetc(shin))) == EOF) {
           status = 1;
           goto rend;
         }
