@@ -496,6 +496,9 @@ static const char unaliashelp[] =
   "\n"
   "    Remove each NAME from the alias list.\n"
   "\n"
+  "    Options:\n"
+  "     -a     Remove all set aliases\n"
+  "\n"
   "Exit Status:\n"
   "    Returns 0 unless an alias does not exist.";
 
@@ -834,6 +837,9 @@ static const char readlinkhelp[] =
   "\n"
   "Print value of a symbolic link or canonical file name\n"
   "\n"
+  "  -f    Canonicalize by following all symlinks\n"
+  "  -n    Do not add newline to the end\n"
+  "\n"
   "Exit Status:\n"
   "    Returns 0 if file is link, 1 otherwise";
 #endif /* ENABLE_READLINK */
@@ -914,18 +920,25 @@ static const char sorthelp[] =
 
 #if ENABLE_TAIL
 static const char tailhelp[] =
-  "tail [-f] [-n [+]count] [file ...]\n"
-  "\n"
-  "    Print the last lines of files.\n"
-  "\n"
-  "    Writes the last COUNT (default 10) lines of each FILE to\n"
-  "    stdout. A count prefixed with '+', or the obsolete +NUM form,\n"
-  "    starts printing at line NUM from the start of the file instead.\n"
-  "    With -f, follows new data as it is appended. If no FILE is\n"
-  "    given, reads from stdin.\n"
-  "\n"
-  "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+"tail [-f] [-n [+]count] [file ...]\n"
+"\n"
+"    Print the last lines of files.\n"
+"\n"
+"    Writes the last COUNT (default 10) lines of each FILE to\n"
+"    stdout. A count prefixed with '+', or the obsolete +NUM form,\n"
+"    starts printing at line NUM from the start of the file instead.\n"
+"    With -f, follows new data as it is appended. If no FILE is\n"
+"    given, reads from stdin.\n"
+"\n"
+"  Options:\n"
+"    -f              output appended data as the file grows an absent\n"
+"                       option argument means 'descriptor'\n"
+"    -F              same as --follow=name --retry\n"
+"    -n [+]NUM       output the last NUM lines, instead of the last 10\n"
+"                       or use -n +NUM to skip NUM-1 lines at the start\n"
+"\n"
+"Exit Status:\n"
+"    Returns 0 on success, 1 on error.";
 #endif /* ENABLE_TAIL */
 
 #if ENABLE_TEE
@@ -1097,7 +1110,7 @@ const builtinhelp helpmsgs[] = {
   [ULIMITH] =   { "ulimit",   ulimitusg,                ulimithelp      },
   [UMASKH] =    { "umask",    "[-S] mode",              umaskhelp       },
   [UNTILH] =    { "until",    untilusg,                 untilhelp       },
-  [UNALIASH] =  { "unalias",  "name",                   unaliashelp     },
+  [UNALIASH] =  { "unalias",  "[-a] name",              unaliashelp     },
   [UNSETH] =    { "unset",    "[-fv] name",             unsethelp       },
   [WAITH] =     { "wait",     "[id ...]",               waitforhelp     },
   [WHILEH] =    { "while",    whileusg,                 whilehelp       },
@@ -1130,7 +1143,7 @@ const builtinhelp helpmsgs[] = {
   [PASTEH] =    { "paste",   "[OPTION]... [FILE]...",   pastehelp       },
 #endif
 #if ENABLE_READLINK
-  [READLINKH] = { "readlink", "[-n] file",              readlinkhelp    },
+  [READLINKH] = { "readlink", "[-n][-f] file",          readlinkhelp    },
 #endif
 #if ENABLE_REALPATH
   [REALPATHH] = { "realpath", "[-n] file",              realpathhelp    },
