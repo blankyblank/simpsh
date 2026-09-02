@@ -44,6 +44,8 @@ enum arith_tok {
     A_LOR,      // ||
     A_BNOT,     // ~
     A_LNOT,     // !
+    A_INCR,     // ++
+    A_DECR,     // --
     A_END,      // end marker
 };
 
@@ -66,6 +68,8 @@ static const int lbp_tab[] = {
   [A_STAR]   = 13,
   [A_SLASH]  = 13,
   [A_PCT]    = 13,
+  [A_INCR]   = 15,
+  [A_DECR]   = 15,
   [A_ASSN]   = 2,
   [A_BNOT]   = -1,
   [A_LNOT]   = -1,
@@ -80,6 +84,8 @@ static const int lbp_tab[] = {
 static const char *ap;     /* current position */
 static size_t alen;        /* remaining bytes */
 static int atok;           /* current token type */
+static int prvtok = A_EOF; /* the previous token */
+static char assnop;        /* compound assignment op */
 static i64 aval;           /* numeric value (for A_NUM) */
 static const char *aname;  /* name pointer (for A_NAME) */
 static size_t anlen;       /* name length (for A_NAME) */
@@ -158,6 +164,7 @@ next_tok(void)
     }
     if (!alen) {
       atok = A_EOF;
+      prvtok = atok;
       return;
     }
 
@@ -175,6 +182,7 @@ next_tok(void)
         case 1:
           atok = A_NUM;
           aval = num;
+          prvtok = atok;
           return;
         case 0:
           if (!tlen)
@@ -184,10 +192,12 @@ next_tok(void)
           continue;
         default:
           atok = A_EOF;
+          prvtok = atok;
           return;
       }
     }
     scan_tok();
+    prvtok = atok;
     return;
   }
 }
@@ -255,25 +265,64 @@ scan_tok(void)
   alen--;
   switch (c) {
     case '+':
-      atok = A_PLUS;
+      if (alen > 0 && ap[0] == '=') {
+        assnop = '+', atok = A_ASSN;
+        ap++, alen--;
+      } else if (alen > 0 && ap[0] == '+' &&
+          (prvtok == A_NAME || (alen > 1 && (isalpha_(ap[1]) || ap[1] == '_')))) {
+        atok = A_INCR;
+        ap++, alen--;
+      } else {
+        atok = A_PLUS;
+      }
       break;
     case '-':
-      atok = A_MINUS;
+      if (alen > 0 && ap[0] == '=') {
+        assnop = '-', atok = A_ASSN;
+        ap++, alen--;
+      } else if (alen > 0 && ap[0] == '-' &&
+          (prvtok == A_NAME || (alen > 1 && (isalpha_(ap[1]) || ap[1] == '_')))) {
+        atok = A_DECR;
+        ap++, alen--;
+      } else {
+        atok = A_MINUS;
+      }
       break;
     case '*':
-      atok = A_STAR;
+      if (alen > 0 && ap[0] == '=') {
+        assnop = '*', atok = A_ASSN;
+        ap++, alen--;
+      } else {
+        atok = A_STAR;
+      }
       break;
     case '/':
-      atok = A_SLASH;
+      if (alen > 0 && ap[0] == '=') {
+        assnop = '/', atok = A_ASSN;
+        ap++, alen--;
+      } else {
+        atok = A_SLASH;
+      }
       break;
     case '%':
-      atok = A_PCT;
+      if (alen > 0 && ap[0] == '=') {
+        assnop = '%', atok = A_ASSN;
+        ap++, alen--;
+      } else {
+        atok = A_PCT;
+      }
       break;
     case '~':
       atok = A_BNOT;
       break;
     case '^':
-      atok = A_BXOR;
+      if (alen > 0 && ap[0] == '=') {
+        assnop = '^', atok = A_ASSN;
+        ap++, alen--;
+      } else
+        {
+          atok = A_BXOR;
+        }
       break;
     case '(':
       atok = A_LPAREN;
@@ -287,9 +336,15 @@ scan_tok(void)
       return;
     case '<':
       if (alen > 0 && ap[0] == '<') {
-        atok = A_LSHIFT;
-        ap++;
-        alen--;
+        if (alen > 1 && ap[1] == '=') {
+          assnop = '<', atok = A_ASSN;
+          ap += 2;
+          alen -= 2;
+        } else {
+          atok = A_LSHIFT;
+          ap++;
+          alen--;
+        }
       } else if (alen > 0 && ap[0] == '=') {
         atok = A_LE;
         ap++;
@@ -300,9 +355,15 @@ scan_tok(void)
       break;
     case '>':
       if (alen > 0 && ap[0] == '>') {
-        atok = A_RSHIFT;
-        ap++;
-        alen--;
+        if (alen > 1 && ap[1] == '=') {
+          assnop = '>', atok = A_ASSN;
+          ap += 2;
+          alen -= 2;
+        } else {
+          atok = A_RSHIFT;
+          ap++;
+          alen--;
+        }
       } else if (alen > 0 && ap[0] == '=') {
         atok = A_GE;
         ap++;
@@ -317,7 +378,7 @@ scan_tok(void)
         ap++;
         alen--;
       } else {
-        atok = A_ASSN;
+        assnop = 0, atok = A_ASSN;
         return;
       }
       break;
@@ -333,8 +394,10 @@ scan_tok(void)
     case '&':
       if (alen > 0 && ap[0] == '&') {
         atok = A_LAND;
-        ap++;
-        alen--;
+        ap++, alen--;
+      } else if (alen > 0 && ap[0] == '=') {
+        assnop = '&', atok = A_ASSN;
+        ap++, alen--;
       } else {
         atok = A_BAND;
       }
@@ -342,8 +405,10 @@ scan_tok(void)
     case '|':
       if (alen > 0 && ap[0] == '|') {
         atok = A_LOR;
-        ap++;
-        alen--;
+        ap++, alen--;
+      } else if (alen > 0 && ap[0] == '=') {
+        assnop = '|', atok = A_ASSN;
+        ap++, alen--;
       } else {
         atok = A_BOR;
       }
@@ -397,6 +462,27 @@ nud(void)
       lname = NULL;
       next_tok();
       return expr_bp(14);
+    case A_INCR:
+    case A_DECR:
+      {
+        int up;
+        up = (atok == A_INCR);
+        next_tok();
+
+        if (atok != A_NAME) {
+          shwarn_arg("arithmetic", ap, "left valu required");
+          atok = A_EOF;
+          return 0;
+        }
+        val = nud();
+        val += up ? 1 : -1;
+        {
+          char buf[32];
+          lltoa(val, buf);
+          setvar_i(lname, buf, val, 0);
+        }
+        return val;
+      }
     default:
       shwarn_arg("arithmetic syntax", ap, "unexpected token");
       atok = A_EOF;
@@ -641,18 +727,84 @@ led(i64 left)
       next_tok();
       return left || expr_bp(5);
     case A_ASSN:
+      i64 rhs, nv;
+      char valbuf[32], *name;
       next_tok();
-      i64 rhs;
-      char valbuf[32];
-      char *name = lname;
+      name = lname;
       rhs = expr_bp(2);
       if (!name) {
         shwarn_arg("arithmetic", ap, "left value requried");
         return 0;
       }
-      lltoa(rhs, valbuf);
-      setvar_i(name, valbuf, rhs, 0);
-      return rhs;
+      switch (assnop) {
+        case '+':
+          nv = left + rhs;
+          break;
+        case '-':
+          nv = left - rhs;
+          break;
+        case '*':
+          nv = left * rhs;
+          break;
+        case '/':
+          if (rhs) {
+            nv = left / rhs;
+          } else {
+            nv = 0;
+            shwarn_arg("arithmetic", ap, "division by 0");
+          }
+          break;
+        case '%':
+          if (rhs) {
+            nv = left % rhs;
+          } else {
+            nv = 0;
+            shwarn_arg("arithmetic", ap, "division by 0");
+          }
+          break;
+        case '<':
+          nv = left << rhs;
+          break;
+        case '>':
+          nv = left >> rhs;
+          break;
+        case '&':
+          nv = left & rhs;
+          break;
+        case '^':
+          nv = left ^ rhs;
+          break;
+        case '|':
+          nv = left | rhs;
+          break;
+        default:
+          nv = rhs;
+      }
+      lltoa(nv, valbuf);
+      setvar_i(name, valbuf, nv, 0);
+      return nv;
+    case A_INCR:
+    case A_DECR:
+      {
+        char *name;
+        int up;
+        name = lname;
+        up = (atok == A_INCR);
+        if (!name) {
+          shwarn_arg("arithmetic", ap, "left value required");
+          atok = A_EOF;
+          return 0;
+        }
+        {
+          char buf[32];
+          i64 nv;
+          nv = left + (up ? 1: -1);
+          lltoa(nv, buf);
+          setvar_i(name, buf, nv, 0);
+        }
+        next_tok();
+        return left;
+      }
     default:
       atok = A_EOF;
       return left;
