@@ -40,3 +40,31 @@ else
   test_pass "out2" "matches" "true"
 fi
 
+
+msg_run "if with empty word condition: if ''; then echo a; else echo b; fi"
+out=$(../simpsh -c "if ''; then echo a; else echo b; fi")
+if [ "$out" = "b" ]; then
+  test_pass "out" "matched" "b"
+else
+  test_fail "out" "expected" "b"
+  exit 1
+fi
+
+msg_run 'if with empty quoted word: if ""; then echo a; else echo b; fi'
+out=$(../simpsh -c 'if ""; then echo a; else echo b; fi')
+if [ "$out" = "b" ]; then
+  test_pass "out" "matched" "b"
+else
+  test_fail "out" "expected" "b"
+  exit 1
+fi
+
+# XXX: i don't like this. never ending loop on fail if covers this already i think
+# msg_run "while ''; do echo x; done; echo end"
+# out=$(../simpsh -c "while ''; do echo x; done; echo end")
+# if [ "$out" = "end" ]; then
+#   test_pass "out" "matched" "end"
+# else
+#   test_fail "out" "expected" "end"
+#   exit 1
+# fi

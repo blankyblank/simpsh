@@ -82,3 +82,13 @@ if [ "$out" !=  'hi' ]; then
 else
   test_pass "out" "matches" "hi"
 fi
+
+msg_run 'cmdsub in ${var:-...} with suffix (mdev regression)'
+out=$(../simpsh -c 'echo ${_undef:-$(echo a)}b')
+if [ "$out" = "ab" ]; then
+  test_pass "out" "matches" "ab"
+else
+  test_fail "out" "expect" "ab"
+  exit 1
+fi
+

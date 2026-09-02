@@ -114,6 +114,24 @@ else
   exit 1
 fi
 
+msg_run '${var:-word} with immediate suffix'
+out=$(../simpsh -c 'echo ${_undef:-abc}def')
+if [ "$out" = "abcdef" ]; then
+  test_pass "out" "matches" "abcdef"
+else
+  test_fail "out" "expect" "abcdef"
+  exit 1
+fi
+
+msg_run '${var:+word} with immediate suffix'
+out=$(../simpsh -c 'v=set; echo ${v:+abc}def')
+if [ "$out" = "abcdef" ]; then
+  test_pass "out" "matches" "abcdef"
+else
+  test_fail "out" "expect" "abcdef"
+  exit 1
+fi
+
 msg_run '${var:?msg} error on unset'
 out=$(../simpsh -c 'unset x; echo ${x:?oops}' 2>&1)
 rc=$?

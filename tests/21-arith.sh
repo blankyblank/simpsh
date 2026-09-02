@@ -137,6 +137,119 @@ msg_run 'arithmetic assignment: x=5; echo $((x = x + 2)); echo $x'
 out=$(../simpsh -c 'x=5; y=$((x = x + 2)); echo $y')
 [ "$out" = "7" ] || { msg_fail "arith assignment" ; exit 1; }
 
+msg_run 'compound add: x=5; echo $((x += 3)); echo $x'
+out=$(../simpsh -c 'x=5; echo $((x += 3)); echo $x')
+[ "$out" = "8
+8" ] || { msg_fail "x += 3"; exit 1; }
+
+msg_run 'compound subtract: x=5; echo $((x -= 2)); echo $x'
+out=$(../simpsh -c 'x=5; echo $((x -= 2)); echo $x')
+[ "$out" = "3
+3" ] || { msg_fail "x -= 2"; exit 1; }
+
+msg_run 'compound multiply: x=2; echo $((x *= 5)); echo $x'
+out=$(../simpsh -c 'x=2; echo $((x *= 5)); echo $x')
+[ "$out" = "10
+10" ] || { msg_fail "x *= 10"; exit 1; }
+
+msg_run 'compound divide: x=10; echo $((x /= 4)); echo $x'
+out=$(../simpsh -c 'x=10; echo $((x /= 4)); echo $x')
+[ "$out" = "2
+2" ] || { msg_fail "x /= 4"; exit 1; }
+
+msg_run 'compound modulo: x=10; echo $((x %= 4)); echo $x'
+out=$(../simpsh -c 'x=10; echo $((x %= 4)); echo $x')
+[ "$out" = "2
+2" ] || { msg_fail "x %= 4"; exit 1; }
+
+msg_run 'compound bitwise: x=1; echo $((x <<= 2)); echo $x'
+out=$(../simpsh -c 'x=1; echo $((x <<= 2)); echo $x')
+[ "$out" = "4
+4" ] || { msg_fail "x <<= 2"; exit 1; }
+
+msg_run 'compound bitwise: x=8; echo $((x >>= 2)); echo $x'
+out=$(../simpsh -c 'x=8; echo $((x >>= 2)); echo $x')
+[ "$out" = "2
+2" ] || { msg_fail "x >>= 2"; exit 1; }
+
+msg_run 'compound and: x=5; echo $((x &= 3)); echo $x'
+out=$(../simpsh -c 'x=5; echo $((x &= 3)); echo $x')
+[ "$out" = "1
+1" ] || { msg_fail "x &= 3"; exit 1; }
+
+# came out to 15 in dash when testing
+msg_run 'compound or: x=5; echo $((x |= 8)); echo $x'
+out=$(../simpsh -c 'x=5; echo $((x |= 8)); echo $x')
+[ "$out" = "13
+13" ] || { msg_fail "x |= 8"; exit 1; }
+
+msg_run 'compound xor: x=5; echo $((x ^= 3)); echo $x'
+out=$(../simpsh -c 'x=5; echo $((x ^= 3)); echo $x')
+[ "$out" = "6
+6" ] || { msg_fail "x ^= 3"; exit 1; }
+
+msg_run 'while: : $((retval += $?)) after false'
+out=$(../simpsh -c 'retval=0; false; : $((retval += $?)); echo $retval')
+[ "$out" = 1 ] || { msg_fail "retval += \$?"; exit 1; }
+
+msg_run 'compound across statements: : $((x += 1)) twice'
+out=$(../simpsh -c 'x=1; : $((x += 1)); : $((x += 1)); echo $x')
+[ "$out" = 3 ] || { msg_fail "x += 1 twice"; exit 1; }
+
+msg_run 'post increment: x=5; echo $((x++)); echo $x'
+out=$(../simpsh -c 'x=5; echo $((x++)); echo $x')
+[ "$out" = "5
+6" ] || { msg_fail "x++"; exit 1; }
+
+msg_run 'preincrement: x=5; echo $((++x)); echo $x'
+out=$(../simpsh -c 'x=5; echo $((++x)); echo $x')
+[ "$out" = "6
+6" ] || { msg_fail "++x"; exit 1; }
+
+msg_run 'post decrement: x=5; echo $((x--)); echo $x'
+out=$(../simpsh -c 'x=5; echo $((x--)); echo $x')
+[ "$out" = "5
+4" ] || { msg_fail "x--"; exit 1; }
+
+msg_run 'post increment mixed: x=5; echo $((x++ + x)); echo $x'
+out=$(../simpsh -c 'x=5; echo $((x++ + x)); echo $x')
+[ "$out" = "11
+6" ] || { msg_fail "x++ + x"; exit 1; }
+
+msg_run 'post decrement mixed: x=5; echo $((x-- * x)); echo $x'
+out=$(../simpsh -c 'x=5; echo $((x-- * x)); echo $x')
+[ "$out" = "20
+4" ] || { msg_fail "x-- * x"; exit 1; }
+
+msg_run 'post decrement null variable: x; echo $((x++)); echo $x'
+out=$(../simpsh -c 'x; echo $((x++)); echo $x')
+[ "$out" = "0
+1" ] || { msg_fail "x++"; exit 1; }
+
+msg_run 'tokenize tests: echo $((5--2))'
+out=$(../simpsh -c 'echo $((5--2))')
+[ "$out" = "7" ] || { msg_fail "5--2"; exit 1; }
+
+msg_run 'echo $((--5))'
+out=$(../simpsh -c 'echo $((--5))')
+[ "$out" = "5" ] || { msg_fail "--5"; exit 1; }
+
+msg_run 'x=5; echo $((x + 2 + 3))'
+out=$(../simpsh -c 'x=5; echo $((x + 2 + 3))')
+[ "$out" = "10" ] || { msg_fail "x + 2 + 3"; exit 1; }
+
+msg_run 'x=5; echo $((x - 1 - 1))'
+out=$(../simpsh -c 'x=5; echo $((x - 1 - 1))')
+[ "$out" = "3" ] || { msg_fail "x - 1 - 1"; exit 1; }
+
+msg_run 'x=5; echo $((x + 2))'
+out=$(../simpsh -c 'x=5; echo $((x + 2))')
+[ "$out" = "7" ] || { msg_fail "x + 2"; exit 1; }
+
+msg_run 'a=5 b=3; echo $((a + b + b))'
+out=$(../simpsh -c 'a=5 b=3; echo $((a + b + b))')
+[ "$out" = "11" ] || { msg_fail "a + b + b"; exit 1; }
+
 msg_run "arithmetic vars: a=5 b=3; echo \$((a + b))"
 out=$(../simpsh -c 'a=5 b=3; echo $((a + b))')
 if [ "$out" != "8" ]; then
