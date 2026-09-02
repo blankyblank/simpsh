@@ -13,7 +13,6 @@
 #include "input.h"
 #include "lex.h"
 #include "main.h"
-#include "opts.h"
 #include "parse.h"
 #include "utils.h"
 
@@ -28,7 +27,7 @@ static int is_assn(wf *);
 static int get_assn(wf **, wf *** restrict);
 static cmd_tree *parse_andor(void);
 static cmd_tree * parse_subsh(void);
-static cmd_tree *parse_simple_cmd(size_t);
+static cmd_tree *parse_simple_cmd(void);
 static cmd_tree *parse_pipe(void);
 static cmd_tree *parse_group(void);
 static cmd_tree *parse_func(void);
@@ -191,7 +190,7 @@ parse_list(int multi)
 }
 
 cmd_tree *
-parse_simple_cmd(size_t neg)
+parse_simple_cmd(void)
 {
   wf **args, **sh_vars;
   redir *redirs, **tail;
@@ -205,8 +204,7 @@ parse_simple_cmd(size_t neg)
   args = st_alloc(cap * sizeof(wf *));
   redirs = NULL;
   tail = &redirs;
-  wc = 0;
-  cmdflags = (neg & 1) ? NEG : 0;
+  wc = cmdflags = 0;
 
   for (;;) {
     switch (tbuf.type) {
@@ -780,7 +778,7 @@ parse_cmd(void)
     case TDONE:
       return NULL;
     default:
-      return parse_simple_cmd(0);
+      return parse_simple_cmd();
   }
 }
 

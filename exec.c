@@ -710,7 +710,7 @@ run_cmd(const cmd_tree *n, int inchld)
 
   status = 0;
   evars = NULL;
-  if (!final || !final[0] || !final[0][0]) { /*  if no command only name=value  */
+  if (!final || !final[0]) { /*  if no command only name=value  */
     if (CVARS(n) && CVARS(n)[0]) {
       size_t nass = 0;
       wf **vars = CVARS(n);
@@ -1016,9 +1016,13 @@ run_redir(const cmd_tree *n, int nchld)
   if (n->left->type == CMD || n->left->type == SUBSHELL) {
     redir *prev = predir;
     predir = r;
+    if (CNEG(n))
+      errsafe++;
     status = run_commands(n->left, nchld);
+    if (CNEG(n))
+      errsafe--;
     predir = prev;
-    return status;
+    return (CNEG(n)) ? !status : status;
   }
 
   sfdc = 0;
@@ -1026,11 +1030,16 @@ run_redir(const cmd_tree *n, int nchld)
     return 1;
   if (apply_redir(r))
     return 1;
+  if (CNEG(n))
+    errsafe++;
   status = run_commands(n->left, nchld);
+  if (CNEG(n))
+    errsafe--;
   fflush_unlocked(NULL);
   if (restore_fd(sfd, sfdc))
     return 1;
 
+  status = (CNEG(n)) ? !status : status;
   if (eflag && LSTATUS != 0 && !iflag && !errsafe && !(n->flags & EFLAG_SAFE))
     exit(LSTATUS);
   return status;

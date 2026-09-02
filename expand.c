@@ -652,12 +652,13 @@ exp_word(wf *wordf, size_t * restrict rlen)
                 wf *subres = exp_word(sub, &vlen);
                 if (bqs == QBRACE) {
                   if (subres) {
+                    wf *last;
+                    for (last = subres; last->next; last = last->next);
                     if (tail)
                       tail->next = subres;
                     else
                       head = subres;
-                    while (tail && tail->next)
-                      tail = tail->next;
+                    tail = last;
                     len += vlen;
                   } else {
                     append_wf(&head, &tail, st_strndup("", 0), 0, QNONE);
@@ -693,12 +694,13 @@ exp_word(wf *wordf, size_t * restrict rlen)
                 wf *subres = exp_word(sub, &vlen);
                 if (bqs == QBRACE) {
                   if (subres) {
+                    wf *last;
+                    for (last = subres; last->next; last = last->next);
                     if (tail)
                       tail->next = subres;
                     else
                       head = subres;
-                    while (tail && tail->next)
-                      tail = tail->next;
+                    tail = last;
                     len += vlen;
                   } else {
                     append_wf(&head, &tail, st_strndup("", 0), 0, QNONE);

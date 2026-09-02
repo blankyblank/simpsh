@@ -127,7 +127,7 @@ struct kw {
 
 #define WF_CHUNK_SIZE 4
 #define CTX_MAX     8
-#define kwhash(s, n)  (((u8)(s)[0] * 1 + (u8)(s)[(n) - 1] * 2 + (n) * 22) & 31)
+#define kwhash(s, n)  (((n)? ((u8)(s)[0] * 1 + (u8)(s)[(n) - 1] * 2 + (n) * 22) : 0) & 31)
 #define SHTOK(t)      ((sh_tok) { .type = t, .sub = 0 })
 #define SHREDIR(s)    ((sh_tok) { .type = TREDIR, .sub = (s) })
 #define SHWORD(w)     ((sh_tok) { .type = TWORD, .cmd = w, .sub = 0 })

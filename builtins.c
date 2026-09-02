@@ -681,7 +681,9 @@ readcmd(char **argv)
           goto rend;
         }
         if (flag & rflag) {
+          stcheck(32);
           st_putc('\\'), st_putc(c), len += 2;
+          continue;
         } else if (c == '\n') {
           continue;
         } else {
@@ -691,11 +693,12 @@ readcmd(char **argv)
       case '\n':
         goto rend;
       default:
+        stcheck(32);
         st_putc(c), len++;
     }
   }
 rend:
-  if (status) {
+  if (status && len == 0) {
     stack_restore(rmark);
     return 1;
   }

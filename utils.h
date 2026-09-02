@@ -211,7 +211,7 @@ join_strn(char **arr, size_t *t)
   }
   *p = '\0';
   if (t)
-    *t = flen;
+    *t = flen - 1;
   return buf;
 }
 
