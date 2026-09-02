@@ -908,6 +908,10 @@ expand_argv(wf **args, size_t *restrict t)
   *t = 0;
 
   argv = (char **)st_alloc(cap * sizeof(char *));
+  if (!args) {
+   argv[0] = NULL;
+   return argv;
+  }
   for (i = 0; args[i]; i++) {
     wf *w = args[i];
     if (!w->next && w->qs == QNONE &&
