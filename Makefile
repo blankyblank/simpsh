@@ -59,6 +59,7 @@ LDFLAG != case "$(BUILD):$(CCNAME):$(OS)" in \
 LIBEDITLIBS != case "$(BUILD_LINK):$(LIBEDIT):$(OS)" in\
 	static:1:OpenBSD) echo "-ledit -lcurses" ;;\
 	static:1:*) echo "-ledit -lncurses" ;;\
+	*:1:OpenBSD) echo "-ldl" ;;\
 	*:1:*) echo "-ldl" ;;\
 	*) echo "" ;;\
 	esac
