@@ -3,25 +3,28 @@
 
 typedef union {
   struct {
-    unsigned a_flag     : 1;
-    unsigned b_flag     : 1;
-    unsigned C_flag     : 1;
-    unsigned e_flag     : 1;
-    unsigned f_flag     : 1;
-    unsigned h_flag     : 1;
-    unsigned i_flag     : 1;
-    unsigned I_flag     : 1;
-    unsigned m_flag     : 1;
-    unsigned n_flag     : 1;
-    unsigned s_flag     : 1;
-    unsigned u_flag     : 1;
-    unsigned v_flag     : 1;
-    unsigned V_flag     : 1;
-    unsigned x_flag     : 1;
-    unsigned emacs_flag : 1;
-    unsigned nolog_flag : 1;
-    unsigned pipe_flag  : 1;
-    unsigned debug_flag : 1;
+    unsigned a_flag      : 1;
+    unsigned b_flag      : 1;
+    unsigned C_flag      : 1;
+    unsigned e_flag      : 1;
+    unsigned f_flag      : 1;
+    unsigned h_flag      : 1;
+    unsigned i_flag      : 1;
+    unsigned I_flag      : 1;
+    unsigned m_flag      : 1;
+    unsigned n_flag      : 1;
+    unsigned s_flag      : 1;
+    unsigned u_flag      : 1;
+    unsigned v_flag      : 1;
+    unsigned V_flag      : 1;
+    unsigned x_flag      : 1;
+    unsigned emacs_flag  : 1;
+    unsigned nolog_flag  : 1;
+    unsigned pipe_flag   : 1;
+    unsigned debug_flag  : 1;
+#ifdef __FreeBSD__
+    unsigned verify_flag : 1;
+#endif /* __FreeBSD__ */
   };
   unsigned bits;
 } shopt;
@@ -45,8 +48,13 @@ typedef union {
 #define Vflag (gstate.shopts.V_flag)
 #define xflag (gstate.shopts.x_flag)
 #define pipeflag (gstate.shopts.pipe_flag)
+#ifdef __FreeBSD__
+  #define verifyflag (gstate.shopts.verify_flag)
+  #define OPTC       20
+#else
+  #define OPTC 19
+#endif /* __FreeBSD__ */
 
-#define OPTC 19
 #define SHOPTC 16 /* short option count */
 
 extern const char shoptch[OPTC];

@@ -37,6 +37,9 @@ static const char *shoptname[OPTC] = {
   "nolog",
   "pipefail",
   "debug",
+#ifdef __FreeBSD__
+  "verify",
+#endif /* __FreeBSD__ */
 };
 
 const char shoptch[OPTC] = {
