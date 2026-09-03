@@ -217,8 +217,10 @@ free_tree(cmd_tree *n)
       sfree(n);
       break;
     case FUNC:
-      free_wf(CARGS(n)[0]);
-      sfree(CARGS(n));
+      if (CARGS(n)) {
+        free_wf(CARGS(n)[0]);
+        sfree(CARGS(n));
+      }
       free_tree(n->left);
       sfree(n);
       break;
@@ -266,9 +268,11 @@ free_tree(cmd_tree *n)
       sfree(n);
       break;
     case CMD:
-      for (size_t i = 0; CARGS(n)[i]; i++)
-        free_wf(CARGS(n)[i]);
-      sfree(CARGS(n));
+      if (CARGS(n)) {
+        for (size_t i = 0; CARGS(n)[i]; i++)
+          free_wf(CARGS(n)[i]);
+        sfree(CARGS(n));
+      }
       if (CVARS(n)) {
         for (size_t i = 0; CVARS(n)[i]; i++)
           free_wf(CVARS(n)[i]);
