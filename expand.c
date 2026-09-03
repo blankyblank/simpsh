@@ -159,8 +159,6 @@ run_cmdsub(const cmd_tree *restrict n)
     default:
       {
         int n;
-        len = 0;
-
         if (close(pipefd[1]) < 0) {
           sherrx(1, "close pipe");
           ret = -1;
@@ -385,7 +383,6 @@ splitnglob(wf *f, size_t * restrict tlen)
             hasglob = 0;
           }
           fpos++;
-          sz = fpos;
           continue;
         case M_IFSN:
           out = getfield(out, &argc, &cap, buf, bpos, hasglob, &ttl);
@@ -705,7 +702,8 @@ exp_word(wf *wordf, size_t * restrict rlen)
                   } else {
                     append_wf(&head, &tail, st_strndup("", 0), 0, QNONE);
                   }
-                  f = marker;
+                  if (marker)
+                    f = marker;
                   continue;
                 }
                 val = subres ? join_wf(subres, 0) : st_strndup("", 0);
@@ -836,7 +834,8 @@ exp_word(wf *wordf, size_t * restrict rlen)
               p = get_posparam(j);
               l = p ? strlen(p) : 0;
               append_wf(&head, &tail, p ? p : "", l, QDOUBLE);
-              tail->flags |= WFAT;
+              if (tail)
+                tail->flags |= WFAT;
               len += l;
             }
             if (!head)

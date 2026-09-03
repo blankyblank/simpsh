@@ -203,6 +203,10 @@ parsetb(char *s, size_t *idx)
 {
   int ccnt = 0;
   size_t *t, lidx = 0;
+  if (!s) {
+    *idx = 0;
+    return NULL;
+  }
   for (size_t i = 0; s[i]; i++)
     if (s[i] == ',')
       ccnt++;

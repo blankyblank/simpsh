@@ -738,8 +738,10 @@ run_cmd(const cmd_tree *n, int inchld)
             memcpy(as, nbuf, nlen);
             as[nlen] = '=';
             memcpy(as + nlen + 1, valbuf, vlen + 1);
-            chk_cap(nass, evarcap, evars, char *);
-            evars[nass++] = as;
+            if (evars) {
+              chk_cap(nass, evarcap, evars, char *);
+              evars[nass++] = as;
+            }
           }
         } else {
           evar = xpnd(vars[i]);
@@ -751,8 +753,10 @@ run_cmd(const cmd_tree *n, int inchld)
             flags = 0;
           setvar(name, val, flags);
           if (xflag) {
-            chk_cap(nass, evarcap, evars, char *);
-            evars[nass++] = evar;
+            if (evars) {
+              chk_cap(nass, evarcap, evars, char *);
+              evars[nass++] = evar;
+            }
           }
         }
       }

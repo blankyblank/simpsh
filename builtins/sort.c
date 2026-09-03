@@ -133,10 +133,18 @@ sortcmd(char *argv[])
       hasout = 1;
       break;
     case 't':
-      if (!(sep = *EARGF(no_opt(argv0, ARGC()))))
-        return 1;
-      hassep = 1;
-      break;
+      {
+        char *arg;
+        if (!(arg = EARGF(no_opt(argv0, ARGC()))))
+          return 1;
+        if (!arg)
+          return 1;
+        sep = *arg;
+        if (!sep)
+          return 1;
+        hassep = 1;
+        break;
+      }
     default:
       return bad_opt(argv0, ARGC());
   }
@@ -147,7 +155,7 @@ sortcmd(char *argv[])
 
   int res;
   size_t linec = 0, rlen = 0;
-  size_t nsrc, linecap = LINECAP;;
+  size_t nsrc, linecap = LINECAP;
   ln *lines = NULL, *run = NULL, *mrun = NULL;
 
   nsrc = (argc) ? argc : 1;
@@ -194,7 +202,7 @@ sortcmd(char *argv[])
         linecap *= 2;
         streallocar(lines, linecap, linec, ln);
       }
-      while ((lines[linec].line = lrread(&lr, &llen))) {
+      while (lines && (lines[linec].line = lrread(&lr, &llen))) {
         lines[linec].llen = llen;
         lines[linec].lineno = lnno++;
         lines[linec++].src = path ? path : "(stdin)";
@@ -240,7 +248,7 @@ sortcmd(char *argv[])
     return sherr(1, argv0, (hasout) ? outfile : "(stdout)");
   for (size_t i = 0; i < linec; i++) {
     if ((mode & ufl) && i > 0) {
-      if (!(res = keycmp(lines[i - 1].line, lines[i - 1].llen, lines[i].line, lines[i].llen, 0)))
+      if (!keycmp(lines[i - 1].line, lines[i - 1].llen, lines[i].line, lines[i].llen, 0))
         continue;
     }
     fwrite(lines[i].line, 1, lines[i].llen, of);
@@ -659,6 +667,8 @@ vercmp(const char *a, size_t la, const char *b, size_t lb)
   size_t len1, len2;
   int res, cmp;
 
+  a = (a) ? a : "";
+  b = (b) ? b : "";
   res = bytecmp(a, la, b, lb);
   if (!res)
     return 0;

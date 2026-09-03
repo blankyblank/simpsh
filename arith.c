@@ -831,9 +831,12 @@ i64
 arith_eval(const char *expr, size_t len)
 {
   i64 res;
-  const char *p = expr;
+  const char *p;
   size_t n = len, skip;
 
+  if (!expr)
+    return 0;
+  p = expr;
   skip = sskipspace(p, n);
   p += skip, n -= skip;
   if (n > 0) {

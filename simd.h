@@ -172,6 +172,8 @@ sskipspace(const char *buf, size_t len)
   int mask;
   size_t i;
 
+  if (!buf || !len)
+    return 0;
   spacev = _mm_set1_epi8(' ');
   tabv = _mm_set1_epi8('\t');
   allones = _mm_set1_epi8(-1);

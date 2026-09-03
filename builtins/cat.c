@@ -36,7 +36,12 @@ catcmd(char **argv)
     bufsize = GETBLKSIZE(f, st);
     buf = st_alloc(bufsize);
     while ((n = fread(buf, 1, bufsize, f)) > 0)
-      fwrite(buf, 1, n, shout);
+      if ((fwrite(buf, 1, n, shout)) != (size_t)n)
+        break;
+    if (ferror(f)) {
+      fclose(f);
+      return sherr(1, argv[i], "read error");
+    }
     fclose(f);
     i++;
   }

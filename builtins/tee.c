@@ -54,7 +54,8 @@ teecmd(char *argv[])
     if (ferror(shin))
       status = sherr(1, argv0, "read error\n");
     for (size_t i = 0; i < argc; i++)
-      fclose(files[i]);
+      if (files[i])
+        fclose(files[i]);
     return status;
   }
   buf = st_alloc(bufsize);

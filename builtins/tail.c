@@ -106,9 +106,12 @@ ARGNUM:
       if (!quiet)
         fprintf(shout,"%s==> %s <==\n", (i > 0) ? "\n" : "", file);
     while ((n = fread(buf, 1, BUFSIZ, fp)) > 0)
-      fwrite(buf, 1, n, shout);
-    if (ferror(fp))
+      if ((fwrite(buf, 1, n, shout)) != (size_t)n)
+        break;
+    if (ferror(fp)) {
+      fclose(fp);
       return sherr(1, tailn, "Bad file descriptor");
+    }
     fclose(fp);
   }
   return 0;
@@ -251,7 +254,6 @@ sttail_beg(int ln)
   char buf[BUFSIZ];
   size_t n;
 
-  n = c = 0;
   need = (ln > 1) ? ln - 1 : 0;
 
   while (need > 0) {
@@ -275,7 +277,7 @@ sttail(int ln)
   size_t off;
   char *rng[ln], buf[BUFSIZ];
 
-  off = c = cnt = n = 0;
+  off = c = cnt = 0;
   if (pls)
     return sttail_beg(ln);
   for (int in = 0; in < ln; ++in)

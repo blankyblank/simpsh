@@ -121,6 +121,8 @@ foldcmd(char *argv[])
     }
     if (r)
       fwrite(buf, 1, r, shout);
+    if (ferror(fp))
+      status = sherr(1, argv0, "read error");
     if (fp && fp != shin)
       fclose(fp);
   }
