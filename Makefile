@@ -75,98 +75,98 @@ LDLIBS  := $(LIBEDITLIBS)
 SRC = alloc.c arith.c builtins.c env.c errmsg.c exec.c expand.c glob.c history.c input.c job.c lex.c lineio.c main.c opts.c parse.c path.c pipe.c printf.c sig.c simpsh.c test.c var.c
 EXTRAS = builtins/basename.c builtins/cat.c builtins/comm.c builtins/cut.c builtins/dirname.c builtins/expand.c builtins/fold.c builtins/head.c builtins/paste.c builtins/readlink.c builtins/realpath.c builtins/sleep.c builtins/sort.c builtins/tail.c builtins/tee.c builtins/tr.c builtins/uniq.c builtins/wc.c
 HDR = alloc.h arg.h arith.h builtins.h config.h env.h errmsg.h exec.h expand.h glob.h histeditshm.h history.h input.h job.h lex.h lineio.h main.h opts.h parse.h path.h pipe.h sig.h simd.h simpsh.h utils.h var.h
-OBJS = obj/alloc.o obj/arith.o obj/builtins.o obj/env.o obj/errmsg.o obj/exec.o obj/expand.o obj/glob.o obj/history.o obj/input.o obj/job.o obj/lex.o obj/lineio.o obj/main.o obj/opts.o obj/parse.o obj/path.o obj/pipe.o obj/printf.o obj/sig.o obj/simpsh.o obj/test.o obj/var.o obj/builtins/basename.o obj/builtins/cat.o obj/builtins/comm.o obj/builtins/cut.o obj/builtins/dirname.o obj/builtins/expand.o obj/builtins/fold.o obj/builtins/head.o obj/builtins/paste.o obj/builtins/readlink.o obj/builtins/realpath.o obj/builtins/sleep.o obj/builtins/sort.o obj/builtins/tail.o obj/builtins/tee.o obj/builtins/tr.o obj/builtins/uniq.o obj/builtins/wc.o
+OBJS = build/alloc.o build/arith.o build/builtins.o build/env.o build/errmsg.o build/exec.o build/expand.o build/glob.o build/history.o build/input.o build/job.o build/lex.o build/lineio.o build/main.o build/opts.o build/parse.o build/path.o build/pipe.o build/printf.o build/sig.o build/simpsh.o build/test.o build/var.o build/builtins/basename.o build/builtins/cat.o build/builtins/comm.o build/builtins/cut.o build/builtins/dirname.o build/builtins/expand.o build/builtins/fold.o build/builtins/head.o build/builtins/paste.o build/builtins/readlink.o build/builtins/realpath.o build/builtins/sleep.o build/builtins/sort.o build/builtins/tail.o build/builtins/tee.o build/builtins/tr.o build/builtins/uniq.o build/builtins/wc.o
 
 .OBJDIR: .
-OBJDIR = obj
+OBJDIR = build
 TARGET = simpsh
 
 .PHONY: all clean pgo test install uninstall analyze examine bench bench-a bench-e bench-f bench-p bench-q
 
 all: $(TARGET)
-obj/builtins:
-	@mkdir -p obj/builtins
-obj/alloc.o: alloc.c $(HDR) obj/builtins
+build/builtins:
+	@mkdir -p build/builtins
+build/alloc.o: alloc.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c alloc.c -o $@
-obj/arith.o: arith.c $(HDR) obj/builtins
+build/arith.o: arith.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c arith.c -o $@
-obj/builtins.o: builtins.c $(HDR) obj/builtins
+build/builtins.o: builtins.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c builtins.c -o $@
-obj/env.o: env.c $(HDR) obj/builtins
+build/env.o: env.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c env.c -o $@
-obj/errmsg.o: errmsg.c $(HDR) obj/builtins
+build/errmsg.o: errmsg.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c errmsg.c -o $@
-obj/exec.o: exec.c $(HDR) obj/builtins
+build/exec.o: exec.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c exec.c -o $@
-obj/expand.o: expand.c $(HDR) obj/builtins
+build/expand.o: expand.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c expand.c -o $@
-obj/glob.o: glob.c $(HDR) obj/builtins
+build/glob.o: glob.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c glob.c -o $@
-obj/history.o: history.c $(HDR) obj/builtins
+build/history.o: history.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c history.c -o $@
-obj/input.o: input.c $(HDR) obj/builtins
+build/input.o: input.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c input.c -o $@
-obj/job.o: job.c $(HDR) obj/builtins
+build/job.o: job.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c job.c -o $@
-obj/lex.o: lex.c $(HDR) obj/builtins
+build/lex.o: lex.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c lex.c -o $@
-obj/lineio.o: lineio.c $(HDR) obj/builtins
+build/lineio.o: lineio.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c lineio.c -o $@
-obj/main.o: main.c $(HDR) obj/builtins
+build/main.o: main.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c main.c -o $@
-obj/opts.o: opts.c $(HDR) obj/builtins
+build/opts.o: opts.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c opts.c -o $@
-obj/parse.o: parse.c $(HDR) obj/builtins
+build/parse.o: parse.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c parse.c -o $@
-obj/path.o: path.c $(HDR) obj/builtins
+build/path.o: path.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c path.c -o $@
-obj/pipe.o: pipe.c $(HDR) obj/builtins
+build/pipe.o: pipe.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c pipe.c -o $@
-obj/printf.o: printf.c $(HDR) obj/builtins
+build/printf.o: printf.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c printf.c -o $@
-obj/sig.o: sig.c $(HDR) obj/builtins
+build/sig.o: sig.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c sig.c -o $@
-obj/simpsh.o: simpsh.c $(HDR) obj/builtins
+build/simpsh.o: simpsh.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c simpsh.c -o $@
-obj/test.o: test.c $(HDR) obj/builtins
+build/test.o: test.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c test.c -o $@
-obj/var.o: var.c $(HDR) obj/builtins
+build/var.o: var.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c var.c -o $@
-obj/builtins/basename.o: builtins/basename.c $(HDR) obj/builtins
+build/builtins/basename.o: builtins/basename.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_basename 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/basename.c -o $@; else rm -f $@; fi
-obj/builtins/cat.o: builtins/cat.c $(HDR) obj/builtins
+build/builtins/cat.o: builtins/cat.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_cat 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/cat.c -o $@; else rm -f $@; fi
-obj/builtins/comm.o: builtins/comm.c $(HDR) obj/builtins
+build/builtins/comm.o: builtins/comm.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_comm 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/comm.c -o $@; else rm -f $@; fi
-obj/builtins/cut.o: builtins/cut.c $(HDR) obj/builtins
+build/builtins/cut.o: builtins/cut.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_cut 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/cut.c -o $@; else rm -f $@; fi
-obj/builtins/dirname.o: builtins/dirname.c $(HDR) obj/builtins
+build/builtins/dirname.o: builtins/dirname.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_dirname 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/dirname.c -o $@; else rm -f $@; fi
-obj/builtins/expand.o: builtins/expand.c $(HDR) obj/builtins
+build/builtins/expand.o: builtins/expand.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_expand 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/expand.c -o $@; else rm -f $@; fi
-obj/builtins/fold.o: builtins/fold.c $(HDR) obj/builtins
+build/builtins/fold.o: builtins/fold.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_fold 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/fold.c -o $@; else rm -f $@; fi
-obj/builtins/head.o: builtins/head.c $(HDR) obj/builtins
+build/builtins/head.o: builtins/head.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_head 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/head.c -o $@; else rm -f $@; fi
-obj/builtins/paste.o: builtins/paste.c $(HDR) obj/builtins
+build/builtins/paste.o: builtins/paste.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_paste 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/paste.c -o $@; else rm -f $@; fi
-obj/builtins/readlink.o: builtins/readlink.c $(HDR) obj/builtins
+build/builtins/readlink.o: builtins/readlink.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_readlink 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/readlink.c -o $@; else rm -f $@; fi
-obj/builtins/realpath.o: builtins/realpath.c $(HDR) obj/builtins
+build/builtins/realpath.o: builtins/realpath.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_realpath 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/realpath.c -o $@; else rm -f $@; fi
-obj/builtins/sleep.o: builtins/sleep.c $(HDR) obj/builtins
+build/builtins/sleep.o: builtins/sleep.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_sleep 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/sleep.c -o $@; else rm -f $@; fi
-obj/builtins/sort.o: builtins/sort.c $(HDR) obj/builtins
+build/builtins/sort.o: builtins/sort.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_sort 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/sort.c -o $@; else rm -f $@; fi
-obj/builtins/tail.o: builtins/tail.c $(HDR) obj/builtins
+build/builtins/tail.o: builtins/tail.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_tail 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/tail.c -o $@; else rm -f $@; fi
-obj/builtins/tee.o: builtins/tee.c $(HDR) obj/builtins
+build/builtins/tee.o: builtins/tee.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_tee 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/tee.c -o $@; else rm -f $@; fi
-obj/builtins/tr.o: builtins/tr.c $(HDR) obj/builtins
+build/builtins/tr.o: builtins/tr.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_tr 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/tr.c -o $@; else rm -f $@; fi
-obj/builtins/uniq.o: builtins/uniq.c $(HDR) obj/builtins
+build/builtins/uniq.o: builtins/uniq.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_uniq 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/uniq.c -o $@; else rm -f $@; fi
-obj/builtins/wc.o: builtins/wc.c $(HDR) obj/builtins
+build/builtins/wc.o: builtins/wc.c $(HDR) build/builtins
 	@if grep -qi "^#define ENABLE_wc 1" config.h; then echo "$(CC)" "$(CFLAGS)" -c "$<" "$@"; $(CC) $(CFLAGS) -c builtins/wc.c -o $@; else rm -f $@; fi
 
 $(TARGET): $(OBJS)
