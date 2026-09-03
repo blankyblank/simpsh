@@ -24,35 +24,46 @@ CCNAME != \
 		echo $(CC); \
 	fi
 
-PROFILE != case "$(BUILD):$(CCNAME)" in \
-	"release:gcc")    echo "-march=native -falign-functions=16 -fno-plt -O2 -flto=auto -s" ;; \
-	"release:clang")  echo "-march=native -fno-plt -flto -O2 -fvectorize -flto=full" ;; \
-	"debug:gcc")      echo "-Og -g3 -fno-omit-frame-pointer -flto=auto -ggdb" ;; \
-	"debug:clang")    echo "-Og -g3 -fno-omit-frame-pointer -flto -glldb -fstandalone-debug" ;; \
-	"sanitize:gcc")   echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined" ;; \
-	"sanitize:clang") echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined -fsanitize=integer" ;; \
+OS != uname -s
+
+PROFILE != case "$(BUILD):$(CCNAME):$(OS)" in \
+	release:gcc:*)    echo "-march=native -falign-functions=16 -fno-plt -O2 -flto=auto -s" ;; \
+	release:clang:*)  echo "-march=native -fno-plt -flto -O2 -fvectorize -flto=full" ;; \
+	debug:gcc:*)      echo "-Og -g3 -fno-omit-frame-pointer -flto=auto -ggdb" ;; \
+	debug:clang:*)    echo "-Og -g3 -fno-omit-frame-pointer -flto -glldb -fstandalone-debug" ;; \
+	sanitize:gcc:OpenBSD)   echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=undefined" ;; \
+	sanitize:gcc:*)   echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined" ;; \
+	sanitize:clang:OpenBSD) echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=undefined -fsanitize=integer" ;; \
+	sanitize:clang:*) echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined -fsanitize=integer" ;; \
 	valgrind:*)       echo "-Og -g3 -fno-omit-frame-pointer -DENABLE_VALGRIND" ;; \
-	"profile:gcc")    echo "-O2 -g3 -pg -fxray-instrument -fvar-tracking-assignments -fno-analyzer-state-merge" ;; \
-	"profile:clang")  echo "-O2 -g3 -fprofile-instr-generate -fcoverage-mapping -fxray-instrument" ;; \
+	profile:gcc:*)    echo "-O2 -g3 -pg -fxray-instrument -fvar-tracking-assignments -fno-analyzer-state-merge" ;; \
+	profile:clang:*)  echo "-O2 -g3 -fprofile-instr-generate -fcoverage-mapping -fxray-instrument" ;; \
 	*)                echo "-march=native -O2 -flto=auto";;\
 	esac
 
-LDFLAG != case "$(BUILD):$(CCNAME)" in \
-	"release:gcc")    echo "-flto=auto" ;; \
-	"release:clang")  echo "-flto=full -Wl,--strip-all" ;; \
-	"debug:gcc")      echo "-flto=auto" ;; \
-	"debug:clang")    echo "" ;; \
-	"sanitize:gcc")   echo "-fsanitize=address,undefined" ;; \
-	"sanitize:clang") echo "-fsanitize=address,undefined -static-libasan" ;; \
+LDFLAG != case "$(BUILD):$(CCNAME):$(OS)" in \
+	release:gcc:*)    echo "-flto=auto" ;; \
+	release:clang:*)  echo "-flto=full -Wl,--strip-all" ;; \
+	debug:gcc:*)      echo "-flto=auto" ;; \
+	debug:clang:*)    echo "" ;; \
+	sanitize:gcc:OpenBSD)   echo "-fsanitize=undefined" ;; \
+	sanitize:gcc:*)   echo "-fsanitize=address,undefined" ;; \
+	sanitize:clang:OpenBSD) echo "-fsanitize=undefined -static-libasan" ;; \
+	sanitize:clang:*) echo "-fsanitize=address,undefined -static-libasan" ;; \
 	valgrind:*)       echo "" ;; \
-	"profile:gcc")    echo "-pg" ;; \
-	"profile:clang")  echo "-fprofile-instr-generate" ;; \
+	profile:gcc:*)    echo "-pg" ;; \
+	profile:clang:*)  echo "-fprofile-instr-generate" ;; \
 	*)                echo "" ;; \
 	esac
 
+LIBEDITLIBS != case "$(BUILD_LINK):$(LIBEDIT):$(OS)" in\
+	static:1:OpenBSD) echo "-ledit -lcurses" ;;\
+	static:1:*) echo "-ledit -lncurses" ;;\
+	*:1:*) echo "-ldl" ;;\
+	*) echo "" ;;\
+	esac
 LINK != case "$(BUILD_LINK)" in static) echo "-static" ;; esac
 LIBEDITFLAGS != case "$(BUILD_LINK):$(LIBEDIT)" in "static:1") echo "-DLIBEDIT -DSTATICLIBEDIT" ;; *:1) echo "-DLIBEDIT" ;; *) echo "" ;; esac
-LIBEDITLIBS != case "$(BUILD_LINK):$(LIBEDIT)" in "static:1") echo "-ledit -lncurses" ;; *:1) echo "-ldl" ;; *) echo "" ;; esac
 
 CFLAGS := $(BASE) $(PROFILE) $(LIBEDITFLAGS)
 CFLAGS += $(GCOV)
