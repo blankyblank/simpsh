@@ -45,6 +45,11 @@
     return sherrx(1, "close fd"); \
   }
 
+#ifndef __GLIBC__
+  #define fflush_unlocked(f) fflush(f)
+#endif /* ifndef d __GLIBC__
+ */
+
 /* project specific replacements */
 
 static inline int
