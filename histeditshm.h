@@ -40,7 +40,7 @@ static EditLine *(*libedit_el_init)(const char *, FILE *, FILE *, FILE *);
 static int (*libedit_el_set)(EditLine *, int, ...);
 static const char *(*libedit_el_gets)(EditLine *, int *);
 static unsigned char (*libedit_el_sh_complete)(EditLine *, int);
-static int (*libedit_el_resize)(EditLine *);
+static void (*libedit_el_resize)(EditLine *);
 
 #ifdef STATICLIBEDIT
 static UNUSED int
