@@ -142,12 +142,17 @@ tree_dup(cmd_tree *s)
       return NULL;
     case CMD:
       cnt = 0;
-      for (size_t i = 0; CARGS(s)[i]; i++)
-        cnt++;
-      CARGS(n) = salloc((cnt + 1) * sizeof(wf *));
-      for (size_t i = 0; i < cnt; i++)
-        CARGS(n)[i] = wfdup(CARGS(s)[i]);
-      CARGS(n)[cnt] = NULL;
+      if (CARGS(s))
+        for (size_t i = 0; CARGS(s)[i]; i++)
+          cnt++;
+      if (cnt) {
+        CARGS(n) = salloc((cnt + 1) * sizeof(wf *));
+        for (size_t i = 0; i < cnt; i++)
+          CARGS(n)[i] = wfdup(CARGS(s)[i]);
+        CARGS(n)[cnt] = NULL;
+      } else {
+        CARGS(n) = NULL;
+      }
       CVARC(n) = CVARC(s);
       if (CVARS(s)) {
         CVARS(n) = salloc((CVARC(s) + 1) * sizeof(wf *));
