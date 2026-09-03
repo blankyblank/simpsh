@@ -396,6 +396,7 @@ tokenize(void)
         skipcomment();
         continue;
       case C_NL:
+        shinpt->linenum++;
         if (wd & CHKNL)
           continue;
         if (!heredoc_head) {
@@ -469,7 +470,7 @@ word:
         sh_tok t = tokword(f, &wd);
         if (t.type == TCONT)
           continue;
-        if (wfredir) {
+        if (wfredir && t.cmd) {
           t.cmd->flags |= WFREDIRFD;
           wfredir = 0;
         }
@@ -613,7 +614,8 @@ lexcmdsub(void)
 {
   wf *svhead, *svtail, *f;
   size_t svwflen;
-  int svctx, svbt, svcctx, svlinenum;
+  int svctx, svbt, svcctx;
+  // , svlinenum;
   cmd_tree *n;
 
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
@@ -624,7 +626,7 @@ lexcmdsub(void)
   svctx = ctx_depth;
   svcctx = cctx;
   svbt = btdepth;
-  svlinenum = shinpt->linenum;
+  // svlinenum = shinpt->linenum;
 
   head = NULL;
   tail = NULL;
@@ -640,7 +642,6 @@ lexcmdsub(void)
     ctx_depth = svctx;
     cctx = svcctx;
     btdepth = svbt;
-    shinpt->linenum = svlinenum;
     return SHEOF;
   }
 
@@ -657,7 +658,6 @@ lexcmdsub(void)
   ctx_depth = svctx;
   cctx = svcctx;
   btdepth = svbt;
-  shinpt->linenum = svlinenum;
   if (head)
     tail->next = f;
   else
@@ -672,7 +672,8 @@ lexbtick(void)
 {
   wf *svhead, *svtail, *f;
   size_t svwflen;
-  int svctx, svbt, svcctx, svlinenum;
+  int svctx, svbt, svcctx;
+  // svlinenum;
   cmd_tree *n;
 
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
@@ -682,7 +683,7 @@ lexbtick(void)
   svwflen = wflen;
   svctx = ctx_depth;
   svcctx = cctx;
-  svlinenum = shinpt->linenum;
+  // svlinenum = shinpt->linenum;
 
   head = NULL;
   tail = NULL;
@@ -701,7 +702,6 @@ lexbtick(void)
     wflen = svwflen;
     ctx_depth = svctx;
     cctx = svcctx;
-    shinpt->linenum = svlinenum;
     return SHEOF;
   }
   f = wfalloc();
@@ -716,7 +716,6 @@ lexbtick(void)
   wflen = svwflen;
   ctx_depth = svctx;
   cctx = svcctx;
-  shinpt->linenum = svlinenum;
   if (head)
     tail->next = f;
   else
@@ -755,7 +754,10 @@ lexarith(void)
       shwarn_arg("arithmetic", arbuf, "expression too long");
       return SHEOF;
     }
-    arbuf[arlen++] = ch;
+    if (ch == '\n')
+      shinpt->linenum++;
+    else
+      arbuf[arlen++] = ch;
   }
   arbuf[arlen] = '\0';
   char *exprtxt = st_strndup(arbuf, arlen);
@@ -782,6 +784,8 @@ lexvbrace(void)
     return SHEOF;
   }
 
+  if (ch == '\n')
+    shinpt->linenum++; // possibly error maybe
   /* ${#param} length expansion: header is the whole content */
   if (ch == '#') {
     int depth = 0;
@@ -808,6 +812,8 @@ lexvbrace(void)
         if (n != SHEOF)
           shungetc(n);
       }
+      if (ch == '\n')
+        shinpt->linenum++;  // possibly error maybe
       st_putc(ch);
       nlen++;
     }
@@ -834,6 +840,8 @@ lexvbrace(void)
         shungetc(n);
         break;
       }
+      if (n == '\n')
+        shinpt->linenum++; //possibly error, idk
       st_putc(n);
       nlen++;
     }
@@ -848,6 +856,8 @@ lexvbrace(void)
         shungetc(n);
         break;
       }
+      if (n == '\n')
+        shinpt->linenum++; //possibly error, idk
       st_putc(n);
       nlen++;
     }
@@ -855,12 +865,17 @@ lexvbrace(void)
 
   /* operator at the name boundary */
   c = shgetchar();
+
+  if (c == '\n')
+    shinpt->linenum++;  // possibly error, idk
   if (c == SHEOF) {
     notclosed = 1;
     return SHEOF;
   }
   if (c == ':') {
     int n = shgetchar();
+    if (n == '\n')
+      shinpt->linenum++;  // possibly error, idk
     if (n == SHEOF) {
       notclosed = 1;
       return SHEOF;
@@ -880,6 +895,8 @@ lexvbrace(void)
     hasop = 1;
   } else if (c == '#' || c == '%') {
     int n = shgetchar();
+    if (n == '\n')
+      shinpt->linenum++; //possibly error, idk
     if (n == c) {
       st_putc(c);
       st_putc(n);
@@ -907,6 +924,8 @@ lexvbrace(void)
     int depth = 0;
     for (;;) {
       ch = shgetchar();
+      if (ch == '\n')
+        shinpt->linenum++;  // possibly error, idk
       if (ch == SHEOF) {
         notclosed = 1;
         return SHEOF;
@@ -923,6 +942,8 @@ lexvbrace(void)
         int n = shgetchar();
         if (n == '{')
           depth++;
+        if (n == '\n')
+          shinpt->linenum++;  // possibly error, idk
         if (n != SHEOF)
           shungetc(n);
       }
@@ -1024,20 +1045,24 @@ wf *
 lex_heredoc(const char *body, size_t len)
 {
   wf *f;
-  int c;
+  int c, svline;
   setinputstrn((char *)body, len);
   pshctx(M_HEREDOC);
   c = shgetchar();
   if (c == SHEOF) {
     popctx();
     notclosed = 0;
+    svline = shinpt->linenum - 1;
     popinput();
+    shinpt->linenum += svline;
     return NULL;
   }
   f = get_wf(c);
   popctx();
   notclosed = 0;
+  svline = shinpt->linenum - 1;
   popinput();
+  shinpt->linenum += svline;
   return f;
 }
 

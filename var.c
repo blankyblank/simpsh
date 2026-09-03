@@ -182,7 +182,8 @@ findvar_n(const char *restrict name, size_t nlen)
     gvar.linebuf[6] = '=';
     gvar.linebuf[7  + ll] = '\0';
     LINENO.var = gvar.linebuf;
-    LINENO.nlen = 6;
+    LINENO.nlen = nlen;
+    LINENO.flen = nlen + 1 + ll + 1;
     LINENO.flags = VREADONLY;
     LINENO.func = NULL;
     return &LINENO;
