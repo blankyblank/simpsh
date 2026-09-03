@@ -13,9 +13,8 @@
 #include <unistd.h>
 #ifdef LIBEDIT
   #include "histeditshm.h"
-#else
-  #include "utils.h"
 #endif /* ifdef LIBEDIT */
+#include "utils.h"
 
 #include "alloc.h"
 #include "errmsg.h"
