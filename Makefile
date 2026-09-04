@@ -33,7 +33,7 @@ PROFILE != case "$(BUILD):$(CCNAME):$(OS)" in \
 	debug:clang:*)    echo "-Og -g3 -fno-omit-frame-pointer -flto -glldb -fstandalone-debug" ;; \
 	sanitize:gcc:OpenBSD)   echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=undefined" ;; \
 	sanitize:gcc:*)   echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined" ;; \
-	sanitize:clang:OpenBSD) echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=undefined -fsanitize=integer" ;; \
+	sanitize:clang*:OpenBSD) echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=undefined -fsanitize=integer" ;; \
 	sanitize:clang:*) echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined -fsanitize=integer" ;; \
 	valgrind:*)       echo "-Og -g3 -fno-omit-frame-pointer -DENABLE_VALGRIND" ;; \
 	profile:gcc:*)    echo "-O2 -g3 -pg -fxray-instrument -fvar-tracking-assignments -fno-analyzer-state-merge" ;; \
@@ -48,7 +48,7 @@ LDFLAG != case "$(BUILD):$(CCNAME):$(OS)" in \
 	debug:clang:*)    echo "" ;; \
 	sanitize:gcc:OpenBSD)   echo "-fsanitize=undefined" ;; \
 	sanitize:gcc:*)   echo "-fsanitize=address,undefined" ;; \
-	sanitize:clang:OpenBSD) echo "-fsanitize=undefined -Wl,--no-execute-only" ;; \
+	sanitize:clang*:OpenBSD) echo "-fsanitize=undefined -Wl,--no-execute-only" ;; \
 	sanitize:clang:*) echo "-fsanitize=address,undefined -static-libasan" ;; \
 	valgrind:*)       echo "" ;; \
 	profile:gcc:*)    echo "-pg" ;; \
