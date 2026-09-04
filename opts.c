@@ -40,6 +40,9 @@ static const char *shoptname[OPTC] = {
 #ifdef __FreeBSD__
   "verify",
 #endif /* __FreeBSD__ */
+#ifdef __OpenBSD__
+  "sh",
+#endif /* __OpenBSD__ */
 };
 
 const char shoptch[OPTC] = {

@@ -25,6 +25,9 @@ typedef union {
 #ifdef __FreeBSD__
     unsigned verify_flag : 1;
 #endif /* __FreeBSD__ */
+#ifdef __OpenBSD__
+    unsigned sh_flag : 1;
+#endif /* __OpenBSD__ */
   };
   unsigned bits;
 } shopt;
@@ -52,8 +55,13 @@ typedef union {
   #define verifyflag (gstate.shopts.verify_flag)
   #define OPTC       20
 #else
-  #define OPTC 19
-#endif /* __FreeBSD__ */
+  #ifdef __OpenBSD__
+    #define shflag (gstate.shopts.sh_flag)
+    #define OPTC 20
+  #else
+    #define OPTC 19
+  #endif /* __OpenBSD__ */
+#endif   /* __FreeBSD__ */
 
 #define SHOPTC 16 /* short option count */
 
