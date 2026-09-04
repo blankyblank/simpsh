@@ -49,7 +49,11 @@ load_libedit(void)
   libedit_el_init = el_init;
   libedit_el_set = el_set;
   libedit_el_gets = el_gets;
+  #ifdef __OpenBSD__
+  libedit_el_sh_complete = _el_sh_complete;
+  #else
   libedit_el_sh_complete = _el_fn_sh_complete;
+  #endif /* __OpenBSD__ */
   libedit_el_resize = el_resize;
   return 1;
 }
@@ -62,13 +66,21 @@ typedef struct {
 static UNUSED int
 load_libedit(void)
 {
+  #ifdef __OpenBSD__
+  void *h = dlopen("libedit.so.7.0", RTLD_LAZY | RTLD_LOCAL);
+  #else
   void *h = dlopen("libedit.so.0", RTLD_LAZY | RTLD_LOCAL);
+  #endif /* __OpenBSD__ */
   if (!h)
     return 0;
   DLSYM_FN(h, libedit_el_init, "el_init");
   DLSYM_FN(h, libedit_el_set, "el_set");
   DLSYM_FN(h, libedit_el_gets, "el_gets");
+  #ifdef __OpenBSD__
+  DLSYM_FN(h, libedit_el_sh_complete, "_el_fn_complete");
+  #else
   DLSYM_FN(h, libedit_el_sh_complete, "_el_fn_sh_complete");
+  #endif /* __OpenBSD__ */
   DLSYM_FN(h, libedit_el_resize, "el_resize");
   return libedit_el_init && libedit_el_set && libedit_el_gets && libedit_el_resize;
 }
