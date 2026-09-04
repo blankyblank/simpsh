@@ -50,7 +50,7 @@ load_libedit(void)
   libedit_el_set = el_set;
   libedit_el_gets = el_gets;
   #ifdef __OpenBSD__
-  libedit_el_sh_complete = _el_sh_complete;
+  libedit_el_sh_complete = _el_fn_complete;
   #else
   libedit_el_sh_complete = _el_fn_sh_complete;
   #endif /* __OpenBSD__ */
