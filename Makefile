@@ -44,7 +44,7 @@ LDFLAG != case "$(BUILD):$(CCNAME):$(OS)" in \
 	debug:clang:*)    echo "" ;; \
 	sanitize:gcc:OpenBSD)   echo "-fsanitize=undefined" ;; \
 	sanitize:gcc:*)   echo "-fsanitize=address,undefined" ;; \
-	sanitize:clang*:OpenBSD) echo "-fsanitize=undefined -Wl,--no-execute-only" ;; \
+	sanitize:clang*:OpenBSD) echo "-fsanitize=undefined -Wl,--no-execute-only -static-libsan" ;; \
 	sanitize:clang:*) echo "-fsanitize=address,undefined -static-libasan" ;; \
 	valgrind:*)       echo "" ;; \
 	profile:gcc:*)    echo "-pg" ;; \
