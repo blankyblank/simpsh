@@ -3,7 +3,6 @@
 
 [ -f ./funcs ] && . ./funcs
 
-../simpsh -c "{ echo true"
 msg_run "pipe test: ls | grep 13-pipe.sh"
 out=$(../simpsh -c "ls | grep 13-pipe.sh")
 if [ "$out" != "13-pipe.sh" ]; then
@@ -13,6 +12,7 @@ else
   test_pass "out" "matches" "13-pipe.sh"
 fi
 
+../simpsh -c "{ echo true"
 msg_run "pipe exit status test: echo test | cat | grep fake ; echo \$?"
 out1=$(../simpsh -c 'echo test | cat | grep fake ; echo $?')
 if [ "$out1" -eq 0 ]; then
