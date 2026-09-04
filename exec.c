@@ -1203,7 +1203,7 @@ realpipe:
         child_setup_fg(i > 0 ? pids[0] : 0);
         if (prevr >= 0)
           DUPFD(prevr, STDIN_FILENO);
-        shin = freopen(NULL, "r", shin);
+        // shin = freopen(NULL, "r", shin);
         if (i < CPIPEC(n) - 1) {
           CLOSEFD(pipefd[0]);
           DUPFD(pipefd[1], STDOUT_FILENO);
