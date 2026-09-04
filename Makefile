@@ -3,25 +3,21 @@
 include config.mk
 
 CCNAME != \
-	if [ "$(CC)" = "cc" ]; then \
-		p="$$(command -v $(CC) 2>/dev/null)"; \
-		r="$$(readlink "$$p" 2>/dev/null)";\
-		if [ -n "$$r" ]; then\
-			case "$$r" in\
-				*clang*) echo clang;;\
-				*gcc*) echo gcc;;\
-				*) echo other;;\
-			esac;\
-		else\
-			v="$$($(CC) --version 2>/dev/null)";\
-				case "$$v" in\
-					*clang*) echo clang;;\
-					*gcc*) echo gcc;;\
-					*) echo other;;\
-				esac;\
-		fi \
+	p="$$(command -v $(CC) 2>/dev/null)"; \
+	r="$$(readlink "$$p" 2>/dev/null)"; \
+	if [ -n "$$r" ]; then \
+		case "$$r" in \
+			*clang*) echo clang;; \
+			*gcc*) echo gcc;; \
+			*) echo other;; \
+		esac; \
 	else \
-		echo $(CC); \
+		v="$$($(CC) --version 2>/dev/null)"; \
+		case "$$v" in \
+			*clang*) echo clang;; \
+			*gcc*) echo gcc;; \
+			*) echo other;; \
+		esac; \
 	fi
 
 OS != uname -s
