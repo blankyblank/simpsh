@@ -888,12 +888,15 @@ const limit limits[] = {
 int
 ulimitcmd(char **argv)
 {
-  int argc = 0;
-  int ltype = SOFT, all = 0;
-  size_t optc = 0;
+  int argc;
+  int ltype, all;
+  size_t optc;
   const limit *l;
-  char *opt = st_alloc(10 * sizeof(char));
+  char *opt;
 
+  optc = argc = all = 0;
+  ltype = HARD | SOFT;
+  opt = st_alloc(10 * sizeof(char));
   array_len(argv, argc);
   ARGBEGIN
   {
@@ -930,6 +933,8 @@ ulimitcmd(char **argv)
     }
     opt = "cdflmnpst";
   }
+  if (!optc)
+    opt = "f";
   if (!*argv) {
     for (char *s = opt; *s; s++) {
       struct rlimit lim;
@@ -941,9 +946,8 @@ ulimitcmd(char **argv)
       if (!l->name)
         return shwarn_arg(argv0, s, "unknown option");
       getrlimit(l->resource, &lim);
-      if (ltype & HARD)
-        val = lim.rlim_max;
-      else
+      val = lim.rlim_max;
+      if (ltype & SOFT)
         val = lim.rlim_cur;
       if (all)
         printf("%s\t\t", l->name);
@@ -987,7 +991,7 @@ ulimitcmd(char **argv)
       savefkulimit(fkstate, l->resource, lim.rlim_cur, lim.rlim_max);
     if (ltype & HARD)
       lim.rlim_max = (val == RLIM_INFINITY) ? val : val * l->factor;
-    else
+    if (ltype & SOFT)
       lim.rlim_cur = (val == RLIM_INFINITY) ? val : val * l->factor;
 
     if (setrlimit(l->resource, &lim) < 0)
