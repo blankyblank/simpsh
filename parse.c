@@ -43,6 +43,7 @@ static char *errtok(sh_tok);
 static void *synunexpected(int, sh_tok);
 static void *synexpected(int, sh_tok, token);
 static void *syntxerr(int, char *, token);
+static void *syntxerrstr(int ln, char *msg, char *exp);
 
 static inline cmd_tree *
 newredirnode(cmd_tree * restrict l, redir * restrict r)
@@ -88,7 +89,7 @@ newcmdnode(wf ** restrict args, int flags, wf ** restrict sh_vars, size_t vc)
   CVARC(n) = vc;
   n->right = n->left = NULL;
   n->flags = flags;
-  n->line = curline;
+  n->line = gstate.fnline ? gstate.lineno - gstate.fnline + 1 : gstate.lineno;
   return n;
 }
 
@@ -249,9 +250,15 @@ parse_simple_cmd(void)
         if (wc == 1 && !redirs) {
           gettok(0);
           if (tbuf.type == TRP) {
-            if (!(body = parse_func()))
+            int b;
+            b = gstate.fnline;
+            gstate.fnline = curline;
+            body = parse_func();
+            gstate.fnline = b;
+            if (!body)
               return NULL;
-            cmd_tree *n = st_alloc(sizeof(cmd_tree));
+            cmd_tree *n;
+            n = st_alloc(sizeof(cmd_tree));
             n->type = FUNC;
             n->left = body;
             CFUNC(n) = args[0];
@@ -505,11 +512,34 @@ parse_heredoc(void)
             stunalloc(lpos);
             goto done;
           }
-          fprintf(stderr, "unexpected EOF while looking for delimiter\n");
+          syntxerrstr(curline, "heredoc", "unexpected EOF while looking for delimiter");
           return;
         }
-        if (c == '\n')
+        if (c == '\n') {
+          shinpt->linenum++;
           break;
+        }
+        if (c == '\\' && btdepth > 0) {
+          c = shgetchar();
+          if (c == SHEOF) {
+            stcheck(32), st_putc('\\');
+            continue;
+          }
+          if (c == '\n')
+            shinpt->linenum++;
+          stcheck(32), st_putc('\\'), st_putc(c);
+          continue;
+        }
+        if (c == '`' && btdepth > 0) {
+          llen = pntlen(lpos, stnext);
+          if (llen == eofvlen && !memcmp(lpos, eofv, eofvlen)) {
+            stunalloc(lpos);
+            shungetc(c);
+            goto done;
+          }
+          syntxerrstr(curline, "heredoc", "unexpected EOF while looking for delimiter");
+          return;
+        }
         stcheck(32), st_putc(c);
       }
       llen = stnext - lpos;
@@ -617,7 +647,8 @@ parse_if(void)
 {
   cmd_tree *cond, *then, *else_;
 
-  cond = parse_list(1);
+  if (!(cond = parse_list(1)))
+    return syntxerrstr(curline, "expected", "command list"); // XXX: find out what the proper wording should be
   cond->flags |= EFLAG_SAFE;
   if (tbuf.type != TTHEN)
     return synexpected(curline, tbuf, TTHEN);
@@ -873,3 +904,20 @@ syntxerr(int ln, char *msg, token t)
   LSTATUS = 2;
   return NULL;
 }
+
+/* syntax warning error for unexpected tokens */
+static void *
+syntxerrstr(int ln, char *msg, char *exp)
+{
+  const char *fn;
+
+  if ((fn = shinpt ? shinpt->name : NULL))
+    fprintf(stderr, "%s: %s: %s: syntax error: %s \"%s\"\n",
+            SHARGV0, geterrline(ln), fn, msg, exp);
+  else
+    fprintf(stderr, "%s: syntax error: %s \"%s\"\n",
+            SHARGV0, msg, exp);
+  LSTATUS = 2;
+  return NULL;
+}
+

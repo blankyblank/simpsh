@@ -85,6 +85,7 @@ typedef struct {
     int optoff; /* getopts optoff */
   } shparm;
   int lineno;     /* line number */
+  int fnline;     /* relative line number in function body */
   int bgpgid;     /* last bg command's pgid */
   int funcdepth;  /* shell function nesting level */
   shopt shopts;   /* shell options */

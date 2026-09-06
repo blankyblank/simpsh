@@ -154,3 +154,32 @@ else
   test_fail "out" "expected numeric" "$out"
   exit 1
 fi
+
+msg_run 'ulimit -n N (no -H/-S) sets both soft and hard'
+out=$(../simpsh -c '
+  cur=$(ulimit -n)
+  ulimit -n "$cur" || exit 1
+  [ "$(ulimit -n)" = "$cur" ] && [ "$(ulimit -Hn)" = "$cur" ]
+' 2>&1)
+if [ -z "$out" ]; then
+  test_pass "ulimit" "sets soft+hard" ""
+else
+  test_fail "ulimit" "expected no error and hard == soft" "$out"
+  exit 1
+fi
+
+msg_run 'ulimit -n N raises hard above old hard (root)'
+if [ "$(id -u)" -eq 0 ]; then
+  out=$(../simpsh -c '
+    ulimit -n 131072 || exit 1
+    [ "$(ulimit -n)" = 131072 ] && [ "$(ulimit -Hn)" = 131072 ]
+  ' 2>&1)
+  if [ -z "$out" ]; then
+    test_pass "ulimit" "raised soft+hard to 131072" ""
+  else
+    test_fail "ulimit" "expected 131072 soft+hard" "$out"
+    exit 1
+  fi
+else
+  test_pass "ulimit root-case" "skipped (not root)" ""
+fi

@@ -90,7 +90,6 @@ enum qs {
 };
 
 struct redir;
-extern struct redir *heredoc_head;
 typedef struct cmd_tree cmd_tree;
 
 /**
@@ -169,6 +168,7 @@ extern int chkwd;
 extern const struct kw kw[32];
 extern int ctx_depth;
 extern tokmode ctx_stack[CTX_MAX];
+extern struct redir *heredoc_head;
 
 
 extern sh_tok tokenize(void);

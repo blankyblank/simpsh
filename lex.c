@@ -23,8 +23,8 @@ static wf *head;
 static wf *tail;
 static int wfredir;
 static size_t wflen;
-static int btdepth;
 unsigned int wf_chunk_left;
+int btdepth;
 int alias_depth;
 int notclosed;
 int chkwd;
@@ -615,7 +615,6 @@ lexcmdsub(void)
   wf *svhead, *svtail, *f;
   size_t svwflen;
   int svctx, svbt, svcctx;
-  // , svlinenum;
   cmd_tree *n;
 
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
@@ -626,7 +625,6 @@ lexcmdsub(void)
   svctx = ctx_depth;
   svcctx = cctx;
   svbt = btdepth;
-  // svlinenum = shinpt->linenum;
 
   head = NULL;
   tail = NULL;
@@ -673,7 +671,6 @@ lexbtick(void)
   wf *svhead, *svtail, *f;
   size_t svwflen;
   int svctx, svbt, svcctx;
-  // svlinenum;
   cmd_tree *n;
 
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
@@ -683,7 +680,6 @@ lexbtick(void)
   svwflen = wflen;
   svctx = ctx_depth;
   svcctx = cctx;
-  // svlinenum = shinpt->linenum;
 
   head = NULL;
   tail = NULL;
@@ -1045,24 +1041,20 @@ wf *
 lex_heredoc(const char *body, size_t len)
 {
   wf *f;
-  int c, svline;
+  int c;
   setinputstrn((char *)body, len);
   pshctx(M_HEREDOC);
   c = shgetchar();
   if (c == SHEOF) {
     popctx();
     notclosed = 0;
-    svline = shinpt->linenum - 1;
     popinput();
-    shinpt->linenum += svline;
     return NULL;
   }
   f = get_wf(c);
   popctx();
   notclosed = 0;
-  svline = shinpt->linenum - 1;
   popinput();
-  shinpt->linenum += svline;
   return f;
 }
 

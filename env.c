@@ -77,6 +77,7 @@ tree_dup(cmd_tree *s)
   n->type = s->type;
   n->flags = s->flags;
   n->left = n->right = NULL;
+  n->line = s->line;
 
   switch (n->type) {
     case OP:
