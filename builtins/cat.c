@@ -31,18 +31,26 @@ catcmd(char **argv)
   }
 
   while (i < argc) {
-    if (!(f = fopen(argv[i], "r")))
+    if (argv[i][0] == '-' && argv[i][1] == '\0') {
+      buf = st_alloc(bufsize);
+      while ((n = fread(buf, 1, bufsize, shin)) > 0)
+        fwrite(buf, 1, n, shout);
+      if (ferror(shin))
+        return sherr(1, argv[i], "Bad file descriptor");
+    } else if (!(f = fopen(argv[i], "r"))) {
       return sherr(1, argv[i], "could not access file");
-    bufsize = GETBLKSIZE(f, st);
-    buf = st_alloc(bufsize);
-    while ((n = fread(buf, 1, bufsize, f)) > 0)
-      if ((fwrite(buf, 1, n, shout)) != (size_t)n)
-        break;
-    if (ferror(f)) {
+    } else {
+      bufsize = GETBLKSIZE(f, st);
+      buf = st_alloc(bufsize);
+      while ((n = fread(buf, 1, bufsize, f)) > 0)
+        if ((fwrite(buf, 1, n, shout)) != (size_t)n)
+          break;
+      if (ferror(f)) {
+        fclose(f);
+        return sherr(1, argv[i], "read error");
+      }
       fclose(f);
-      return sherr(1, argv[i], "read error");
     }
-    fclose(f);
     i++;
   }
   return 0;
