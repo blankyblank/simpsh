@@ -49,6 +49,7 @@ slclass slotsz[SLCLASSN] = {
 };
 /*     STACK ALLOCATOR      */
 
+/* moves back cursor pointer to an earlier point within the allocator's buffer */
 void
 stunalloc(void *p)
 {
