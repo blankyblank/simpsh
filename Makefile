@@ -2,24 +2,18 @@
 
 include config.mk
 
-CCNAME != \
-	p="$$(command -v $(CC) 2>/dev/null)"; \
-	r="$$(readlink "$$p" 2>/dev/null)"; \
-	if [ -n "$$r" ]; then \
-		case "$$r" in \
-			*clang*) echo clang;; \
-			*gcc*) echo gcc;; \
-			*) echo other;; \
-		esac; \
-	else \
-		v="$$($(CC) --version 2>/dev/null)"; \
-		case "$$v" in \
-			*clang*) echo clang;; \
-			*gcc*) echo gcc;; \
-			*) echo other;; \
-		esac; \
-	fi
 
+CCNAME != \
+	case "$(CC)" in\
+		gcc|clang) echo "$(CC)";;\
+		*) D="$$($(CC) -dM -E - </dev/null 2>/dev/null)"; \
+			case "$$D" in \
+				*__clang__*) echo clang;;\
+				*__GNUC__*) echo gcc;;\
+				*) echo other;;\
+			esac;;\
+	esac
+		
 OS != uname -s
 
 PROFILE != case "$(BUILD):$(CCNAME):$(OS)" in \
@@ -72,7 +66,8 @@ LDLIBS  := $(LIBEDITLIBS)
 SRC = alloc.c arith.c builtins.c env.c errmsg.c exec.c expand.c glob.c history.c input.c job.c lex.c lineio.c main.c opts.c parse.c path.c pipe.c printf.c sig.c simpsh.c test.c var.c
 EXTRAS = builtins/basename.c builtins/cat.c builtins/comm.c builtins/cut.c builtins/dirname.c builtins/expand.c builtins/fold.c builtins/head.c builtins/paste.c builtins/readlink.c builtins/realpath.c builtins/sleep.c builtins/sort.c builtins/tail.c builtins/tee.c builtins/tr.c builtins/uniq.c builtins/wc.c
 HDR = alloc.h arg.h arith.h builtins.h config.h env.h errmsg.h exec.h expand.h glob.h histeditshm.h history.h input.h job.h lex.h lineio.h main.h opts.h parse.h path.h pipe.h sig.h simd.h simpsh.h utils.h var.h
-OBJS = build/alloc.o build/arith.o build/builtins.o build/env.o build/errmsg.o build/exec.o build/expand.o build/glob.o build/history.o build/input.o build/job.o build/lex.o build/lineio.o build/main.o build/opts.o build/parse.o build/path.o build/pipe.o build/printf.o build/sig.o build/simpsh.o build/test.o build/var.o build/builtins/basename.o build/builtins/cat.o build/builtins/comm.o build/builtins/cut.o build/builtins/dirname.o build/builtins/expand.o build/builtins/fold.o build/builtins/head.o build/builtins/paste.o build/builtins/readlink.o build/builtins/realpath.o build/builtins/sleep.o build/builtins/sort.o build/builtins/tail.o build/builtins/tee.o build/builtins/tr.o build/builtins/uniq.o build/builtins/wc.o
+OBJS_BUILTINS != for b in basename cat comm cut dirname expand fold head paste readlink realpath sleep sort tail tee tr uniq wc; do case "$$(grep -ci "^\#define ENABLE_$$b 1" config.h)" in 1) echo "build/builtins/$$b.o";; esac; done
+OBJS = build/alloc.o build/arith.o build/builtins.o build/env.o build/errmsg.o build/exec.o build/expand.o build/glob.o build/history.o build/input.o build/job.o build/lex.o build/lineio.o build/main.o build/opts.o build/parse.o build/path.o build/pipe.o build/printf.o build/sig.o build/simpsh.o build/test.o build/var.o $(OBJS_BUILTINS)
 
 .OBJDIR: .
 OBJDIR = build
@@ -82,6 +77,7 @@ TARGET = simpsh
 
 all: $(TARGET)
 build/builtins:
+	echo "$(BUILD):$(CCNAME):$(OS)"
 	@mkdir -p build/builtins
 build/alloc.o: alloc.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c alloc.c -o $@
