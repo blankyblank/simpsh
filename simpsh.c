@@ -206,9 +206,15 @@ eval_run(void)
     stmark mark;
 
     mark = stack_mark();
+    PARSEERR = 0;
     c = parse_list(0);
     if (!c) {
       stack_restore(mark);
+      break;
+    }
+    if (PARSEERR) {
+      stack_restore(mark);
+      status = 2;
       break;
     }
     if (!nflag)
@@ -230,6 +236,7 @@ simpsh_run(void)
     stmark mark;
 
     mark = stack_mark();
+    PARSEERR = 0;
 
     if (fchksig)
       dotrap();
@@ -238,6 +245,10 @@ simpsh_run(void)
     stack_state("parse");
 #endif /* DEBUG */
     if (!c) {
+      stack_restore(mark);
+      break;
+    }
+    if (PARSEERR) {
       stack_restore(mark);
       break;
     }

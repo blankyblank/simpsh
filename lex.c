@@ -614,7 +614,7 @@ lexcmdsub(void)
 {
   wf *svhead, *svtail, *f;
   size_t svwflen;
-  int svctx, svbt, svcctx;
+  int svctx, svbt, svcctx, svperr;
   cmd_tree *n;
 
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
@@ -625,10 +625,11 @@ lexcmdsub(void)
   svctx = ctx_depth;
   svcctx = cctx;
   svbt = btdepth;
+  svperr = PARSEERR;
 
   head = NULL;
   tail = NULL;
-  wflen = 0;
+  wflen = PARSEERR = 0;
   ctx_depth = btdepth = 0;
 
   n = parse_list(1);
@@ -640,6 +641,7 @@ lexcmdsub(void)
     ctx_depth = svctx;
     cctx = svcctx;
     btdepth = svbt;
+    PARSEERR = svperr || PARSEERR;
     return SHEOF;
   }
 
@@ -656,6 +658,7 @@ lexcmdsub(void)
   ctx_depth = svctx;
   cctx = svcctx;
   btdepth = svbt;
+  PARSEERR = svperr || PARSEERR;
   if (head)
     tail->next = f;
   else
@@ -670,7 +673,7 @@ lexbtick(void)
 {
   wf *svhead, *svtail, *f;
   size_t svwflen;
-  int svctx, svbt, svcctx;
+  int svctx, svbt, svcctx, svperr;
   cmd_tree *n;
 
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
@@ -680,11 +683,11 @@ lexbtick(void)
   svwflen = wflen;
   svctx = ctx_depth;
   svcctx = cctx;
+  svperr = PARSEERR;
 
   head = NULL;
   tail = NULL;
-  wflen = 0;
-  ctx_depth = 0;
+  wflen = ctx_depth = PARSEERR =  0;
 
   svbt = btdepth;
   btdepth = 1;
@@ -698,6 +701,7 @@ lexbtick(void)
     wflen = svwflen;
     ctx_depth = svctx;
     cctx = svcctx;
+    PARSEERR = svperr || PARSEERR;
     return SHEOF;
   }
   f = wfalloc();
@@ -711,6 +715,7 @@ lexbtick(void)
   tail = svtail;
   wflen = svwflen;
   ctx_depth = svctx;
+  PARSEERR = svperr || PARSEERR;
   cctx = svcctx;
   if (head)
     tail->next = f;

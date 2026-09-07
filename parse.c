@@ -171,6 +171,8 @@ parse_list(int multi)
     cmd_tree *r;
 
     if (!(r = parse_andor())) {
+      if (PARSEERR)
+        return NULL;
       return l;
     }
     if (heredoc_head)
@@ -327,6 +329,8 @@ parse_subsh(void)
   n = parse_list(1);
   if (tbuf.type != TRP)
     return synexpected(curline, tbuf, TRP);
+  if (PARSEERR)
+    return NULL;
   gettok(0);
   return n;
 }
@@ -418,6 +422,8 @@ parse_group(void)
   body = parse_list(1);
   if (tbuf.type != TRB)
     return synexpected(curline, tbuf, TRB);
+  if (PARSEERR)
+    return NULL;
   gettok(0);
   return body;
 }
@@ -611,8 +617,12 @@ parse_case(void)
       clauses->ptrn[pc] = NULL;
       if (tbuf.type != TRP)
         return synexpected(curline, tbuf, TRP);
+      if (PARSEERR)
+        return NULL;
 
       clauses->body = parse_list(1);
+      if (PARSEERR)
+        return NULL;
       if (!headcl)
         headcl = clauses;
       else
@@ -653,16 +663,22 @@ parse_if(void)
   if (tbuf.type != TTHEN)
     return synexpected(curline, tbuf, TTHEN);
   then = parse_list(1);
+  if (PARSEERR)
+    return NULL;
 
   token tok = tbuf.type;
   switch (tok) {
     case TELIF:
       else_ = parse_if();
+      if (PARSEERR)
+        return NULL;
       break;
     case TELSE:
       else_ = parse_list(1);
       if (tbuf.type != TFI)
         return synexpected(curline, tbuf, TFI);
+      if (PARSEERR)
+        return NULL;
       gettok(CHKALIAS | CHKKWD | CHKBRACE);
       break;
     case TFI:
@@ -725,6 +741,8 @@ parse_for(void)
 
   if (!(body = parse_list(1)))
     return NULL;
+  if (PARSEERR)
+    return NULL;
   if (tbuf.type != TDONE)
     return synexpected(curline, tbuf, TDONE);
   gettok(CHKALIAS | CHKKWD | CHKBRACE);
@@ -755,6 +773,8 @@ parse_while(token tok)
     return synunexpected(curline, tbuf);
 
   if (!(body = parse_list(1)))
+    return NULL;
+  if (PARSEERR)
     return NULL;
   if (tbuf.type != TDONE)
     return synexpected(curline, tbuf, TDONE);
@@ -790,6 +810,8 @@ parse_cmd(void)
       l->flags = 0;
       l->line = curline;
       l->right = NULL;
+      if (PARSEERR)
+        return NULL;
       return l;
     case TLB:
       l = st_alloc(sizeof(cmd_tree));
@@ -864,12 +886,15 @@ synunexpected(int ln, sh_tok wrong)
 {
   const char *fn;
 
+  if (PARSEERR)
+    return NULL;
   if ((fn = shinpt ? shinpt->name : NULL))
     fprintf(stderr, "%s: %s: %s: syntax error: unexpected token \"%s\"\n",
             SHARGV0, geterrline(ln), fn, errtok(wrong));
   else
     fprintf(stderr, "%s: syntax error: unexpected token \"%s\"\n",
             SHARGV0, errtok(wrong));
+  PARSEERR = 1;
   LSTATUS = 2;
   return NULL;
 }
@@ -879,12 +904,15 @@ synexpected(int ln, sh_tok wrong, token t)
 {
   const char *fn;
 
+  if (PARSEERR)
+    return NULL;
   if ((fn = shinpt ? shinpt->name : NULL))
     fprintf(stderr, "%s: %s: %s: syntax error:  found \"%s\" expected \"%s\"\n",
             SHARGV0, geterrline(ln), fn, errtok(wrong), tokstr(t));
   else
     fprintf(stderr, "%s: syntax error: found \"%s\" expected \"%s\"\n",
             SHARGV0, errtok(wrong), tokstr(t));
+  PARSEERR = 1;
   LSTATUS = 2;
   return NULL;
 }
@@ -895,12 +923,15 @@ syntxerr(int ln, char *msg, token t)
 {
   const char *fn;
 
+  if (PARSEERR)
+    return NULL;
   if ((fn = shinpt ? shinpt->name : NULL))
     fprintf(stderr, "%s: %s: %s: syntax error: %s \"%s\"\n",
             SHARGV0, geterrline(ln), fn, msg, tokstr(t));
   else
     fprintf(stderr, "%s: syntax error: %s \"%s\"\n",
             SHARGV0, msg, tokstr(t));
+  PARSEERR = 1;
   LSTATUS = 2;
   return NULL;
 }
@@ -911,12 +942,15 @@ syntxerrstr(int ln, char *msg, char *exp)
 {
   const char *fn;
 
+  if (PARSEERR)
+    return NULL;
   if ((fn = shinpt ? shinpt->name : NULL))
     fprintf(stderr, "%s: %s: %s: syntax error: %s \"%s\"\n",
             SHARGV0, geterrline(ln), fn, msg, exp);
   else
     fprintf(stderr, "%s: syntax error: %s \"%s\"\n",
             SHARGV0, msg, exp);
+  PARSEERR = 1;
   LSTATUS = 2;
   return NULL;
 }

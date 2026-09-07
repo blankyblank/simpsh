@@ -86,6 +86,7 @@ typedef struct {
   } shparm;
   int lineno;     /* line number */
   int fnline;     /* relative line number in function body */
+  int parseerr;   /* indicate if we've hit a parse error */
   int bgpgid;     /* last bg command's pgid */
   int funcdepth;  /* shell function nesting level */
   shopt shopts;   /* shell options */
@@ -101,6 +102,7 @@ extern FILE *shin;
 extern FILE *shout;
 
 #define LSTATUS   (gstate.lstatus)        /* last exit status */
+#define PARSEERR  (gstate.parseerr)       /* indicate if we've hit a parse error */
 #define RETVAL    (gstate.retval)         /* value from 'return n' */
 #define RETNOW    (gstate.retnow)         /* if set return from func or . file */
 #define LOOPDEPTH (gstate.loopdepth)      /* current loop nesting depth */
