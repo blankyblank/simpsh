@@ -1,7 +1,7 @@
 simpsh
 *.bk
 tmp*.md
-obj/*.o
+build/
 tests/scripting-test
 *sh-st
 project*.md
