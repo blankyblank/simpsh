@@ -77,7 +77,7 @@ TARGET = simpsh
 
 all: $(TARGET)
 build/builtins:
-	echo "$(BUILD):$(CCNAME):$(OS)"
+	@echo "$(BUILD):$(CCNAME):$(OS)"
 	@mkdir -p build/builtins
 build/alloc.o: alloc.c $(HDR) build/builtins
 	$(CC) $(CFLAGS) -c alloc.c -o $@
