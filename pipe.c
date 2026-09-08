@@ -23,7 +23,8 @@ fkrestore(fakestate *fs)
   fakectx = LOOPBREAK = LOOPCONT = RETNOW = RETVAL = 0;
 
   if (fs->cwd >= 0) {
-    fchdir(fs->cwd);
+    if (fchdir(fs->cwd) < 0)
+      sherrx(1, "fchdir");
     close(fs->cwd);
     fs->cwd = -1;
   }
