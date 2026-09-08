@@ -2,11 +2,11 @@
 PREFIX = /usr/local
 BINDIR = $(DESTDIR)$(PREFIX)/bin
 
-## compiler: cc | gcc | clang
-CC = cc
+## compiler: cc | gcc | clang | afl-clang-fast
+CC = afl-clang-fast
 
-## build profile: release | debug | sanitize | valgrind | profile
-BUILD = release
+## build profile: release | debug | sanitize | sanitize-extra (clang only) | valgrind | profile
+BUILD = sanitize
 
 ## linking: dynamic | static
 BUILD_LINK = dynamic
@@ -20,5 +20,5 @@ GCOV =
 # default flags
 BASE = --std=c23 -I. -Wall -Wextra -pedantic -pipe
 
-# EXTRA = -pg
+# EXTRA = -O0
 # EXTRA = -DDEBUG

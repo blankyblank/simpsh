@@ -5,7 +5,7 @@ include config.mk
 
 CCNAME != \
 	case "$(CC)" in\
-		gcc|clang) echo "$(CC)";;\
+		gcc|clang|afl*) echo "$(CC)";;\
 		*) D="$$($(CC) -dM -E - </dev/null 2>/dev/null)"; \
 			case "$$D" in \
 				*__clang__*) echo clang;;\
@@ -17,15 +17,18 @@ CCNAME != \
 OS != uname -s
 
 PROFILE != case "$(BUILD):$(CCNAME):$(OS)" in \
-	release:gcc:*)    echo "-march=native -falign-functions=16 -fno-plt -O2 -flto=auto -s" ;; \
-	release:clang:*)  echo "-march=native -fno-plt -flto -O2 -fvectorize -flto=full" ;; \
-	debug:gcc:*)      echo "-Og -g3 -fno-omit-frame-pointer -flto=auto -ggdb" ;; \
+	release:gcc:*)    echo "-march=native -D_FORTIFY_SOURCE=2 -fstack-protector-strong -falign-functions=16 -fno-plt -O2 -flto=auto -s" ;; \
+	release:clang:*)  echo "-march=native -D_FORTIFY_SOURCE=2 -fstack-protector-strong -fno-plt -flto -O2 -fvectorize -flto=full" ;; \
+	debug:gcc:*)      echo "-O0 -g3 -fno-omit-frame-pointer -flto=auto -ggdb" ;; \
 	debug:clang:*)    echo "-Og -g3 -fno-omit-frame-pointer -flto -glldb -fstandalone-debug" ;; \
 	sanitize:gcc:OpenBSD)   echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=undefined" ;; \
 	sanitize:gcc:*)   echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined" ;; \
 	sanitize:clang*:OpenBSD) echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=undefined -fsanitize=integer -fsanitize-minimal-runtime" ;; \
-	sanitize:clang:*) echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined -fsanitize=integer" ;; \
+	sanitize:clang:*) echo "-fsanitize=address,undefined,signed-integer-overflow,null,alignment,object-size,bounds,return,float-cast-overflow,pointer-overflow,unreachable,vla-bound,function \
+	-fno-omit-frame-pointer -fno-sanitize-recover=all -O1 -g3 " ;; \
+	sanitize-extra*)  echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined -fsanitize=integer -fno-sanitize-recover=all -fsanitize=cfi -fvisibility=hidden -flto" ;; \
 	valgrind:*)       echo "-Og -g3 -fno-omit-frame-pointer -DENABLE_VALGRIND" ;; \
+	*afl*)            echo "-O2 -g3 -fno-omit-frame-pointer -fno-sanitize-recover=all" ;; \
 	profile:gcc:*)    echo "-O2 -g3 -pg -fxray-instrument -fvar-tracking-assignments -fno-analyzer-state-merge" ;; \
 	profile:clang:*)  echo "-O2 -g3 -fprofile-instr-generate -fcoverage-mapping -fxray-instrument" ;; \
 	*)                echo "-march=native -O2 -flto=auto";;\
@@ -40,7 +43,9 @@ LDFLAG != case "$(BUILD):$(CCNAME):$(OS)" in \
 	sanitize:gcc:*)   echo "-fsanitize=address,undefined" ;; \
 	sanitize:clang*:OpenBSD) echo "-fsanitize=undefined -Wl,--no-execute-only -static-libsan -fsanitize-minimal-runtime" ;; \
 	sanitize:clang:*) echo "-fsanitize=address,undefined -static-libasan" ;; \
+	sanitize-extra:clang:*) echo "-fsanitize=address,undefined,cfi -static-libasan" ;; \
 	valgrind:*)       echo "" ;; \
+	*afl*)            echo "-O2 -g3 -fno-omit-frame-pointer -fno-sanitize-recover=all" ;; \
 	profile:gcc:*)    echo "-pg" ;; \
 	profile:clang:*)  echo "-fprofile-instr-generate" ;; \
 	*)                echo "" ;; \
@@ -179,6 +184,7 @@ clean:
 
 pgo:
 	rm -rf pgo
+	rm -rf ./builtins/pgo
 	$(MAKE) clean
 	$(MAKE) PGOFLAGS="-fprofile-dir=pgo -fprofile-generate"
 	./simpsh profile/bench.sh
