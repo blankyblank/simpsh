@@ -50,3 +50,4 @@ heaptrack.*
 /tools/dump_wf.c
 /tests/pctest.sh
 /reminder
+/tests/testfiles/redir-subsh-pipe.test
