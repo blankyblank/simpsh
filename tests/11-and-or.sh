@@ -32,3 +32,54 @@ if [ "$out3" != true ]; then
 else
   test_pass  "out3" "matches" "true"
 fi
+
+msg_run 'heredoc with && same-line continuation: cat <<EOF && echo after'
+out=$(../simpsh -c 'cat <<EOF && echo after
+hello
+EOF')
+if [ "$out" != "hello
+after" ]; then
+  test_fail "out" "expected" "hello after"; exit 1
+else
+  test_pass "out" "matches" "hello after"
+fi
+
+msg_run 'heredoc with && newline continuation: cat <<EOF && (newline) body'
+out=$(../simpsh -c 'cat <<EOF &&
+hello
+EOF
+echo after')
+if [ "$out" != "hello
+after" ]; then
+  test_fail "out" "expected" "hello after"; exit 1
+else
+  test_pass "out" "matches" "hello after"
+fi
+
+msg_run 'heredoc with ; continuation: cat <<EOF; echo after'
+out=$(../simpsh -c 'cat <<EOF; echo after
+hello
+EOF')
+if [ "$out" != "hello
+after" ]; then
+  test_fail "out" "expected" "hello after"; exit 1
+else
+  test_pass "out" "matches" "hello after"
+fi
+
+
+msg_run 'multiline group redirect with && and pipe (configure shape)'
+rm -f ./testfiles/brace-group.out
+../simpsh -c '{
+  echo "A" &&
+  echo "B" | sed "s/.*/(&)/" &&
+  echo "C"
+} > ./testfiles/brace-group.out'
+out=$(cat ./testfiles/brace-group.out 2>/dev/null); rm -f ./testfiles/brace-group.out
+if [ "$out" != "A
+(B)
+C" ]; then
+  test_fail "out" "expected" "A (B) C"; exit 1
+else
+  test_pass "out" "matches" "A (B) C"
+fi

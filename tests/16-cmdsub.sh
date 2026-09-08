@@ -92,3 +92,52 @@ else
   exit 1
 fi
 
+msg_run "backtick collapse: echo [\`echo 'a\$b'\`] (single-quoted \$ collapses)"
+out=$(../simpsh -c 'echo [`echo '"'"'a\$b'"'"'`]')
+if [ "$out" != '[a$b]' ]; then
+  test_fail "out" "expected" "[a]"; exit 1
+else
+  test_pass "out" "matches" "[a]"
+fi
+
+msg_run 'backtick dquote: echo [`echo "A\\$undefined_xyz B"`] ($ stays literal)'
+out=$(../simpsh -c 'echo [`echo "A\\$undefined_xyz B"`]')
+if [ "$out" != '[A$undefined_xyz B]' ]; then
+  test_fail "out" "expected" '[A$undefined_xyz B]'; exit 1
+else
+  test_pass "out" "matches" '[A$undefined_xyz B]'
+fi
+
+msg_run 'backtick BRE groups: echo `expr "Xab" : "X\(a\)"`'
+out=$(../simpsh -c 'echo `expr "Xab" : "X\(a\)"`')
+if [ "$out" != "a" ]; then
+  test_fail "out" "expected" "a"; exit 1
+else
+  test_pass "out" "matches" "a"
+fi
+
+msg_run 'backquote heredoc with EOD` terminator piped: v=`cat<<EOD | tr a-z A-Z`'
+cat > ./testfiles/bt-hd.sh <<'OUTER'
+v=`cat<<EOD | tr a-z A-Z
+hello x
+EOD`
+echo "$v"
+OUTER
+out=$(../simpsh ./testfiles/bt-hd.sh)
+rm -f ./testfiles/bt-hd.sh
+if [ "$out" != "HELLO X" ]; then
+  test_fail "out" "expected" "HELLO X"; exit 1
+else
+  test_pass "out" "matches" "HELLO X"
+fi
+
+msg_run 'medium heredoc byte-exact through cmdsub (store-growth class)'
+seq 1 1000 | sed 's/.*/LINE&!x/' > ./testfiles/hd-body.txt
+{ echo 'x=$(cat <<MHEOF'; cat ./testfiles/hd-body.txt; echo 'MHEOF'; echo ')'; echo 'printf "%s\n" "$x"'; } > ./testfiles/hd-run.sh
+../simpsh ./testfiles/hd-run.sh > ./testfiles/hd-got.txt 2>&1
+if cmp -s ./testfiles/hd-body.txt ./testfiles/hd-got.txt; then
+  msg_pass "medium heredoc byte-exact"
+else
+  msg_fail "medium heredoc differs"; exit 1
+fi
+rm -f ./testfiles/hd-body.txt ./testfiles/hd-run.sh ./testfiles/hd-got.txt

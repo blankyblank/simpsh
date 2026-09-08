@@ -89,3 +89,13 @@ if [ "$out" != "a b" ]; then
 else
   test_pass "out" "matches" "a b"
 fi
+
+msg_run "pipe wrapped in redirected subshell: (echo test | cat) > ./testfiles/redir-subsh-pipe.test; cat ./testfiles/redir-subsh-pipe.test"
+out=$(../simpsh -c '(echo test | cat) > ./testfiles/redir-subsh-pipe.test;
+  cat ./testfiles/redir-subsh-pipe.test')
+if [ "$out" != "test" ]; then
+  test_fail "out" "expected" "test"; exit 1
+else
+  test_pass "out" "matches" "test"
+fi
+

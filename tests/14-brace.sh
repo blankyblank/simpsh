@@ -29,3 +29,19 @@ else
   test_fail "out2" "should be empty not" "test123"
   exit 1
 fi
+
+msg_run 'multiline group redirect with && and pipe (configure shape)'
+rm -f ./testfiles/brace-group.out
+../simpsh -c '{
+  echo "A" &&
+  echo "B" | sed "s/.*/(&)/" &&
+  echo "C"
+} > ./testfiles/brace-group.out'
+out=$(cat ./testfiles/brace-group.out 2>/dev/null); rm -f ./testfiles/brace-group.out
+if [ "$out" != "A
+(B)
+C" ]; then
+  test_fail "out" "expected" "A (B) C"; exit 1
+else
+  test_pass "out" "matches" "A (B) C"
+fi

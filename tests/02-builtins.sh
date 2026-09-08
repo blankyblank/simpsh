@@ -183,3 +183,27 @@ if [ "$(id -u)" -eq 0 ]; then
 else
   test_pass "ulimit root-case" "skipped (not root)" ""
 fi
+
+msg_run 'cd . keeps logical path: cd /tmp; cd .; pwd'
+out=$(../simpsh -c 'cd /tmp; cd .; pwd')
+if [ "$out" != "/tmp" ]; then
+  test_fail "out" "expected" "/tmp"; exit 1
+else
+  test_pass "out" "matches" "/tmp"
+fi
+
+msg_run 'dot-slash normalization: cd /tmp/./ && pwd'
+out=$(../simpsh -c 'cd /tmp/./ && pwd')
+if [ "$out" != "/tmp" ]; then
+  test_fail "out" "expected" "/tmp"; exit 1
+else
+  test_pass "out" "matches" "/tmp"
+fi
+
+msg_run 'cd -P physical: cd -P /tmp && pwd'
+out=$(../simpsh -c 'cd -P /tmp && pwd')
+if [ "$out" != "/tmp" ]; then
+  test_fail "out" "expected" "/tmp"; exit 1
+else
+  test_pass "out" "matches" "/tmp"
+fi

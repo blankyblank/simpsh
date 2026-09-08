@@ -262,4 +262,12 @@ else
   test_pass "out" "matches" "expanded"
 fi
 
-exit 0
+msg_run 'redirect target with PID: echo hi > /tmp/simpsh-pid$$.txt'
+rm -f /tmp/simpsh-pid*.txt
+../simpsh -c '{ echo hi; } > /tmp/simpsh-pid$$.txt'
+out=$(cat /tmp/simpsh-pid*.txt 2>/dev/null); rm -f /tmp/simpsh-pid*.txt
+if [ "$out" != "hi" ]; then
+  test_fail "out" "expected" "hi"; exit 1
+else
+  test_pass "out" "matches" "hi"
+fi
