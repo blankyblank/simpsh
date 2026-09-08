@@ -170,6 +170,7 @@ extern int ctx_depth;
 extern int btdepth;
 extern tokmode ctx_stack[CTX_MAX];
 extern struct redir *heredoc_head;
+extern struct redir **heredoc_tail;
 
 
 extern sh_tok tokenize(void);

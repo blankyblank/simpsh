@@ -75,6 +75,7 @@ enum {
 extern sh_tok tbuf;
 /** build ast tree */
 extern cmd_tree *parse_list(int multi);
+extern void collect_heredocs(void);
 
 #endif /* PARSE_H */
 

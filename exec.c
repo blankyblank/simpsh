@@ -660,6 +660,7 @@ __attribute__((hot)) static int
 run_cmd(const cmd_tree *n, int inchld)
 {
   size_t i, len;
+  int svdone;
   char ifl, efl;
   char **final;
   shfunc *f;
@@ -685,6 +686,8 @@ run_cmd(const cmd_tree *n, int inchld)
       unblocksigs();
       return 128 + SIGINT;
     }
+    svdone = cmdsubdone;
+    cmdsubdone = 0;
     final = expand_argv(CARGS(n), &len);
     handler = sv;
   }
@@ -769,6 +772,7 @@ run_cmd(const cmd_tree *n, int inchld)
     }
     if (!status && cmdsubdone)
       status = LSTATUS;
+    cmdsubdone = svdone;
     if (predir)
       status = apply_redir(predir);
     if (CNEG(n))
@@ -779,6 +783,7 @@ run_cmd(const cmd_tree *n, int inchld)
   stack_state(final[0]);
 #endif /* DEBUG */
 
+  cmdsubdone = svdone;
   if (n->flags & EFLAG_SAFE)
     errsafe++;
   if ((b = findbuiltin(*final)) && (b->flags & SBLTN)) {
@@ -1138,9 +1143,12 @@ static int
 run_pipe(const cmd_tree *n)
 {
   int status = 0;
+  redir *svredir;
 
   if (!CPIPEC(n))
     return 0;
+  svredir = predir;
+  predir = NULL;
   for (size_t i = 0; i < CPIPEC(n); i++)
     if (!canfakepipe(CPIPE(n)[i]))
       goto realpipe;
@@ -1182,6 +1190,7 @@ run_pipe(const cmd_tree *n)
     fkrestore(fkstate);
   }
   fkstate = sv, fakectx = svctx;
+  predir = svredir;
   return (CNEG(n)) ? !status : status;
 
 realpipe:
@@ -1291,6 +1300,7 @@ realpipe:
     status = !status;
   if (eflag && status != 0 && !iflag && !errsafe && !(n->flags & EFLAG_SAFE))
     exit(status);
+  predir = svredir;
   return status;
 }
 

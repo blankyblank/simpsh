@@ -199,7 +199,7 @@ pwdpath(char *path) {
           *res++ = *src++;
         break;
       case '.':
-        if (*(src + 1) && (*(src + 2) == '/' || *(src + 2) == '\0'))
+        if (*(src + 1) == '.' &&  (*(src + 2) == '/' || *(src + 2) == '\0'))
           if (res > path + 1) {
             if (res > path + 1 && *(res - 1) == '/')
               res--;
@@ -211,11 +211,15 @@ pwdpath(char *path) {
           } else {
             src += 2;
           }
-        else if (*(src + 1) == '/')
+        else if (*(src + 1) == '/') {
+          if (*(src + 2) == '\0' && res > path + 1 && *(res - 1) == '/')
+            res--;
           src += 2;
-        else if (*(src + 1) == '\0')
+        } else if (*(src + 1) == '\0') {
+          if (res > path + 1 && *(res - 1) == '/')
+            res--;
           src++;
-        else
+        } else
           *res++ = *src++;
         break;
       default:
@@ -308,7 +312,7 @@ cdcmd(char **argv)
     if (prnt) {
       printf("%s\n", respath);
     }
-    if (getcwd(respath, PATH_MAX))
+    if (!getcwd(respath, PATH_MAX))
       return 1;
   } else {
     size_t plen, dlen;

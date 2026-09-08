@@ -34,6 +34,15 @@ int chkwd;
 #define NCHR(c)   (nchars[(unsigned char)(c)])
 #define DCHR(c)   (dqchars[(unsigned char)(c)])
 #define SCHR(c)   (sqchars[(unsigned char)(c)])
+#define svstate() \
+  svhead = head; svtail = tail; svwflen = wflen; svctx = ctx_depth; \
+   svcctx = cctx; svbt = btdepth; svperr = PARSEERR; svhd = heredoc_head; \
+   svhdt = heredoc_tail
+#define popstate() \
+  head = svhead; tail = svtail; wflen = svwflen; ctx_depth = svctx; \
+   cctx = svcctx; btdepth = svbt; PARSEERR = svperr || PARSEERR; \
+   heredoc_head = svhd; heredoc_tail = svhdt
+
 #define flushword(qs) \
   do { \
     if (wflen > 0) { \
@@ -397,6 +406,11 @@ tokenize(void)
         continue;
       case C_NL:
         shinpt->linenum++;
+        if (heredoc_head && cctx == M_NORMAL && !shinpt->strpush) {
+          collect_heredocs();
+          if (PARSEERR)
+            return SHTOK(TEOF);
+        }
         if (wd & CHKNL)
           continue;
         if (!heredoc_head) {
@@ -616,32 +630,23 @@ lexcmdsub(void)
   size_t svwflen;
   int svctx, svbt, svcctx, svperr;
   cmd_tree *n;
+  struct redir *svhd, **svhdt;
 
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
 
-  svhead = head;
-  svtail = tail;
-  svwflen = wflen;
-  svctx = ctx_depth;
-  svcctx = cctx;
-  svbt = btdepth;
-  svperr = PARSEERR;
+  svstate();
 
   head = NULL;
   tail = NULL;
+  heredoc_head = NULL;
+  heredoc_tail = &heredoc_head;
   wflen = PARSEERR = 0;
   ctx_depth = btdepth = 0;
 
   n = parse_list(1);
   if (tbuf.type != TRP) {
     notclosed = 1;
-    head = svhead;
-    tail = svtail;
-    wflen = svwflen;
-    ctx_depth = svctx;
-    cctx = svcctx;
-    btdepth = svbt;
-    PARSEERR = svperr || PARSEERR;
+    popstate();
     return SHEOF;
   }
 
@@ -652,56 +657,81 @@ lexcmdsub(void)
   f->next = NULL;
   f->flags = 0;
 
-  head = svhead;
-  tail = svtail;
-  wflen = svwflen;
-  ctx_depth = svctx;
-  cctx = svcctx;
-  btdepth = svbt;
-  PARSEERR = svperr || PARSEERR;
+  popstate();
   if (head)
     tail->next = f;
   else
     head = f;
   tail = f;
-
   return 0;
 }
 
 static int
 lexbtick(void)
 {
+  size_t svwflen,btlen, btcap;
+  int svctx, svbt, svcctx;
+  int svlinenum, svperr;
   wf *svhead, *svtail, *f;
-  size_t svwflen;
-  int svctx, svbt, svcctx, svperr;
+  char *btbuf;
   cmd_tree *n;
+  struct redir *svhd, **svhdt;
 
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
-
-  svhead = head;
-  svtail = tail;
-  svwflen = wflen;
-  svctx = ctx_depth;
-  svcctx = cctx;
-  svperr = PARSEERR;
-
+  svstate();
   head = NULL;
   tail = NULL;
+  heredoc_head = NULL;
+  heredoc_tail = &heredoc_head;
   wflen = ctx_depth = PARSEERR =  0;
+
+  svlinenum = shinpt->linenum;
+  btlen = 0, btcap = 256;
+  btbuf = st_alloc(btcap);
+  for (;;) {
+    int c;
+    if ((c = shgetchar()) == SHEOF) {
+      notclosed = 1;
+      popstate();
+      return SHEOF;
+    }
+    if (c == '`')
+      break;
+    if (c == '\\') {
+      int c2;
+      if ((c2 = shgetchar()) == SHEOF) {
+        shungetc(c2);
+        c2 = '\\';
+      }
+      if (c2 != '\\' && c2 != '`' && c2 != '$' && !(svcctx == M_DQUOTE && c2 == '"')) {
+        if (btlen + 2 >= btcap) {
+          btcap *= 2;
+          streallocar(btbuf, btcap, btlen, char);
+        }
+        btbuf[btlen++] = c;
+      }
+      c = c2;
+      if (c == '\n')
+        shinpt->linenum++;
+    }
+    if (btlen + 2 >= btcap) {
+      btcap *= 2;
+      streallocar(btbuf, btcap, btlen, char);
+    }
+    btbuf[btlen++] = c;
+  }
 
   svbt = btdepth;
   btdepth = 1;
+  setinputstrn(btbuf, (int)btlen);
+  shinpt->linenum = svlinenum;
   n = parse_list(1);
   btdepth = svbt;
+  popinput();
 
-  if (tbuf.type != TBTICK) {
+  if (tbuf.type != TEOF) {
     notclosed = 1;
-    head = svhead;
-    tail = svtail;
-    wflen = svwflen;
-    ctx_depth = svctx;
-    cctx = svcctx;
-    PARSEERR = svperr || PARSEERR;
+    popstate();
     return SHEOF;
   }
   f = wfalloc();
@@ -711,18 +741,12 @@ lexbtick(void)
   f->next = NULL;
   f->flags = 0;
 
-  head = svhead;
-  tail = svtail;
-  wflen = svwflen;
-  ctx_depth = svctx;
-  PARSEERR = svperr || PARSEERR;
-  cctx = svcctx;
+  popstate();
   if (head)
     tail->next = f;
   else
     head = f;
   tail = f;
-
   return 0;
 }
 

@@ -19,7 +19,7 @@
 #define WFCAP 8
 
 redir *heredoc_head;
-static redir **heredoc_tail = &heredoc_head;
+redir **heredoc_tail = &heredoc_head;
 sh_tok tbuf = { .type = TNONE };
 #define gettok(f) (chkwd = (f), tbuf = tokenize())
 
@@ -44,6 +44,16 @@ static void *synunexpected(int, sh_tok);
 static void *synexpected(int, sh_tok, token);
 static void *syntxerr(int, char *, token);
 static void *syntxerrstr(int ln, char *msg, char *exp);
+
+#define HDGROW() do { \
+  if (hlen + 1 >= hcap) { \
+    size_t nhcap = hcap ? hcap * 2 : 256; \
+    hbuf = hbuf ? srealloc(hbuf, nhcap) : salloc(nhcap); \
+    hcap = nhcap; \
+  } \
+} while (0)
+
+#define HDPUTC(c) do { HDGROW(); hbuf[hlen++] = (c); llen++; } while (0)
 
 static inline cmd_tree *
 newredirnode(cmd_tree * restrict l, redir * restrict r)
@@ -91,6 +101,13 @@ newcmdnode(wf ** restrict args, int flags, wf ** restrict sh_vars, size_t vc)
   n->flags = flags;
   n->line = gstate.fnline ? gstate.lineno - gstate.fnline + 1 : gstate.lineno;
   return n;
+}
+
+void
+collect_heredocs(void)
+{
+  if (heredoc_head)
+    parse_heredoc();
 }
 
 /* check if word is name=value */
@@ -171,15 +188,20 @@ parse_list(int multi)
     cmd_tree *r;
 
     if (!(r = parse_andor())) {
-      if (PARSEERR)
+      if (PARSEERR) {
+        heredoc_head = NULL;
+        heredoc_tail = &heredoc_head;
         return NULL;
+      }
       return l;
     }
-    if (heredoc_head)
+    if (heredoc_head && tbuf.type == TEOF)
       parse_heredoc();
 
     if (tbuf.type == TBKGRND) {
-      l = newoppnode(TSEMI, l ? l : newoppnode(TBKGRND, r, NULL), l ? r : NULL);
+      cmd_tree *bg;
+      bg = newoppnode(TBKGRND, r, NULL);
+      l = l ? newoppnode(TSEMI, l, bg) : newoppnode(TSEMI, bg, NULL);
       gettok(CHKALIAS | CHKKWD | (multi ? CHKNL : 0) | CHKBRACE);
       continue;
     }
@@ -478,14 +500,15 @@ parse_heredoc(void)
     return;
 
   redir *r;
-  char *eofv;
-  char *bpos;
-  char c;
+  char *eofv, *dst, *hbuf, c;
   size_t eofvlen;
-  size_t bodylen;
+  size_t hlen, hcap, llen;
 
+  hlen = hcap = llen = 0;
+  hbuf = NULL;
   while (heredoc_head) {
-    bpos = NULL;
+    hlen = hcap = 0;
+    hbuf = NULL;
     r = heredoc_head;
     heredoc_head = heredoc_head->heredoc_next;
     eofv = join_wf(r->name, 0);
@@ -496,29 +519,26 @@ parse_heredoc(void)
         c = shgetchar();
       shungetc(c);
     }
-    bpos = stnext;
 
     for (;;) {
-      char *lpos;
-      size_t llen;
-
       if (r->type == RDHERE_D) {
         c = shgetchar();
         while (c == '\t')
           c = shgetchar();
         shungetc(c);
       }
-      lpos = stnext;
+      llen = 0;
 
       for (;;) {
         c = shgetchar();
         if (c == SHEOF) {
-          llen = stnext - lpos;
-          if (llen == eofvlen && memcmp(lpos, eofv, eofvlen) == 0) {
-            stunalloc(lpos);
+          if (llen == eofvlen && memcmp(hbuf + hlen - llen, eofv, eofvlen) == 0) {
+            hlen -= llen;
             goto done;
           }
           syntxerrstr(curline, "heredoc", "unexpected EOF while looking for delimiter");
+          if (hbuf)
+            sfree(hbuf);
           return;
         }
         if (c == '\n') {
@@ -528,37 +548,43 @@ parse_heredoc(void)
         if (c == '\\' && btdepth > 0) {
           c = shgetchar();
           if (c == SHEOF) {
-            stcheck(32), st_putc('\\');
+            HDPUTC('\\');
             continue;
           }
           if (c == '\n')
             shinpt->linenum++;
-          stcheck(32), st_putc('\\'), st_putc(c);
+          HDPUTC('\\');
+          HDPUTC(c);
           continue;
         }
         if (c == '`' && btdepth > 0) {
-          llen = pntlen(lpos, stnext);
-          if (llen == eofvlen && !memcmp(lpos, eofv, eofvlen)) {
-            stunalloc(lpos);
+          if (llen == eofvlen && !memcmp(hbuf + hlen - llen, eofv, eofvlen)) {
+            hlen -= llen;
             shungetc(c);
             goto done;
           }
           syntxerrstr(curline, "heredoc", "unexpected EOF while looking for delimiter");
+          if (hbuf)
+            sfree(hbuf);
           return;
         }
-        stcheck(32), st_putc(c);
+        HDPUTC(c);
       }
-      llen = stnext - lpos;
-      if (llen == eofvlen && memcmp(lpos, eofv, eofvlen) == 0) {
-        stunalloc(lpos);
+      if (llen == eofvlen && memcmp(hbuf + hlen - llen, eofv, eofvlen) == 0) {
+        hlen -= llen;
         break;
       }
-      stcheck(32), st_putc('\n');
+      HDPUTC('\n');
     }
 
 done:
-    bodylen = stnext - bpos;
-    r->heredoc = grab_str(bodylen);
+    dst = st_alloc(hlen + 1);
+    if (hlen)
+      memcpy(dst, hbuf, hlen);
+    dst[hlen] = '\0';
+    r->heredoc = dst;
+    if (hbuf)
+      sfree(hbuf);
   }
   heredoc_tail = &heredoc_head;
 }
