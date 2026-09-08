@@ -3,10 +3,10 @@ PREFIX = /usr/local
 BINDIR = $(DESTDIR)$(PREFIX)/bin
 
 ## compiler: cc | gcc | clang | afl-clang-fast
-CC = afl-clang-fast
+CC = cc
 
 ## build profile: release | debug | sanitize | sanitize-extra (clang only) | valgrind | profile
-BUILD = sanitize
+BUILD = release
 
 ## linking: dynamic | static
 BUILD_LINK = dynamic
