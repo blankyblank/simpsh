@@ -51,3 +51,9 @@ heaptrack.*
 /tests/pctest.sh
 /reminder
 /tests/testfiles/redir-subsh-pipe.test
+/out/default
+/triage
+/tests/seeds-min
+/tests/seeds
+/tests/fzrun
+/tests/seeds-exec
