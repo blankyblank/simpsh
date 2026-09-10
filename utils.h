@@ -55,10 +55,12 @@
 static inline int
 atoi_smpl(const char *restrict s)
 {
-  int n = 0;
+  if (!s)
+    return 0;
+  unsigned int u = 0;
   while (isdigit_(*s))
-    n = n * 10 + (*s++ - '0');
-  return n;
+    u = u * 10 + (unsigned int)(*s++ - '0');
+  return u > (unsigned int)INT_MAX ? INT_MAX : (int)u;
 }
 
 static inline int

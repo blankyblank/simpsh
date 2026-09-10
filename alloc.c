@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "alloc.h"
+#include "errmsg.h"
 #include "main.h"
 #include "lex.h"
 
@@ -98,7 +99,7 @@ st_addseg(size_t asize)
   stacksl = 1;
   nseg = salloc(len);
   if (!nseg)
-    return NULL;
+    err(1, "mmap failed to allocate block");
   nseg->prev = current;
   stnext = nseg->buf;
   stleft = allocsz(nseg) - (sizeof(stackseg) - MINSTACK_S);
@@ -139,7 +140,7 @@ grow_stack(size_t msize)
     nsize = MINSTACK_S;
   stacksl = 1;
   if (!(nb = salloc(sizeof(stackseg) - MINSTACK_S + nsize)))
-    return NULL;
+    err(1, "out of memory");
   nb->prev = current;
   current = nb;
   if (used > 0)

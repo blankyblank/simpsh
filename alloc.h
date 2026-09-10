@@ -256,8 +256,8 @@ sfree(void *p)
   s = magic;
   save = p;
   p = (char *)p - sizeof(slab *);
-  if (s->magic != MEMMAGIC || (char *)p < (char *)s + sizeof(slab) ||
-      (char *)p >= (char *)s->end) {
+  if (((size_t)s & (sizeof(void *) - 1)) || s->magic != MEMMAGIC ||
+      (char *)p < (char *)s + sizeof(slab) || (char *)p >= (char *)s->end) {
     free(save);
     return;
   }

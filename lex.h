@@ -125,13 +125,22 @@ struct kw {
 };
 
 #define WF_CHUNK_SIZE 4
-#define CTX_MAX     8
+#define CTX_MAX     64
 #define kwhash(s, n)  (((n)? ((u8)(s)[0] * 1 + (u8)(s)[(n) - 1] * 2 + (n) * 22) : 0) & 31)
 #define SHTOK(t)      ((sh_tok) { .type = t, .sub = 0 })
 #define SHREDIR(s)    ((sh_tok) { .type = TREDIR, .sub = (s) })
 #define SHWORD(w)     ((sh_tok) { .type = TWORD, .cmd = w, .sub = 0 })
-#define pshctx(m)     (ctx_stack[++ctx_depth] = (m))
 #define popctx()      (ctx_depth--)
+#define pshctx(m) \
+  do { \
+    if (ctx_depth + 1 >= CTX_MAX) { \
+      if (!PARSEERR) \
+        shwarn("parser", "nesting too deep"); \
+      PARSEERR = 1; \
+    } else { \
+      ctx_stack[++ctx_depth] = (m); \
+    } \
+  } while (0)
 
 enum {
   CHKALIAS = 1 << 0,

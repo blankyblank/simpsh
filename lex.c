@@ -134,41 +134,6 @@ static int lexvnum(int);
 static int lexbtick(void);
 static void skipcomment(void);
 
-#define qescape(c) \
-  case insq: \
-    if ((c) == '\'') { \
-      cstate &= ~(unsigned int)insq; \
-      st_putc(c); \
-      cmdlen++; \
-      continue; \
-    } else { \
-      st_putc(c); \
-      cmdlen++; \
-      continue; \
-    } \
-  case esc | indq: \
-  case esc: \
-    st_putc(c); \
-    cmdlen++; \
-    cstate &= ~(unsigned int)esc; \
-    continue; \
-  case indq: \
-    if ((c) == '"') { \
-      cstate &= ~(unsigned int)indq; \
-      st_putc(c); \
-      cmdlen++; \
-      continue; \
-    } else if ((c) == '\\') { \
-      st_putc(c); \
-      cmdlen++; \
-      cstate |= esc; \
-      continue; \
-    } else { \
-      st_putc(c); \
-      cmdlen++; \
-      continue; \
-    }
-
 static inline int
 eatbnl(void)
 {
@@ -300,8 +265,7 @@ get_wf(int c)
             if (lexvnum(n) == SHEOF)
               goto done;
           } else {
-            stcheck(32);
-            st_putc(c);
+            stcheck(32), st_putc(c);
             wflen++;
             shungetc(n);
           }
@@ -326,7 +290,7 @@ get_wf(int c)
           break;
         }
         if (cctx == M_NORMAL) {
-          st_putc(c);
+          stcheck(32), st_putc(c);
           wflen++;
           break;
         }
@@ -801,7 +765,6 @@ lexvbrace(void)
   size_t nlen = 0;
   int hasop = 0, ch;
   flushword((cctx == M_DQUOTE) ? QDOUBLE : QNONE);
-  stcheck(32);
 
   ch = shgetchar();
   if (ch == SHEOF) {
@@ -814,9 +777,10 @@ lexvbrace(void)
   /* ${#param} length expansion: header is the whole content */
   if (ch == '#') {
     int depth = 0;
-    st_putc(ch);
+    stcheck(32), st_putc(ch);
     nlen++;
     for (;;) {
+      stcheck(32);
       ch = shgetchar();
       if (ch == SHEOF) {
         notclosed = 1;
@@ -850,12 +814,13 @@ lexvbrace(void)
     return 0;
   }
 
-  st_putc(ch);
+  stcheck(32), st_putc(ch);
   nlen++;
 
   /* parameter name */
   if (isdigit_(ch)) {
     for (;;) {
+      stcheck(32);
       int n = shgetchar();
       if (n == SHEOF) {
         notclosed = 1;
@@ -872,6 +837,7 @@ lexvbrace(void)
     }
   } else if (isalpha_(ch) || ch == '_') {
     for (;;) {
+      stcheck(32);
       int n = shgetchar();
       if (n == SHEOF) {
         notclosed = 1;
@@ -906,8 +872,7 @@ lexvbrace(void)
       return SHEOF;
     }
     if (n == '-' || n == '=' || n == '?' || n == '+') {
-      st_putc(c);
-      st_putc(n);
+      stcheck(32), st_putc(c), st_putc(n);
       nlen += 2;
       hasop = 1;
     } else {
@@ -915,7 +880,7 @@ lexvbrace(void)
       shungetc(c);
     }
   } else if (c == '-' || c == '=' || c == '?' || c == '+') {
-    st_putc(c);
+    stcheck(32), st_putc(c);
     nlen++;
     hasop = 1;
   } else if (c == '#' || c == '%') {
@@ -923,13 +888,12 @@ lexvbrace(void)
     if (n == '\n')
       shinpt->linenum++; //possibly error, idk
     if (n == c) {
-      st_putc(c);
-      st_putc(n);
+      stcheck(32), st_putc(c), st_putc(n);
       nlen += 2;
     } else {
       if (n != SHEOF)
         shungetc(n);
-      st_putc(c);
+      stcheck(32), st_putc(c);
       nlen++;
     }
     hasop = 1;
@@ -959,7 +923,7 @@ lexvbrace(void)
         if (!depth)
           break;
         depth--;
-        st_putc(ch);
+        stcheck(32), st_putc(ch);
         nlen++;
         continue;
       }
@@ -972,7 +936,7 @@ lexvbrace(void)
         if (n != SHEOF)
           shungetc(n);
       }
-      st_putc(ch);
+      stcheck(32), st_putc(ch);
       nlen++;
     }
   }
@@ -992,6 +956,7 @@ lexvar(int c)
   stcheck(32), st_putc(c);
   size_t nlen = 1;
   for (;;) {
+    stcheck(32);
     int ch = eatbnl();
     if (!isalnum_(ch) && ch != '_') {
       shungetc(ch);
@@ -1035,7 +1000,7 @@ lexvnum(int c)
       shungetc(ch);
       break;
     }
-    st_putc(ch);
+    stcheck(32), st_putc(ch);
     nlen++;
   }
   w = grab_str(nlen);

@@ -17,7 +17,9 @@
 #include "utils.h"
 
 #define WFCAP 8
+#define MAX_PDEPTH 512
 
+static int pdepth;
 redir *heredoc_head;
 redir **heredoc_tail = &heredoc_head;
 sh_tok tbuf = { .type = TNONE };
@@ -119,6 +121,8 @@ is_assn(wf *cmd)
   char *eq;
   const char *p;
 
+  if (!cmd->word)
+    return 0;
   eq = memchr(cmd->word, '=', cmd->len);
   if (!eq || eq == cmd->word)
     return 0;
@@ -169,17 +173,25 @@ get_assn(wf **args, wf *** restrict sh_vars)
   return ac;
 }
 
-/* TODO: fix cascading errors, to stop error message once one syntax error is found. */
-
 __attribute__((hot)) cmd_tree *
 parse_list(int multi)
 {
   cmd_tree *l = NULL;
 
+  if (!multi) {
+    heredoc_head = NULL;
+    heredoc_tail = &heredoc_head;
+    pdepth = 0;
+  } else if (++pdepth > MAX_PDEPTH) {
+   return syntxerrstr(curline, "syntax error", "nesting too deep");
+  }
   for (;;) {
     gettok(CHKALIAS | CHKKWD | (multi ? CHKNL : 0) | CHKBRACE);
-    if (tbuf.type == TEOF)
+    if (tbuf.type == TEOF) {
+      if (multi)
+        pdepth--;
       return NULL;
+    }
     if (tbuf.type != TNL)
       break;
   }
@@ -191,8 +203,12 @@ parse_list(int multi)
       if (PARSEERR) {
         heredoc_head = NULL;
         heredoc_tail = &heredoc_head;
+        if (multi)
+          pdepth--;
         return NULL;
       }
+      if (multi)
+        pdepth--;
       return l;
     }
     if (heredoc_head && tbuf.type == TEOF)
@@ -210,7 +226,9 @@ parse_list(int multi)
       gettok(CHKALIAS | CHKKWD | (multi ? CHKNL : 0) | CHKBRACE);
       continue;
     }
-      return l ? newoppnode(TSEMI, l, r) : r;
+    if (multi)
+      pdepth--;
+    return l ? newoppnode(TSEMI, l, r) : r;
   }
 }
 
@@ -250,9 +268,17 @@ parse_simple_cmd(void)
           gettok(0);
 
           if (tbuf.type == TREDIR && (name->flags & WFREDIRFD)) {
-            int fd = 0;
-            for (size_t i = 0; i < name->len; i++)
-              fd = fd * 10 + (name->word[i] - '0');
+            unsigned long long u;
+            int fd;
+            if (name->len > 10)
+              return syntxerrstr(curline, "bad file descriptor", "exceeds int max");
+            fd = u = 0;
+            for (size_t i = 0; i < name->len; i++) {
+              u = u * 10 + (name->word[i] - '0');
+              if (u > (unsigned long long)INT_MAX)
+                return syntxerrstr(curline, "bad file descriptor", "larger than int max");
+              fd = (int)u;
+            }
             if (!(r = parse_redir(tbuf, fd)))
               return syntxerr(curline, "missing filename for", tbuf.type);
             *tail = r;
@@ -365,7 +391,7 @@ gettailredir(cmd_tree *c)
   tail = &redirs;
 
   for (;;) {
-    if (tbuf.type == TWORD && (tbuf.cmd->flags & WFREDIRFD)) {
+    if (tbuf.type == TWORD && (tbuf.cmd->flags & WFREDIRFD) && tbuf.cmd->word) {
       int fd = 0;
         fd = atoi_smpl(tbuf.cmd->word);
         gettok(0);
@@ -401,12 +427,14 @@ parse_pipe(void)
   }
   if (!(cmd = parse_cmd()))
     return NULL;
-
-  cmd = gettailredir(cmd);
+  if (!(cmd = gettailredir(cmd)))
+    return NULL;
   stages[n++] = cmd;
   for (;;) {
     if (tbuf.type != TPIPE)
       break;
+    if (n >= 256)
+      return syntxerr(curline, "too many pipe stages", tbuf.type);
     gettok(CHKALIAS | CHKKWD | CHKNL | CHKBRACE);
     if (!(p = parse_cmd()))
       return NULL;
@@ -532,13 +560,15 @@ parse_heredoc(void)
       for (;;) {
         c = shgetchar();
         if (c == SHEOF) {
-          if (llen == eofvlen && memcmp(hbuf + hlen - llen, eofv, eofvlen) == 0) {
+          if (llen == eofvlen && (!llen || !memcmp(hbuf + hlen - llen, eofv, eofvlen))) {
             hlen -= llen;
             goto done;
           }
           syntxerrstr(curline, "heredoc", "unexpected EOF while looking for delimiter");
           if (hbuf)
             sfree(hbuf);
+          heredoc_head = NULL;
+          heredoc_tail = &heredoc_head;
           return;
         }
         if (c == '\n') {
@@ -558,7 +588,7 @@ parse_heredoc(void)
           continue;
         }
         if (c == '`' && btdepth > 0) {
-          if (llen == eofvlen && !memcmp(hbuf + hlen - llen, eofv, eofvlen)) {
+          if (llen == eofvlen && (!llen || !memcmp(hbuf + hlen - llen, eofv, eofvlen))) {
             hlen -= llen;
             shungetc(c);
             goto done;
@@ -566,11 +596,13 @@ parse_heredoc(void)
           syntxerrstr(curline, "heredoc", "unexpected EOF while looking for delimiter");
           if (hbuf)
             sfree(hbuf);
+          heredoc_head = NULL;
+          heredoc_tail = &heredoc_head;
           return;
         }
         HDPUTC(c);
       }
-      if (llen == eofvlen && memcmp(hbuf + hlen - llen, eofv, eofvlen) == 0) {
+      if (llen == eofvlen && (!llen || !memcmp(hbuf + hlen - llen, eofv, eofvlen))) {
         hlen -= llen;
         break;
       }
