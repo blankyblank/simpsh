@@ -2,8 +2,9 @@
 PREFIX = /usr/local
 BINDIR = $(DESTDIR)$(PREFIX)/bin
 
-## compiler: cc | gcc | clang | afl-clang-fast
+## compiler: cc | gcc | clang | afl-clang-fast | afl-clang-lto
 CC = cc
+
 
 ## build profile: release | debug | sanitize | sanitize-extra (clang only) | valgrind | profile
 BUILD = release

@@ -28,7 +28,7 @@ PROFILE != case "$(BUILD):$(CCNAME):$(OS)" in \
 	-fno-omit-frame-pointer -fno-sanitize-recover=all -O1 -g3 " ;; \
 	sanitize-extra*)  echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined -fsanitize=integer -fno-sanitize-recover=all -fsanitize=cfi -fvisibility=hidden -flto" ;; \
 	valgrind:*)       echo "-Og -g3 -fno-omit-frame-pointer -DENABLE_VALGRIND" ;; \
-	*afl*)            echo "-O2 -g3 -fno-omit-frame-pointer -fno-sanitize-recover=all" ;; \
+	*afl*)            echo "-O2 -fsanitize=address,undefined -g3 -fno-omit-frame-pointer -fno-sanitize-recover=all -flto=full" ;; \
 	profile:gcc:*)    echo "-O2 -g3 -pg -fxray-instrument -fvar-tracking-assignments -fno-analyzer-state-merge" ;; \
 	profile:clang:*)  echo "-O2 -g3 -fprofile-instr-generate -fcoverage-mapping -fxray-instrument" ;; \
 	*)                echo "-march=native -O2 -flto=auto";;\
@@ -45,7 +45,7 @@ LDFLAG != case "$(BUILD):$(CCNAME):$(OS)" in \
 	sanitize:clang:*) echo "-fsanitize=address,undefined -static-libasan" ;; \
 	sanitize-extra:clang:*) echo "-fsanitize=address,undefined,cfi -static-libasan" ;; \
 	valgrind:*)       echo "" ;; \
-	*afl*)            echo "-O2 -g3 -fno-omit-frame-pointer -fno-sanitize-recover=all" ;; \
+	*afl*)            echo "-O2 -g3 -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all -flto=full" ;; \
 	profile:gcc:*)    echo "-pg" ;; \
 	profile:clang:*)  echo "-fprofile-instr-generate" ;; \
 	*)                echo "" ;; \
@@ -220,3 +220,25 @@ bench-p:
 	hyperfine --warmup 4 'simpsh ./profile/printf-bench.sh'
 bench-q:
 	hyperfine --warmup 4 'simpsh ./profile/quote-bench.sh'
+
+fuzz-exec:
+	mkdir -p tests/seeds-exec /mnt/fuzz/out-exec
+	bwrap \
+	  --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /sbin /sbin \
+	  --ro-bind /lib /lib --ro-bind /lib64 /lib64 --ro-bind /etc /etc \
+	  --ro-bind ./simpsh /simpsh --ro-bind ./tests /t --bind ./tests/out-exec /out \
+		--ro-bind $(CURDIR)/simpsh /simpsh \
+		--ro-bind $(CURDIR)/tests/seeds-exec /t/seeds-exec \
+		--ro-bind $(CURDIR)/tests/afl.dict /t/afl.dict \
+		--ro-bind $(CURDIR)/tests/fzrun /t/fzrun \
+		--bind /mnt/fuzz/out-exec /out \
+	  --tmpfs /tmp --tmpfs /run --proc /proc --dev /dev --unshare-all --die-with-parent \
+	  --clearenv --setenv PATH /usr/bin:/bin --setenv HOME /tmp --setenv SHELL /simpsh \
+	  --setenv UBSAN_OPTIONS halt_on_error=1:abort_on_error=1:symbolize=0:print_stacktrace=1 \
+		--setenv ASAN_OPTIONS abort_on_error=1:detect_leaks=0:symbolize=0:allocator_may_return_null=1 \
+		--setenv AFL_SKIP_BIN_CHECK 1 --setenv AFL_AUTORESUME 1  --chdir /tmp \
+		afl-fuzz -i /t/seeds-exec -o /out -m none -t 5000 -d -x /t/afl.dict -- /t/fzrun @@
+
+
+
+
