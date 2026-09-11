@@ -25,8 +25,10 @@ foldcmd(char *argv[])
   {
     case 'w':
       {
-        char *wdth = EARGF(usage(argv0, helpmsgs[FOLDH].usage));
+        char *wdth;
         long tmpw;
+        if (!(wdth = EARGF(usage(argv0, helpmsgs[FOLDH].usage))))
+          return shwarn_arg(argv0, "-w", "missing arguement");
         if ((tmpw = atoi_(wdth)) <= 0)
           return shwarn_arg(argv0, wdth, "must be a positive integer");
         w = (size_t)tmpw;

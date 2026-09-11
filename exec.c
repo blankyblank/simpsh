@@ -1330,9 +1330,6 @@ execcmd(char **argv)
   return 0;
 
 fail:
-  if (env) {
-    sfree(env);
-  }
   sfree(fullpath);
   return sherrx(1, argv[0]);
 }

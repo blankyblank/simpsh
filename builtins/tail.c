@@ -88,6 +88,8 @@ ARGNUM:
 
   if (ln < 0)
     ln = 10;
+  if (!ln)
+    return 0;
 
   if (!argc)
     return sttail(ln);
