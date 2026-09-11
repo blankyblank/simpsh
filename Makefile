@@ -2,7 +2,6 @@
 
 include config.mk
 
-
 CCNAME != \
 	case "$(CC)" in\
 		gcc|clang|afl*) echo "$(CC)";;\
