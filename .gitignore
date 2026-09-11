@@ -57,3 +57,4 @@ heaptrack.*
 /tests/seeds
 /tests/fzrun
 /tests/seeds-exec
+/safe
