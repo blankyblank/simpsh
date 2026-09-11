@@ -208,8 +208,6 @@ scan_tok(void)
   size_t skip;
   char c;
 
-  /* TODO: decide if i want to keep simd function
-   * or move to scalar */
   if (alen > 0) {
     skip = sskipspace(ap, alen);
     ap += skip;
@@ -221,12 +219,13 @@ scan_tok(void)
   }
 
   if (isdigit_(ap[0])) {
-    aval = 0;
+    u64 acc;
+    aval = acc = 0;
     if (ap[0] == '0' && alen > 1 && ap[1] == 'x') {
       ap += 2;
       alen -= 2;
       while (alen > 0 && isxdigit(ap[0])) {
-        aval = (aval * 16) + hexval(ap[0]);
+        acc = (acc * 16) + (u64)hexval(ap[0]);
         ap++;
         alen--;
       }
@@ -234,17 +233,18 @@ scan_tok(void)
       ap++;
       alen--;
       while (alen > 0 && ap[0] >= '0' && ap[0] <= '7') {
-        aval = (aval * 8) + (ap[0] - '0');
+        acc = (acc * 8) + (u64)(ap[0] - '0');
         ap++;
         alen--;
       }
     } else {
       while (alen > 0 && isdigit_(ap[0])) {
-        aval = (aval * 10) + (ap[0] - '0');
+        acc = (acc * 10) + (u64)(ap[0] - '0');
         ap++;
         alen--;
       }
     }
+    aval = (i64)acc;
     atok = A_NUM;
     return;
   }
@@ -449,7 +449,7 @@ nud(void)
     case A_MINUS:
       lname = NULL;
       next_tok();
-      return -expr_bp(14);
+      return (i64)(0ULL - (u64)expr_bp(14));
     case A_LNOT:
       lname = NULL;
       next_tok();
@@ -664,13 +664,13 @@ led(i64 left)
   switch (atok) {
     case A_PLUS:
       next_tok();
-      return left + expr_bp(13);
+      return (i64)((u64)left + (u64)expr_bp(13));
     case A_MINUS:
       next_tok();
-      return left - expr_bp(13);
+      return (i64)((u64)left - (u64)expr_bp(13));
     case A_STAR:
       next_tok();
-      return left * expr_bp(14);
+      return (i64)((u64)left * (u64)expr_bp(14));
     case A_SLASH:
       next_tok();
       rb = expr_bp(14);
@@ -678,6 +678,9 @@ led(i64 left)
         shwarn_arg("arithmetic", ap, "division by 0");
         return 0;
       }
+      // INT64_MIN / -1 wrap
+      if (rb == -1)
+        return (i64)(0ULL - (u64)left);
       return left / rb;
     case A_PCT:
       next_tok();
@@ -686,13 +689,15 @@ led(i64 left)
         shwarn_arg("arithmetic", ap, "division by 0");
         return 0;
       }
+      if (rb == -1)
+        return (i64)(0ULL - (u64)left);
       return left % rb;
     case A_LSHIFT:
       next_tok();
-      return left << expr_bp(12);
+      return (i64)((u64)left << ((u64)expr_bp(12) & 63));
     case A_RSHIFT:
       next_tok();
-      return left >> expr_bp(12);
+      return (i64)((u64)left >> ((u64)expr_bp(12) & 63));
     case A_LT:
       next_tok();
       return left < expr_bp(11);
@@ -738,17 +743,20 @@ led(i64 left)
       }
       switch (assnop) {
         case '+':
-          nv = left + rhs;
+          nv = (i64)((u64)left + (u64)rhs);
           break;
         case '-':
-          nv = left - rhs;
+          nv = (i64)((u64)left - (u64)rhs);
           break;
         case '*':
-          nv = left * rhs;
+          nv = (i64)((u64)left * (u64)rhs);
           break;
         case '/':
           if (rhs) {
-            nv = left / rhs;
+            if (rhs == -1)
+              nv = (i64)(0ULL - (u64)left);
+            else
+              nv = left / rhs;
           } else {
             nv = 0;
             shwarn_arg("arithmetic", ap, "division by 0");
@@ -756,17 +764,20 @@ led(i64 left)
           break;
         case '%':
           if (rhs) {
-            nv = left % rhs;
+            if (rhs == -1)
+              nv = (i64)(0ULL - (u64)left);
+            else
+              nv = left % rhs;
           } else {
             nv = 0;
             shwarn_arg("arithmetic", ap, "division by 0");
           }
           break;
         case '<':
-          nv = left << rhs;
+          nv = (i64)((u64)left << (u64)rhs);
           break;
         case '>':
-          nv = left >> rhs;
+          nv = (i64)((u64)left >> (u64)rhs);
           break;
         case '&':
           nv = left & rhs;
@@ -798,7 +809,7 @@ led(i64 left)
         {
           char buf[32];
           i64 nv;
-          nv = left + (up ? 1: -1);
+          nv = (i64)((u64)left + (up ? 1ULL: ~0ULL));
           lltoa(nv, buf);
           setvar_i(name, buf, nv, 0);
         }
@@ -831,6 +842,7 @@ i64
 arith_eval(const char *expr, size_t len)
 {
   i64 res;
+  u64 acc;
   const char *p;
   size_t n = len, skip;
 
@@ -846,22 +858,25 @@ arith_eval(const char *expr, size_t len)
 
     /* left operand */
     if (isdigit_(p[0])) {
-      lval = 0;
+      lval = acc = 0;
       while (n > 0 && isdigit_(p[0])) {
-        lval = lval * 10 + (p[0] - '0');
+        acc = acc * 10 + (u64)(p[0] - '0');
         p++, n--;
       }
+      lval = (i64)acc;
     } else if (isalpha_(p[0]) || p[0] == '_') {
       wlen = sscnword(p, n);
-      lval = avarval(p, wlen);
+      acc = (u64)avarval(p, wlen);
       p += wlen, n -= wlen;
+      lval = (i64)acc;
       if (lval < 0)
         goto fallback;
     } else if (p[0] == '$' && n > 1 && (isalpha_(p[1]) || p[1] == '_')) {
       p++, n--;
       wlen = sscnword(p, n);
-      lval = avarval(p, wlen);
+      acc = (u64)avarval(p, wlen);
       p += wlen, n -= wlen;
+      lval = (i64)acc;
     } else {
       goto fallback;
     }
@@ -910,22 +925,25 @@ arith_eval(const char *expr, size_t len)
 
     /* right operand */
     if (isdigit_(p[0])) {
-      rval = 0;
+      rval = acc = 0;
       while (n > 0 && isdigit_(p[0])) {
-        rval = rval * 10 + (p[0] - '0');
+        acc = acc * 10 + (u64)(p[0] - '0');
         p++, n--;
+        rval = (i64)acc;
       }
     } else if (isalpha_(p[0]) || p[0] == '_') {
       wlen = sscnword(p, n);
-      rval = avarval(p, wlen);
+      acc = (u64)avarval(p, wlen);
       p += wlen, n -= wlen;
+      rval = (i64)acc;
       if (rval < 0)
         goto fallback;
     } else if (p[0] == '$' && n > 1 && (isalpha_(p[1]) || p[1] == '_')) {
       p++, n--;
       wlen = sscnword(p, n);
-      rval = avarval(p, wlen);
+      acc = (u64)avarval(p, wlen);
       p += wlen, n -= wlen;
+      rval = (i64)acc;
       if (rval < 0)
         goto fallback;
     } else {
@@ -937,23 +955,27 @@ arith_eval(const char *expr, size_t len)
     if (n == 0) {
       switch (op) {
         case '+':
-          return lval + rval;
+          return (i64)((u64)lval + (u64)rval);
         case '-':
-          return lval - rval;
+          return (i64)((u64)lval - (u64)rval);
         case '*':
-          return lval * rval;
+          return (i64)((u64)lval * (u64)rval);
         case '/':
-          if (rval == 0)
+          if (!rval)
             goto fallback;
+          if (rval == -1)
+            return (i64)(0ULL - (u64)lval);
           return lval / rval;
         case '%':
-          if (rval == 0)
+          if (!rval)
             goto fallback;
+          if (rval == -1)
+            return (i64)(0ULL - (u64)lval);
           return lval % rval;
         case '<':
-          return lval << (rval & 63);
+          return (i64)((u64)lval << (u64)(rval & 63));
         case '>':
-          return lval >> (rval & 63);
+          return (i64)((u64)lval >> (u64)(rval & 63));
         case '&':
           return lval & rval;
         case '^':
@@ -972,7 +994,6 @@ fallback:
   return res;
 }
 
-/* why are we keeping this?????????????????????? */
 static i64
 lookupavar(void)
 {

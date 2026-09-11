@@ -41,6 +41,9 @@ static inline const builtin *
 findbuiltin(const char *args)
 {
   unsigned int idx;
+
+  if (!args)
+    return NULL;
   idx = hash(args, BUILTIN_BUCKETS);
   for (; builtin_tab[idx] >= 0; idx = (idx + 1) & (BUILTIN_BUCKETS - 1))
     if (builtins[builtin_tab[idx]].name[0] == args[0] &&

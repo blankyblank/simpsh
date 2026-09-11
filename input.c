@@ -54,6 +54,8 @@ popstring(void)
 {
   strpush *sp;
   sp = shinpt->strpush;
+  if (!sp)
+    return;
   shinpt->nchar = sp->saved_nchar;
   shinpt->nleft = sp->saved_nleft;
   shinpt->unget = sp->saved_unget;
@@ -82,7 +84,8 @@ shgetline(char *buf, size_t sz)
 int
 charfill(void)
 {
-  shinput *in = shinpt;
+  shinput *in;
+  in = shinpt;
   if (in->strpush) {
     popstring();
     return shgetchar();

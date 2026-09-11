@@ -237,6 +237,9 @@ simpsh_run(void)
 
     mark = stack_mark();
     PARSEERR = 0;
+    if (shinpt)
+      shinpt->strpush = NULL;
+    alias_depth = 0;
 
     if (fchksig)
       dotrap();

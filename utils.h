@@ -77,9 +77,10 @@ atoi_(const char *s)
 static inline i64
 atoll_(const char * restrict s, i64 * restrict res)
 {
-  i64 n = 0;
-  int neg = 0;
+  u64 n;
+  int neg;
 
+  n = neg = 0;
   if (*s == '-') {
     neg = 1;
     s++;
@@ -90,8 +91,8 @@ atoll_(const char * restrict s, i64 * restrict res)
     return -1;
   }
   while (isdigit_(*s))
-    n = n * 10 + (*s++ - '0');
-  *res = neg ? -n : n;
+    n = n * 10 + (u64)(*s++ - '0');
+  *res = (i64)(neg ? 0u - n : n);
   return 0;
 }
 

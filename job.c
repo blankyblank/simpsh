@@ -41,7 +41,7 @@ newjob(pid_t pgid, const char *cmd)
   nj->num = njn++;
   nj->state = JRUN;
   nj->flags = 0;
-  nj->cmd = strdup_(cmd);
+  nj->cmd = strdup_(cmd ? cmd : "(command)");
   nj->nlive = 1;
   nj->status_pid = pgid;
   nj->wstatus = 0;

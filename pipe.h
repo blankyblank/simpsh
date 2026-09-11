@@ -56,12 +56,18 @@ void svfktraps(fakestate *, int);
 static inline int
 canfakepipe(cmd_tree *n)
 {
+  if (!n)
+    return 0;
   if (n->type == REDIR)
     n = n->left;
-  if (n->type != CMD)
+  if (!n || n->type != CMD)
     return 0;
   const builtin *bi;
+  wf **a;
 
+  a = CARGS(n);
+  if (!a || !*a || !a[0]->word)
+    return 0;
   bi = findbuiltin(CARGS(n)[0]->word);
   if (bi && bi->fn != &execcmd &&
       bi->fn != &evalcmd && bi->fn != &commandcmd && bi->fn != &dotcmd)

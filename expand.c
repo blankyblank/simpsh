@@ -630,7 +630,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
                marker = marker->next) ;
           if (marker && marker != f->next) {
             wf *g, *prev = NULL;
-            for (g = f->next; g != marker->next; g = g->next) {
+            for (g = f->next; marker && g != marker->next; g = g->next) {
               wf *cp = st_alloc(sizeof(wf));
               memcpy(cp, g, sizeof(wf));
               cp->next = NULL;
@@ -660,7 +660,8 @@ exp_word(wf *wordf, size_t * restrict rlen)
                   } else {
                     append_wf(&head, &tail, st_strndup("", 0), 0, QNONE);
                   }
-                  f = marker;
+                  if (marker)
+                    f = marker;
                   continue;
                 }
                 val = subres ? join_wf(subres, 0) : st_strndup("", 0);
@@ -818,7 +819,8 @@ exp_word(wf *wordf, size_t * restrict rlen)
             int qs = (bqs == QBRACE) ? QNONE : bqs;
             append_wf(&head, &tail, "", 0, qs);
           }
-          f = marker;
+          if (marker)
+            f = marker;
           break;
         }
 

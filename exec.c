@@ -84,6 +84,8 @@ static int shfexec(char ** restrict, char ** restrict, const char * restrict, re
 static char *
 bg_cmd(const cmd_tree *n)
 {
+  if (!n)
+    return "(command)";
   switch (n->type) {
     case CMD:
       {

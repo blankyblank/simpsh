@@ -61,7 +61,10 @@ int charfill(void);
 static inline int
 shgetchar(void)
 {
-  shinput *in = shinpt;
+  shinput *in;
+  if (!shinpt)
+    return SHEOF;
+  in = shinpt;
   if (doexpect(in->unget > 0)) {
     in->unget--;
     return in->ungetbuf[shinpt->unget];
@@ -106,6 +109,8 @@ shreadbuf(void)
 static inline size_t
 shpeek(const char **p)
 {
+  if (!shinpt)
+    return 0;
   if (shinpt->unget > 0)
     return 0;
   if (shinpt->nleft > 0) {

@@ -64,7 +64,8 @@ ifsupdt(const char *ifs)
   for (; *ifs; ifs++)
     if (!is_ws(*ifs)) {
       ifschar[(unsigned char)*ifs] = 1;
-      gvar.ifsv[gvar.ifsvlen++] = *ifs;
+      if (gvar.ifsvlen < sizeof(gvar.ifsv))
+        gvar.ifsv[gvar.ifsvlen++] = *ifs;
     }
 }
 

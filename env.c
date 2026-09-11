@@ -464,6 +464,10 @@ unaliascmd(char **argv)
 
   status = 0;
   argv0 = *argv++;
+  if (!*argv) {
+    usage(argv0, helpmsgs[UNALIASH].usage);
+    return 2;
+  }
   if (**argv == '-') {
     switch ((*argv)[1]) {
       case 'a':
