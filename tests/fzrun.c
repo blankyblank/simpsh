@@ -86,27 +86,34 @@ int main(int argc, char **argv) {
       return 0;
     if (!mkdtemp(dir))
       return 2;
-    pid = fork();
-    if (pid < 0)
-      return 2;
-    if (pid == 0) {
-      prctl(PR_SET_PDEATHSIG, SIGKILL);
-      if (chdir(dir) < 0)
-        _exit(2);
-      close(FORKSRV_FD);
-      close(FORKSRV_FD + 1);
-      int ofd = open("/proc/self/oom_score_adj", O_WRONLY);
-      if (ofd >= 0) {
-        write(ofd, "1000", 4);
-        close(ofd);
-      }
-      execl("/simpsh", "/simpsh", input, (char *)NULL);
-      _exit(127);
+    switch (pid = fork()) {
+      case -1:
+        return 2;
+      case 0:
+        prctl(PR_SET_PDEATHSIG, SIGKILL);
+        if (chdir(dir) < 0)
+          _exit(2);
+        close(FORKSRV_FD);
+        close(FORKSRV_FD + 1);
+        int ofd = open("/proc/self/oom_score_adj", O_WRONLY);
+        if (ofd >= 0) {
+          write(ofd, "1000", 4);
+          close(ofd);
+        }
+        int nfd = open("/dev/null", O_RDONLY);
+        if (nfd >= 0) {
+          dup2(nfd, STDIN_FILENO);
+          if (nfd != STDIN_FILENO)
+            close(nfd);
+        }
+        execl("/simpsh", "/simpsh", input, (char *)NULL);
+        _exit(127);
+      default:
+        if (write_all(FORKSRV_FD + 1, &pid, 4) < 0)
+          return 2;
+        while (waitpid(pid, &st, 0) < 0 && errno == EINTR)
+          ;
     }
-    if (write_all(FORKSRV_FD + 1, &pid, 4) < 0)
-      return 2;
-    while (waitpid(pid, &st, 0) < 0 && errno == EINTR)
-      ;
     nftw(dir, rm_one, 16, FTW_DEPTH | FTW_PHYS);
     rmdir(dir);
     if (write_all(FORKSRV_FD + 1, &st, 4) < 0)
