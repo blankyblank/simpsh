@@ -124,8 +124,9 @@ sortcmd(char *argv[])
         if (nkeyd >= KEYCAP) {
           return usage(argv0, helpmsgs[SORTH].usage), 1;
         }
-        if (parsekey(kdstr, &keys[nkeyd++]) < 0)
+        if (parsekey(kdstr, &keys[nkeyd]) < 0)
           return shwarn_arg(argv0, kdstr, "bad key");
+        nkeyd++;
         break;
     case 'o':
       if (!(outfile = EARGF(no_opt(argv0, ARGC()))))
@@ -549,9 +550,9 @@ dictcmp(const char *a, size_t la, const char *b, size_t lb, int flg)
 
   for (; a < aend && b < bend; a++, b++) {
     if (flg & inprnt) {
-      while (a < aend && !isprint(*a))
+      while (a < aend && !isprint((unsigned char)*a))
         a++;
-      while (b < bend && !isprint(*b))
+      while (b < bend && !isprint((unsigned char)*b))
         b++;
     }
     if (flg & dict) {

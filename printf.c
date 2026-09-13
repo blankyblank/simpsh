@@ -12,6 +12,7 @@
 
 static int rval;
 static char **garv;
+static int used;
 
 int printesc(const char **, char *);
 char *printstresc(const char *, size_t *, int *);
@@ -74,7 +75,7 @@ printesc(const char **sp, char *out)
     case 'x':
       (*sp)++;
       for (int i = 0;i <= 1; i++) {
-        if (isxdigit(**sp)) {
+        if (isxdigit((unsigned char)**sp)) {
           val = val * 16 + hexval(*(*sp)++);
         } else {
           break;
@@ -151,6 +152,7 @@ getnum(void)
 {
   if (!*garv)
     return 0;
+  used = 1;
   return strtoull(*(garv)++, NULL, 0);
 }
 
@@ -159,6 +161,7 @@ getfloat(void)
 {
   if (!*garv)
     return 0;
+  used = 1;
   return strtold(*(garv)++, NULL);
 }
 
@@ -167,6 +170,7 @@ getstr(void)
 {
   if (!*garv)
     return "";
+  used = 1;
   return *(garv)++;
 }
 
@@ -175,6 +179,7 @@ getchr(void)
 {
   if (!*garv)
     return '\0';
+  used = 1;
   return *(*(garv)++);
 }
 
@@ -266,6 +271,7 @@ printfcmd(char **argv)
     char out[4], *cp;
     int ret = 0;
     cp = fmt;
+    used = 0;
     while (*cp) {
       if (*cp == '\\') {
         cp++;
@@ -411,6 +417,6 @@ printfcmd(char **argv)
           rval = 1;
       }
     }
-  } while (*garv && parsed);
+  } while (*garv && parsed && used);
   return rval;
 }

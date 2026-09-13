@@ -31,7 +31,7 @@ sleepcmd(char *argv[])
     int dec = 0, whole = 0;
 
     for (char *p = arg; *p; p++) {
-      if (isdigit(*p)) {
+      if (isdigit((unsigned char)*p)) {
         if (dot) {
           denom *= 10;
           dec = dec * 10 + (*p - '0');

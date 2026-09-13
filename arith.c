@@ -224,7 +224,7 @@ scan_tok(void)
     if (ap[0] == '0' && alen > 1 && ap[1] == 'x') {
       ap += 2;
       alen -= 2;
-      while (alen > 0 && isxdigit(ap[0])) {
+      while (alen > 0 && isxdigit((unsigned char)ap[0])) {
         acc = (acc * 16) + (u64)hexval(ap[0]);
         ap++;
         alen--;
