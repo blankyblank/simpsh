@@ -277,11 +277,12 @@ sttail(int ln)
 {
   int s, c, cnt, n;
   size_t off;
-  char *rng[ln], buf[BUFSIZ];
+  char **rng, buf[BUFSIZ];
 
   off = c = cnt = 0;
   if (pls)
     return sttail_beg(ln);
+  rng = st_alloc(ln * sizeof(char *));
   for (int in = 0; in < ln; ++in)
     rng[in] = NULL;
   while ((n = fread(buf + off, 1, sizeof(buf) - off, shin)) > 0) {
