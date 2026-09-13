@@ -296,7 +296,8 @@ splitnglob(wf *f, size_t * restrict tlen)
           out[argc++] = match[k];
         }
         *tlen = pos;
-        out[mc] = NULL;
+        chk_cap(argc, cap, out, char *);
+        out[argc] = NULL;
         return out;
       }
     }
@@ -415,6 +416,7 @@ splitnglob(wf *f, size_t * restrict tlen)
   }
   if (tlen)
     *tlen = ttl;
+  chk_cap(argc, cap, out, char *);
   out[argc] = NULL;
   return out;
 }
@@ -463,6 +465,11 @@ exp_cmdsub(const char *restrict cmd, size_t cmdlen, size_t *restrict olen)
   setinputstrn((char *)cmd, cmdlen);
   notclosed = 0;
   cmdsub = parse_list(TEOF);
+  if (PARSEERR) {
+    popinput();
+    stack_restore(csmark);
+    return NULL;
+  }
   popinput();
   cmdsdup = tree_dup(cmdsub);
   stack_restore(csmark);
@@ -992,6 +999,7 @@ expand_argv(wf **args, size_t *restrict t)
       argv[fargc++] = fields[j];
     }
   }
+  chk_cap(fargc, cap, argv, char *);
   argv[fargc] = NULL;
   return argv;
 }

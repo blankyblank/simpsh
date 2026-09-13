@@ -200,15 +200,12 @@ parse_list(int multi)
     cmd_tree *r;
 
     if (!(r = parse_andor())) {
-      if (PARSEERR) {
-        heredoc_head = NULL;
-        heredoc_tail = &heredoc_head;
-        if (multi)
-          pdepth--;
-        return NULL;
-      }
+      heredoc_head = NULL;
+      heredoc_tail = &heredoc_head;
       if (multi)
         pdepth--;
+      if (PARSEERR)
+        return NULL;
       return l;
     }
     if (heredoc_head && tbuf.type == TEOF)
@@ -305,6 +302,8 @@ parse_simple_cmd(void)
             gstate.fnline = curline;
             body = parse_func();
             gstate.fnline = b;
+            if (PARSEERR)
+              return NULL;
             if (!body)
               return NULL;
             cmd_tree *n;
@@ -349,12 +348,16 @@ parse_andor(void)
 
   if (!(l = parse_pipe()))
     return NULL;
+  if (PARSEERR)
+    return NULL;
   for (;;) {
     if (tbuf.type != TAND && tbuf.type != TOR)
       return l;
     token op = tbuf.type;
     gettok(CHKALIAS | CHKKWD | CHKNL | CHKBRACE);
     if (!(r = parse_pipe()))
+      return NULL;
+    if (PARSEERR)
       return NULL;
     l->flags |= EFLAG_SAFE;
     if (l->right)
@@ -427,6 +430,8 @@ parse_pipe(void)
   }
   if (!(cmd = parse_cmd()))
     return NULL;
+  if (PARSEERR)
+    return NULL;
   if (!(cmd = gettailredir(cmd)))
     return NULL;
   stages[n++] = cmd;
@@ -437,6 +442,8 @@ parse_pipe(void)
       return syntxerr(curline, "too many pipe stages", tbuf.type);
     gettok(CHKALIAS | CHKKWD | CHKNL | CHKBRACE);
     if (!(p = parse_cmd()))
+      return NULL;
+    if (PARSEERR)
       return NULL;
     p = gettailredir(p);
     stages[n++] = p;
@@ -717,6 +724,8 @@ parse_if(void)
 
   if (!(cond = parse_list(1)))
     return syntxerrstr(curline, "expected", "command list"); // XXX: find out what the proper wording should be
+  if (PARSEERR)
+    return NULL;
   cond->flags |= EFLAG_SAFE;
   if (tbuf.type != TTHEN)
     return synexpected(curline, tbuf, TTHEN);
@@ -733,10 +742,10 @@ parse_if(void)
       break;
     case TELSE:
       else_ = parse_list(1);
-      if (tbuf.type != TFI)
-        return synexpected(curline, tbuf, TFI);
       if (PARSEERR)
         return NULL;
+      if (tbuf.type != TFI)
+        return synexpected(curline, tbuf, TFI);
       gettok(CHKALIAS | CHKKWD | CHKBRACE);
       break;
     case TFI:
@@ -823,6 +832,8 @@ parse_while(token tok)
   cmd_tree *condition, *body;
 
   if (!(condition = parse_list(1)))
+    return NULL;
+  if (PARSEERR)
     return NULL;
   condition->flags |= EFLAG_SAFE;
   if (tbuf.type != TDO)

@@ -20,4 +20,9 @@
 #define ENABLE_WC 1
 #define ENABLE_UNIQ 1
 
+/* size of word fragment chains to be allocated*/
+#define WF_CHUNK_SIZE 4
+
+/* minimum size of stack allocaor segments */
+#define MINSTACK_S   align_mem(8192)
 #endif /* CONFIG_H */

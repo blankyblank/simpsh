@@ -9,6 +9,9 @@
 #include "opts.h"
 #include "simd.h"
 
+/* defined in env.h */
+typedef struct alias alias;
+
 typedef struct strpush strpush;
 struct strpush {
     strpush *prev;
@@ -17,6 +20,7 @@ struct strpush {
     int saved_unget;
     int saved_ungetbuf[2];
     int alias;
+    alias *a;
 };
 
 /** holds unified input stream data */
@@ -46,9 +50,11 @@ extern shinput *shinpt;
 
 #define popinput() \
   do { \
-    if (shinpt->fd < 0 && shinpt->b.mapsize) \
-      munmap(shinpt->buf, shinpt->b.mapsize); \
-    shinpt = shinpt->prev; \
+    shinput *_old = shinpt; \
+    if (_old->fd < 0 && _old->b.mapsize) \
+      munmap(_old->buf, _old->b.mapsize); \
+    shinpt = _old->prev; \
+    sfree(_old); \
   } while (0)
 
 extern size_t shgetline(char *, size_t);
@@ -79,9 +85,9 @@ shgetchar(void)
 static inline int
 shungetc(int c)
 {
-  if (shinpt->unget < 2)
-    return shinpt->ungetbuf[shinpt->unget++] = c;
-  return SHEOF;
+  if (shinpt->unget < 0 || shinpt->unget >= 2)
+    return SHEOF;
+  return shinpt->ungetbuf[shinpt->unget++] = c;
 }
 
 int

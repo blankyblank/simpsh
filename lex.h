@@ -4,6 +4,10 @@
 
 #include <stddef.h>
 
+#include "errmsg.h"
+#include "config.h"
+#include "main.h"
+
 enum chars {
   C_WORD,
   C_SPACE,
@@ -91,6 +95,7 @@ enum qs {
 
 struct redir;
 typedef struct cmd_tree cmd_tree;
+typedef struct alias alias;
 
 /**
  * word fragment
@@ -124,7 +129,6 @@ struct kw {
   token tok;
 };
 
-#define WF_CHUNK_SIZE 4
 #define CTX_MAX     64
 #define kwhash(s, n)  (((n)? ((u8)(s)[0] * 1 + (u8)(s)[(n) - 1] * 2 + (n) * 22) : 0) & 31)
 #define SHTOK(t)      ((sh_tok) { .type = t, .sub = 0 })
@@ -183,7 +187,7 @@ extern struct redir **heredoc_tail;
 
 
 extern sh_tok tokenize(void);
-extern void pushstring(char *, size_t, int);
+extern void pushstring(char *, size_t, int, alias *);
 extern void popstring(void);
 extern char *join_wf(wf *, int);
 extern wf *lex_heredoc(const char *, size_t);
@@ -208,7 +212,7 @@ append_wf(wf **restrict head, wf **restrict tail, char *restrict w, size_t len, 
 {
   wf *f;
   if (!(f = wfalloc())) {
-    perror("st_alloc failed");
+    shwarn(w, "st_alloc failed");
     return;
   }
 

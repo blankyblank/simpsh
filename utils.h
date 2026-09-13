@@ -191,24 +191,31 @@ static inline char *
 join_strn(char **arr, size_t *t)
 {
   char *p, *buf;
-  size_t ac = 0, flen;
-  size_t tlen = 0;
+  size_t ac, flen, tlen, need;
 
+  tlen = ac = need = flen = 0;
   if (!arr)
     return NULL;
-
   array_len(arr, ac);
 
-  if (!t)
-    for (size_t i = 0; i < ac; i++)
-      tlen += strlen(arr[i]);
-  else
-    tlen = *t;
+  if (!ac) {
+    buf = st_alloc(1);
+    *buf = '\0';
+    if (t)
+      *t = 0;
+    return buf;
+  }
 
-  buf = st_alloc(tlen + ac);
+  for (size_t i = 0; i < ac; i++)
+    need += strlen(arr[i]);
+  if (!t)
+    tlen = need;
+  else
+    tlen = (*t > need) ? *t : need;
+
+  buf = st_alloc(tlen + ac + 1);
   p = buf;
 
-  flen = 0;
   for (char **a = arr; *a; a++) {
     size_t len;
     if (a != arr)
@@ -227,7 +234,7 @@ join_strn(char **arr, size_t *t)
 static inline const char *
 skip_ws(const char *s)
 {
-  while (isspace(*s))
+  while (isspace((unsigned char)*s))
     s++;
   return s;
 }

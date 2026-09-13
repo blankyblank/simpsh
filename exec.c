@@ -1081,14 +1081,14 @@ run_subsh(const cmd_tree *n, int chld)
   fdlist sfd[FD_MAX];
   size_t sfdc = 0;
 
+  if (predir && (save_fd(predir, sfd, &sfdc) || apply_redir(predir)))
+    return 1;
   ps = (fakestate) { .cwd = -1 };
   sv = fkstate, svctx = fakectx;
   fkstate = &ps;
   fkinit(fkstate);
   svefl = eflag, svifl = iflag;
   eflag = 0, iflag = 0;
-  if (predir && (save_fd(predir, sfd, &sfdc) || apply_redir(predir)))
-    return 1;
   status = run_commands(n->left, 0);
   if (sfdc)
     restore_fd(sfd, sfdc);
@@ -1330,7 +1330,6 @@ execcmd(char **argv)
   return 0;
 
 fail:
-  sfree(fullpath);
   return sherrx(1, argv[0]);
 }
 

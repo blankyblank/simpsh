@@ -361,6 +361,7 @@ setalias(const char *restrict name, const char *restrict val)
       return;
     a->name = strdup_(name);
     a->value = strdup_(val);
+    a->inuse = 0;
     unsigned int i = hash(name, ENV_BUCKETS);
     a->next = alias_tab[i];
     alias_tab[i] = a;
@@ -476,6 +477,10 @@ unaliascmd(char **argv)
           e = alias_tab[i];
           while (e) {
             n = e->next;
+            if (e->inuse) {
+              e = n;
+              continue;
+            }
             sfree(e->name);
             sfree(e->value);
             sfree(e);
@@ -504,7 +509,12 @@ unaliascmd(char **argv)
   for (size_t i = 0; argv[i]; i++) {
     e = findalias(argv[i]);
     if (e) {
-      rmalias(argv[i]);
+      if (e->inuse) {
+        shwarn_arg(argv0, argv[i], "alias is in use");
+        status = 1;
+      } else {
+        rmalias(argv[i]);
+      }
     } else {
       shwarn_arg(argv0, argv[i], "alias not found");
       status = 1;

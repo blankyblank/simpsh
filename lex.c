@@ -215,7 +215,7 @@ get_wf(int c)
         grow_stack(32);
       while (nchars[(unsigned char)c] == C_WORD) {
         stcheck(32);
-        *(unsigned char *)stnext++ = c, stleft--;
+        *(unsigned char *)stnext++ = (unsigned char)c, stleft--;
         wflen++;
         c = eatbnl();
         if (c == SHEOF)
@@ -483,12 +483,13 @@ tokword(wf *f, int *wd)
   if ((*wd & CHKALIAS) && (f->flags & WFSINGLE)) {
     word = join_wf(f, 0);
     a = findalias(word);
-    if (a) {
+    if (a && !a->inuse) {
       if (alias_depth >= MAX_ALIAS_DEPTH) {
         fprintf(stderr, "alias: too many levels of recursion\n");
         return SHTOK(TEOF);
       }
-      pushstring(a->value, strlen(a->value), 1);
+      a->inuse = 1;
+      pushstring(a->value, strlen(a->value), 1, a);
       *wd &= ~CHKALIAS;
       return SHTOK(TCONT);
     }
@@ -608,6 +609,10 @@ lexcmdsub(void)
   ctx_depth = btdepth = 0;
 
   n = parse_list(1);
+  if (PARSEERR) {
+    popstate();
+    return SHEOF;
+  }
   if (tbuf.type != TRP) {
     notclosed = 1;
     popstate();
@@ -690,6 +695,11 @@ lexbtick(void)
   setinputstrn(btbuf, (int)btlen);
   shinpt->linenum = svlinenum;
   n = parse_list(1);
+  if (PARSEERR) {
+    popinput();
+    popstate();
+    return SHEOF;
+  }
   btdepth = svbt;
   popinput();
 

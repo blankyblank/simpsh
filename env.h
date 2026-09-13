@@ -11,6 +11,7 @@ typedef struct alias alias;
 struct alias {
   char *name;
   char *value;
+  int inuse;
   alias *next;
 };
 

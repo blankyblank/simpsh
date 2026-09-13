@@ -25,12 +25,10 @@
 #  define NO_UBSAN
 #endif
 
-// #define DEBUG 1
-/* so far 8000 for minstack_s seems pretty good for performance, but it seems
- * large which can have it's own drawbacks test more sizes */
+#include "config.h"
+
 #define align_mem(n) (((n) + (_Alignof(max_align_t) - 1)) & ~(size_t)(_Alignof(max_align_t) - 1))
-#define MINSTACK_S   align_mem(8192)
-#define MEMSIZE    4096
+#define MEMSIZE      4096
 #define MEMMAGIC     0x534C4142
 #define LARGEMAGIC   ((void *)(uintptr_t)0x4C52474C) /* "LARG" */
 #define SLCLASSN     10
@@ -38,9 +36,9 @@
 #define MINSLAB      align_mem(4096)
 #define stack_mark() ((stmark) { current, stnext, stleft })
 #define st_strdup(s) (st_strndup(s, strlen(s))) /** stack allocated strdup */
-#define stcheck(n) ((void)(stleft <= n ? grow_stack(n) : (void *)0))
-#define st_putc(c)  (*(unsigned char *)stnext++ = (c), stleft--)
-#define strdup_(s) (strndup_((s), strlen(s)))
+#define stcheck(n)   ((void)(stleft <= n ? grow_stack(n) : (void *)0))
+#define st_putc(c)   (*(unsigned char *)stnext++ = (c), stleft--)
+#define strdup_(s)   (strndup_((s), strlen(s)))
 #ifdef __TINYC__
 static inline __attribute__((always_inline)) int
 flrlog2(size_t x)
@@ -102,21 +100,7 @@ struct stackseg {
   char buf[MINSTACK_S];
 };
 
-#ifdef DEBUG
-typedef struct {
-  size_t live;
-  size_t cursegs;
-  size_t peak;
-  size_t peaksegs;
-  size_t segalloc;
-  size_t segfree;
-} ststat;
-
-extern ststat stt;
-extern void stack_report(void);
-extern void stack_state(const char *);
-#endif /* DEBUG */
-
+typedef struct wf wf;
 
 typedef struct {
   stackseg *current;
@@ -141,6 +125,21 @@ typedef struct {
   size_t sbsz;
   slab *slabs;
 } slclass;
+
+#ifdef DEBUG
+typedef struct {
+  size_t live;
+  size_t cursegs;
+  size_t peak;
+  size_t peaksegs;
+  size_t segalloc;
+  size_t segfree;
+} ststat;
+
+extern ststat stt;
+extern void stack_report(void);
+extern void stack_state(const char *);
+#endif /* DEBUG */
 
 extern slclass slotsz[SLCLASSN];
 

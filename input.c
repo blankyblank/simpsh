@@ -11,6 +11,7 @@
 #include "alloc.h"
 #include "input.h"
 #include "lex.h"
+#include "env.h"
 
 static char basebuf[BASEBUFSIZE];
 static shinput base_shinput;
@@ -32,20 +33,21 @@ init_input(void)
 }
 
 void
-pushstring(char *s, size_t len, int alias)
+pushstring(char *s, size_t len, int isalias, alias *a)
 {
-  strpush *sp = st_alloc(sizeof(strpush));
+  strpush *sp = salloc(sizeof(strpush));
   sp->prev = shinpt->strpush;
   sp->saved_nchar = shinpt->nchar;
   sp->saved_nleft = shinpt->nleft;
   sp->saved_unget = shinpt->unget;
   memcpy(sp->saved_ungetbuf, shinpt->ungetbuf, 2 * sizeof(int));
-  sp->alias = alias;
+  sp->alias = isalias;
+  sp->a = a;
   shinpt->nchar = s;
   shinpt->nleft = len;
   shinpt->unget = 0;
   shinpt->strpush = sp;
-  if (alias)
+  if (isalias)
     alias_depth++;
 }
 
@@ -58,11 +60,15 @@ popstring(void)
     return;
   shinpt->nchar = sp->saved_nchar;
   shinpt->nleft = sp->saved_nleft;
-  shinpt->unget = sp->saved_unget;
+  shinpt->unget = (sp->saved_unget >= 0 && sp->saved_unget <= 2) ? sp->saved_unget : 0;
   memcpy(shinpt->ungetbuf, sp->saved_ungetbuf, 2 * sizeof(int));
   shinpt->strpush = sp->prev;
-  if (sp->alias)
+  if (sp->alias) {
+    if (sp->a)
+      sp->a->inuse = 0;
     alias_depth--;
+  }
+  sfree(sp);
 }
 
 size_t
@@ -120,7 +126,7 @@ void
 setinputstrn(char *s, int len)
 {
   shinput *new;
-  new = st_alloc(sizeof(shinput));
+  new = salloc(sizeof(shinput));
   new->prev = shinpt;
   new->buf = NULL;
   new->fd = -1;
@@ -147,7 +153,7 @@ setinputf(int fd, const char *name, int nmp)
         posix_madvise(map, st.st_size, POSIX_MADV_SEQUENTIAL);
         close(fd);
         shinput *new;
-        new = st_alloc(sizeof(shinput));
+        new = salloc(sizeof(shinput));
         new->prev = shinpt;
         new->buf = map;
         new->name = name ? st_strdup(name) : NULL;
@@ -167,7 +173,7 @@ setinputf(int fd, const char *name, int nmp)
     }
   }
   shinput *new;
-  new = st_alloc(sizeof(shinput));
+  new = salloc(sizeof(shinput));
   new->buf = st_alloc(BUFSIZ);
   new->name = name ? st_strdup(name) : NULL;
   new->b.lleft = 0;
