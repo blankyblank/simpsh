@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck disable=2015
+# shellcheck disable=2016
 
 [ -f ./funcs ] && . ./funcs
 
@@ -128,3 +129,16 @@ else
   test_fail "out" "expected empty stdout" ""
   exit 1
 fi
+
+msg_run 'wc builtin: no padding in $(wc -l < f)'
+printf '0123456789\n0123456789\n' > /tmp/wc.lines        # 22 bytes, 2 lines -> w>=2 before fix
+out=$(../simpsh -c 'l=$(wc -l < /tmp/wc.lines); [ "$l" -gt 0 ] && [ "$l" = "2" ] && echo ok')
+rm -f /tmp/wc.lines
+if [ "$out" = ok ]; then
+  test_pass "out" "matched" "ok"
+else
+ test_fail "out" "expected" "ok"
+fi
+
+
+
