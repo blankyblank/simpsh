@@ -87,7 +87,7 @@ static const char dothelp[] =
   "\n"
   "Exit Status:\n"
   "    Returns the exit status of the last command executed from the file,\n"
-  "    or 1 if the file could not be read.";
+  "    or 1 if the file could not be read.\n";
 
 static const char testhelp[] =
   "[ expression ]\n"
@@ -146,14 +146,14 @@ static const char testhelp[] =
   "      ( EXPR )        Grouping.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 if the expression is true, 1 if false, 2 on error.";
+  "    Returns 0 if the expression is true, 1 if false, 2 on error.\n";
 
 static const char truehelp[] = "\n"
                                "\n"
                                "    Returns success. does nothing else.\n"
                                "\n"
                                "Exit Status:\n"
-                               "    Always returns 0.";
+                               "    Always returns 0.\n";
 
 static const char aliashelp[] =
   "alias [name[=value] ...]\n"
@@ -165,7 +165,7 @@ static const char aliashelp[] =
   "    the alias for that name.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless an error occurs.";
+  "    Returns 0 unless an error occurs.\n";
 
 static const char bghelp[] =
   "bg [job]\n"
@@ -176,7 +176,7 @@ static const char bghelp[] =
   "    The job is continued as if it had been started with `&'.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless an invalid job is specified.";
+  "    Returns 0 unless an invalid job is specified.\n";
 
 static const char breakhelp[] =
   "break [n]\n"
@@ -187,7 +187,7 @@ static const char breakhelp[] =
   "    than the current nesting level, all loops are exited.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless the shell is not currently in a loop.";
+  "    Returns 0 unless the shell is not currently in a loop.\n";
 
 static const char casehelp[] =
   "case WORD in [PATTERN [| PATTERN]...) COMMANDS ;;]... esac\n"
@@ -201,7 +201,7 @@ static const char casehelp[] =
   "\n"
   "Exit Status:\n"
   "    Returns the exit status of the last command executed, or 0 if\n"
-  "    no pattern matches.";
+  "    no pattern matches.\n";
 
 static const char cdhelp[] =
   "cd [-LP] [dir]\n"
@@ -217,7 +217,7 @@ static const char cdhelp[] =
   "      -P    Resolve the path physically, do not follow symlinks.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 if the directory is changed, 1 on error.";
+  "    Returns 0 if the directory is changed, 1 on error.\n";
 
 static const char continuehelp[] =
   "continue [n]\n"
@@ -227,7 +227,7 @@ static const char continuehelp[] =
   "    If N is specified, resume at the N-th enclosing loop level.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless the shell is not currently in a loop.";
+  "    Returns 0 unless the shell is not currently in a loop.\n";
 
 static const char echohelp[] =
   "echo [-n] [string ...]\n"
@@ -241,7 +241,7 @@ static const char echohelp[] =
   "      -n    Do not append a trailing newline.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless an error occurs writing to stdout.";
+  "    Returns 0 unless an error occurs writing to stdout.\n";
 
 static const char exechelp[] =
   "exec [command [arg ...]] [redirection]\n"
@@ -267,7 +267,7 @@ static const char exithelp[] =
   "    EOF does not cause the shell to exit.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns N to the parent process.";
+  "    Returns N to the parent process.\n";
 
 static const char exporthelp[] =
   "export name[=value] ...\n"
@@ -279,16 +279,17 @@ static const char exporthelp[] =
   "    assigned that value and marked for export.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless an invalid variable name is given.";
+  "    Returns 0 unless an invalid variable name is given.\n";
 
-static const char falsehelp[] = "\n"
-                                "\n"
-                                "    Null command that always fails.\n"
-                                "\n"
-                                "    Does nothing and ignores all arguments.\n"
-                                "\n"
-                                "Exit Status:\n"
-                                "    Always returns 1.";
+static const char falsehelp[] = 
+"\n false"
+"\n"
+"    Null command that always fails.\n"
+"\n"
+"    Does nothing and ignores all arguments.\n"
+"\n"
+"Exit Status:\n"
+"    Always returns 1.\n";
 
 static const char forhelp[] =
   "for NAME [in WORDS ...] ; do COMMANDS ; done\n"
@@ -300,7 +301,7 @@ static const char forhelp[] =
   "    NAME is set to each positional parameter in turn.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns the exit status of the last command executed.";
+  "    Returns the exit status of the last command executed.\n";
 
 static const char fghelp[] =
   "fg [job]\n"
@@ -311,7 +312,7 @@ static const char fghelp[] =
   "    foreground and gives it control of the terminal.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless an invalid job is specified.";
+  "    Returns 0 unless an invalid job is specified.\n";
 
 static const char hashhelp[] =
   "hash [-r] [name ...]\n"
@@ -325,7 +326,7 @@ static const char hashhelp[] =
   "      -r    Flush the entire hash cache.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless a name is not found.";
+  "    Returns 0 unless a name is not found.\n";
 
 static const char helphelp[] =
   "help [builtin ...]\n"
@@ -338,7 +339,7 @@ static const char helphelp[] =
   "\n"
   "Exit Status:\n"
   "    Returns 0 if help is displayed for all named builtins,\n"
-  "    or 1 if a builtin is not found.";
+  "    or 1 if a builtin is not found.\n";
 
 static const char ifhelp[] =
   "if COMMANDS ; then COMMANDS ; [ elif COMMANDS ; then COMMANDS ; ] ... [ "
@@ -353,7 +354,7 @@ static const char ifhelp[] =
   "\n"
   "Exit Status:\n"
   "    Returns the exit status of the last command executed, or 0\n"
-  "    if no condition tested true and there is no else branch.";
+  "    if no condition tested true and there is no else branch.\n";
 
 static const char jobshelp[] =
   "jobs [job ...]\n"
@@ -364,7 +365,7 @@ static const char jobshelp[] =
   "    state (Running, Stopped, Done), and command string.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0.";
+  "    Returns 0.\n";
 
 static const char localhelp[] =
   "local name[=value] ...\n"
@@ -376,7 +377,7 @@ static const char localhelp[] =
   "    returns.  Only valid inside a shell function definition.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless used outside a function.";
+  "    Returns 0 unless used outside a function.\n";
 
 static const char pwdhelp[] =
   "pwd [-LP]\n"
@@ -388,7 +389,7 @@ static const char pwdhelp[] =
   "      -P    Print the physical path with all symlinks resolved.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 
 static const char readhelp[] =
   "read [-p prompt] [-r] var ...\n"
@@ -404,7 +405,7 @@ static const char readhelp[] =
   "      -r         Raw input: backslash does not act as escape.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on EOF or error.";
+  "    Returns 0 on success, 1 on EOF or error.\n";
 
 static const char readonlyhelp[] =
   "readonly name[=value] ...\n"
@@ -416,7 +417,7 @@ static const char readonlyhelp[] =
   "    unset or modify a readonly variable will fail.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless an error occurs.";
+  "    Returns 0 unless an error occurs.\n";
 
 static const char returnhelp[] =
   "return [n]\n"
@@ -428,7 +429,7 @@ static const char returnhelp[] =
   "    that of the last command executed.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns N, or 1 if not inside a function or sourced script.";
+  "    Returns N, or 1 if not inside a function or sourced script.\n";
 
 static const char sethelp[] =
   "set [-abCefhiImnsuvVx] [-o option] [+abCefhiImnsuvVx] [+o option] [-- "
@@ -462,7 +463,7 @@ static const char sethelp[] =
   "    options; subsequent arguments become positional parameters.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on failure.";
+  "    Returns 0 on success, 1 on failure.\n";
 
 static const char untilhelp[] =
   "until COMMANDS ; do COMMANDS ; done\n"
@@ -475,7 +476,7 @@ static const char untilhelp[] =
   "\n"
   "Exit Status:\n"
   "    Returns the exit status of the last command executed in the\n"
-  "    `do' body, or 0 if the condition was true initially.";
+  "    `do' body, or 0 if the condition was true initially.\n";
 
 static const char umaskhelp[] =
   "umask [-S] [mode]\n"
@@ -489,7 +490,7 @@ static const char umaskhelp[] =
   "      -S    Print the mask in symbolic (rwx) format.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 
 static const char unaliashelp[] =
   "unalias name ...\n"
@@ -500,7 +501,7 @@ static const char unaliashelp[] =
   "     -a     Remove all set aliases\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless an alias does not exist.";
+  "    Returns 0 unless an alias does not exist.\n";
 
 static const char unsethelp[] =
   "unset [-fv] name ...\n"
@@ -512,7 +513,7 @@ static const char unsethelp[] =
   "      -v    Treat each NAME as a variable name (default).\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 
 static const char whilehelp[] =
   "while COMMANDS ; do COMMANDS ; done\n"
@@ -525,7 +526,7 @@ static const char whilehelp[] =
   "\n"
   "Exit Status:\n"
   "    Returns the exit status of the last command executed in the\n"
-  "    `do' body, or 0 if the condition was false initially.";
+  "    `do' body, or 0 if the condition was false initially.\n";
 
 static const char bracehelp[] =
   "{ COMMANDS ; }\n"
@@ -537,7 +538,7 @@ static const char bracehelp[] =
   "    subshell, variables set inside affect the current shell.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns the exit status of the last command executed.";
+  "    Returns the exit status of the last command executed.\n";
 
 static const char commandhelp[] =
   "command [-pvV] name [argument]\n"
@@ -549,7 +550,7 @@ static const char commandhelp[] =
   "\n"
   "Exit Status:\n"
   "    Returns the exit status of the executed command, or 126/127\n"
-  "    on failure.";
+  "    on failure.\n";
 
 static const char evalhelp[] =
   "eval [arg ...]\n"
@@ -560,7 +561,7 @@ static const char evalhelp[] =
   "    and executed as shell commands.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns the exit status of the last command executed.";
+  "    Returns the exit status of the last command executed.\n";
 
 static const char getoptshelp[] =
   "getopts optstring name [arg ...]\n"
@@ -573,7 +574,7 @@ static const char getoptshelp[] =
   "\n"
   "Exit Status:\n"
   "    Returns 0 if an option was found, 1 if no more options, 2\n"
-  "    on error.";
+  "    on error.\n";
 
 static const char killhelp[] =
   "kill [-s sigspec | -signum | -signame] [pid | job] ...\n"
@@ -585,7 +586,7 @@ static const char killhelp[] =
   "    signal (default SIGTERM) to each given PID or job.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless an invalid option or signal is given.";
+  "    Returns 0 unless an invalid option or signal is given.\n";
 
 static const char printhelp[] =
   "printf format [argument ...]\n"
@@ -597,7 +598,7 @@ static const char printhelp[] =
   "    %%q produces shell-quoted output.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, non-zero on error.";
+  "    Returns 0 on success, non-zero on error.\n";
 
 static const char shifthelp[] =
   "shift [n]\n"
@@ -609,7 +610,7 @@ static const char shifthelp[] =
   "\n"
   "Exit Status:\n"
   "    Returns 0 unless N is greater than the number of positional\n"
-  "    parameters.";
+  "    parameters.\n";
 
 static const char timeshelp[] =
   "\n"
@@ -620,7 +621,7 @@ static const char timeshelp[] =
   "    and its children.\n"
   "\n"
   "Exit Status:\n"
-  "    Always returns 0.";
+  "    Always returns 0.\n";
 
 static const char traphelp[] =
   "trap [-lp] [arg] [signal ...]\n"
@@ -634,7 +635,7 @@ static const char traphelp[] =
   "    Use ERR as a special signal for command failure traps.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 unless an invalid option is given.";
+  "    Returns 0 unless an invalid option is given.\n";
 
 static const char typehelp[] =
   "type name [name ...]\n"
@@ -645,7 +646,7 @@ static const char typehelp[] =
   "    builtin, or external command, and its location if applicable.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 if all names are found, 1 otherwise.";
+  "    Returns 0 if all names are found, 1 otherwise.\n";
 
 static const char ulimithelp[] =
   "ulimit [-aHS] [-c core] [-d data] [-f blocks]\n"
@@ -660,7 +661,7 @@ static const char ulimithelp[] =
   "    the specified resource limit is set.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 
 static const char waitforhelp[] =
   "wait [id ...]\n"
@@ -671,7 +672,7 @@ static const char waitforhelp[] =
   "    arguments, waits for all background processes.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns the exit status of the last waited-for process.";
+  "    Returns the exit status of the last waited-for process.\n";
 
 #if ENABLE_BASENAME
 static const char basenamehelp[] =
@@ -683,7 +684,7 @@ static const char basenamehelp[] =
   "    matches the end of NAME, it is also stripped.\n"
   "\n"
   "Exit Status:\n"
-  "    Always returns 0.";
+  "    Always returns 0.\n";
 #endif /* ENABLE_BASENAME */
 
 #if ENABLE_CAT
@@ -696,7 +697,7 @@ static const char cathelp[] =
   "    If no files are given, reads from stdin.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 #endif /* ENABLE_CAT */
 
 #if ENABLE_COMM
@@ -715,7 +716,7 @@ static const char commhelp[] =
   "  -3            suppress column 3 (lines that appear in both files)\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 #endif /* ENABLE_COMM */
 
 #if ENABLE_DIRNAME
@@ -728,7 +729,7 @@ static const char dirnamehelp[] =
   "    directory path.\n"
   "\n"
   "Exit Status:\n"
-  "    Always returns 0.";
+  "    Always returns 0.\n";
 #endif /* ENABLE_DIRNAME */
 
 #if ENABLE_CUT
@@ -753,7 +754,7 @@ static const char cuthelp[] =
   "      -M      from start to M inclusive\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 #endif /* ENABLE_CUT */
 
 #if ENABLE_EXPAND
@@ -774,7 +775,7 @@ static const char expandhelp[] =
   "            the last specified tab stop instead of the first column\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 #endif /* ENABLE_EXPAND */
 
 #if ENABLE_FOLD
@@ -789,7 +790,7 @@ static const char foldhelp[] =
   "   -w,         use WIDTH columns instead of 80\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 #endif /* ENABLE_FOLD */
 
 #if ENABLE_HEAD
@@ -802,7 +803,7 @@ static const char headhelp[] =
   "    stdout. If no FILE is given, reads from stdin.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 #endif /* ENABLE_HEAD */
 
 #if ENABLE_PASTE
@@ -817,7 +818,7 @@ static const char pastehelp[] =
   "    -s,      paste one file at a time instead of in parallel\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 #endif /* ENABLE_PASTE */
 
 #if ENABLE_REALPATH
@@ -828,7 +829,7 @@ static const char realpathhelp[] =
   "\n"
   "all but the last component must exist\n"
   "Exit Status:\n"
-  "     Returns 0 on success, 1 on error";
+  "     Returns 0 on success, 1 on error\n";
 #endif /* ENABLE_REALPATH */
 
 #if ENABLE_READLINK
@@ -841,7 +842,7 @@ static const char readlinkhelp[] =
   "  -n    Do not add newline to the end\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 if file is link, 1 otherwise";
+  "    Returns 0 if file is link, 1 otherwise\n";
 #endif /* ENABLE_READLINK */
 
 #if ENABLE_SLEEP
@@ -856,7 +857,7 @@ static const char sleephelp[] =
   "    multiple arguments are given, their durations are added.\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 #endif /* ENABLE_SLEEP */
 
 #if ENABLE_SORT
@@ -938,7 +939,7 @@ static const char tailhelp[] =
 "                       or use -n +NUM to skip NUM-1 lines at the start\n"
 "\n"
 "Exit Status:\n"
-"    Returns 0 on success, 1 on error.";
+"    Returns 0 on success, 1 on error.\n";
 #endif /* ENABLE_TAIL */
 
 #if ENABLE_TEE
@@ -949,7 +950,7 @@ static const char teehelp[] =
   "-a,            append to the given FILESs, do not overwrite\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on file, or read errors.";
+  "    Returns 0 on success, 1 on file, or read errors.\n";
 #endif /* ENABLE_TEE */
 
 #if ENABLE_TR
@@ -1000,7 +1001,7 @@ static const char trhelp[] =
 "while translating, [:lower:] and [:upper:] must be used in pairs to\n"
 "specify case conversion.  Squeezing occurs after translation or deletion.\n"
 "   Exit Status:\n"
-"     Returns 0 on success, 1 on errors.";
+"     Returns 0 on success, 1 on errors.\n";
 #endif /* ENABLE_TR */
 
 #if ENABLE_EXPAND
@@ -1021,7 +1022,7 @@ static const char unexpandhelp[] =
   "            the last specified tab stop instead of the first column\n"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on error.";
+  "    Returns 0 on success, 1 on error.\n";
 #endif /* ENABLE_EXPAND */
 
 #if ENABLE_WC
@@ -1035,13 +1036,13 @@ static const char wchelp[] =
   "\n"
   "The options below may be used to select which counts are printed, always in\n"
   "the following order: newline, word, character, byte\n"
-  "  -c,          print the byte counts"
-  "  -l,          print the newline counts"
-  "  -w,          print the word counts"
+  "  -c,          print the byte counts\n"
+  "  -l,          print the newline counts\n"
+  "  -w,          print the word counts\n"
   // "-m,            print the character counts"
   "\n"
   "Exit Status:\n"
-  "    Returns 0 on success, 1 on file, or read errors.";
+  "    Returns 0 on success, 1 on file, or read errors.\n";
 #endif /* ENABLE_WC */
 
 #if ENABLE_UNIQ
