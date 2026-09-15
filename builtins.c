@@ -548,8 +548,6 @@ echocmd(char *argv[])
     nf = FLAG_N, argv++, argc--;
   argv++, argc--;
 
-  if (fcntl(STDOUT_FILENO, F_GETFD) < 0)
-    return sherr(1, argv0, "could not write to stdout");
   for (size_t i = 0; argv[i]; i++) {
     if (fputs(argv[i], shout) == EOF)
       return sherr(1, argv0, "could not write to stdout");
@@ -558,10 +556,8 @@ echocmd(char *argv[])
         return sherr(1, argv0, "could not write to stdout");
   }
   if (!(nf & FLAG_N))
-    if (fputc('\n', shout) == EOF) {
-      warn("%s: %s", argv0, "could not write to stdout");
-      return 1;
-    }
+    if (fputc('\n', shout) == EOF)
+      return sherr(1, argv0, "could not write to stdout");
   return 0;
 }
 
@@ -606,8 +602,7 @@ exitcmd(char **argv)
     RETNOW = 1;
     return exnum;
   }
-  slclear();
-  exit(exnum);
+  exittrap(exnum);
 }
 
 static int

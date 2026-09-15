@@ -64,8 +64,6 @@ popstring(void)
   memcpy(shinpt->ungetbuf, sp->saved_ungetbuf, 2 * sizeof(int));
   shinpt->strpush = sp->prev;
   if (sp->alias) {
-    if (sp->a)
-      sp->a->inuse = 0;
     alias_depth--;
   }
   sfree(sp);

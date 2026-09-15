@@ -18,6 +18,7 @@
 
 #include "alloc.h"
 #include "errmsg.h"
+#include "env.h"
 #include "exec.h"
 #include "expand.h"
 #include "history.h"
@@ -210,10 +211,14 @@ eval_run(void)
     c = parse_list(0);
     if (!c) {
       stack_restore(mark);
+      if (gstate.funcdepth == 0)
+        cleandefered();
       break;
     }
     if (PARSEERR) {
       stack_restore(mark);
+      if (gstate.funcdepth == 0)
+        cleandefered();
       status = 2;
       break;
     }
@@ -221,9 +226,13 @@ eval_run(void)
       status = run_commands(c, 0);
     if (RETNOW) {
       stack_restore(mark);
+      if (gstate.funcdepth == 0)
+        cleandefered();
       break;
     }
     stack_restore(mark);
+    if (gstate.funcdepth == 0)
+      cleandefered();
   }
   return status;
 }
@@ -249,24 +258,36 @@ simpsh_run(void)
 #endif /* DEBUG */
     if (!c) {
       stack_restore(mark);
+      if (gstate.funcdepth == 0)
+        cleandefered();
       break;
     }
     if (PARSEERR) {
       stack_restore(mark);
+      if (gstate.funcdepth == 0)
+        cleandefered();
       break;
     }
     if (!nflag)
       run_commands(c, 0);
     fflush_unlocked(shout);
+    if (ferror_unlocked(shout)) {
+      clearerr(shout);
+      LSTATUS = 1;
+    }
     if (RETNOW) {
       RETNOW = 0;
       stack_restore(mark);
+      if (gstate.funcdepth == 0)
+        cleandefered();
 #ifdef DEBUG
       stack_state("done");
 #endif
       break;
     }
     stack_restore(mark);
+    if (gstate.funcdepth == 0)
+      cleandefered();
     if (fchksig)
       dotrap();
     if (iflag || mflag)

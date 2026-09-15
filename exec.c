@@ -67,7 +67,7 @@ static int run_if(const cmd_tree *);
 static int run_case(const cmd_tree *);
 static int run_while(const cmd_tree *);
 static int run_for(const cmd_tree *);
-static int run_func(const cmd_tree *restrict, char **restrict);
+static int run_func(shfunc *restrict, char **restrict);
 static int run_pipe(const cmd_tree *);
 static int run_bg(const cmd_tree *);
 static int run_redir(const cmd_tree *, int);
@@ -345,6 +345,7 @@ forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
   size_t sfdc = 0;
   int err;
 
+  fflush_unlocked(NULL);
   if (r) {
     if (save_fd(r, sfd, &sfdc) || apply_redir(r)) {
       if (sfdc)
@@ -362,7 +363,6 @@ forkexec(char *path, char **argv, char **env, const char *cmd, redir *r)
     posix_spawnattr_setpgroup(&attr, 0);
     posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
   }
-  fflush_unlocked(NULL);
   err = posix_spawn(&pid, path, NULL, &attr, argv, env);
   if (err == ENOEXEC) {
     bin_sh = getpath("sh");
@@ -462,6 +462,8 @@ run_commands(const cmd_tree *n, int nchld)
     return 0;
   if (RETNOW)
     return LSTATUS = RETVAL;
+  if (fchksig)
+    dotrap();
 
   while (n->type == OP && (COPP(n) == TSEMI || COPP(n) == TNL)) {
     LSTATUS = run_commands(n->left, 0);
@@ -521,15 +523,20 @@ static int
 runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
 {
   fdlist sfd[FD_MAX];
+  redir *pr;
   size_t sfdc = 0;
   volatile int st = 0;
   jmploc * volatile svhandler;
   jmploc jmploc;
 
-  if (predir) {
+  pr = predir;
+  predir = NULL;
+  if (pr) {
     fflush_unlocked(shout);
-    if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
+    if (save_fd(pr, sfd, &sfdc) || apply_redir(pr)) {
+      predir = pr;
       return 1;
+    }
   }
   if (vars && vars[0]) {
     for (size_t i = 0; vars[i]; i++) {
@@ -555,17 +562,25 @@ runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
     st = builtin_launch(b, final);
     handler = svhandler;
   }
+  predir = pr;
   if ((int)st > 0) {
     if (!errsafe && !iflag && b->fn != returncmd && b->fn != evalcmd) {
-      if (fakectx)
+      if (fakectx) {
+        if (pr)
+          restore_fd(sfd, sfdc);
         return 1;
-      else
-        exit(1);
+      } else
+        exittrap(1);
     }
   }
-  if (predir) {
+  if (pr) {
     if (!(b && b->fn == &execcmd && !final[1])) {
       fflush_unlocked(NULL);
+      if (ferror_unlocked(shout)) {
+        clearerr(shout);
+        sherr(1, final[0], "could not write to stdout");
+        st = 1;
+      }
       restore_fd(sfd, sfdc);
     }
   }
@@ -573,9 +588,11 @@ runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
 }
 
 static int
-runshcmd(shfunc *restrict f, const builtin *restrict b, char **restrict final, wf **restrict vars)
+runshcmd(shfunc * restrict f, const builtin * restrict b,
+         char ** restrict final, wf ** restrict vars)
 {
   fdlist sfd[FD_MAX];
+  redir *pr;
   size_t i, sfdc = 0;
   volatile size_t vc;
   jmploc * volatile svhandler;
@@ -583,10 +600,14 @@ runshcmd(shfunc *restrict f, const builtin *restrict b, char **restrict final, w
   static tmp_var tmp[MAX_TMP_VARS];
   int status;
 
-  if (predir) {
+  pr = predir;
+  predir = NULL;
+  if (pr) {
     fflush_unlocked(shout);
-    if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
+    if (save_fd(pr, sfd, &sfdc) || apply_redir(pr)) {
+      predir = pr;
       return 1;
+    }
   }
   if (vars && vars[0]) {
     for (vc = 0, i = 0; vars[i]; i++) {
@@ -611,14 +632,20 @@ runshcmd(shfunc *restrict f, const builtin *restrict b, char **restrict final, w
     putchar('\n');
   } else {
     handler = &jmploc;
-    status = f ? run_func(f->body, final) : builtin_launch(b, final);
+    status = f ? run_func(f, final) : builtin_launch(b, final);
     handler = svhandler;
   }
+  predir = pr;
   if (vars && vars[0])
     poptmpvars(tmp, vc);
-  if (predir) {
+  if (pr) {
     if (!(b && b->fn == &execcmd && !final[1])) {
       fflush_unlocked(NULL);
+      if (ferror_unlocked(shout)) {
+        clearerr(shout);
+        sherr(1, final[0], "could not write to stdout");
+        status = 1;
+      }
       restore_fd(sfd, sfdc);
     }
   }
@@ -696,7 +723,7 @@ run_cmd(const cmd_tree *n, int inchld)
   if (gstate.nounseterr) {
     gstate.nounseterr = 0;
     if (!ifl)
-      exit(1);
+      exittrap(1);
     return 1;
   }
 
@@ -715,6 +742,7 @@ run_cmd(const cmd_tree *n, int inchld)
 
   status = 0;
   evars = NULL;
+  /* XXX: this is really ugly this needs to be cleaned up */
   if (!final || !final[0]) { /*  if no command only name=value  */
     if (CVARS(n) && CVARS(n)[0]) {
       size_t nass = 0;
@@ -726,7 +754,8 @@ run_cmd(const cmd_tree *n, int inchld)
         shvflags flags;
         char *evar;
         wf *w = vars[i];
-        if (w && w->qs == QNONE && w->next && !w->next->next && w->next->qs == QARITH && w->len && w->word[w->len-1] == '=') {
+        if (w && w->qs == QNONE && w->next && !w->next->next &&
+            w->next->qs == QARITH && w->len && w->word[w->len - 1] == '=') {
           char valbuf[32], nbuf[64];
           size_t nlen, vlen;
           name = w->word;
@@ -739,7 +768,8 @@ run_cmd(const cmd_tree *n, int inchld)
           shvar *v = findvar(nbuf);
           setvar_i(nbuf, valbuf, ival, (v ? v->flags : 0));
           if (xflag) {
-            char *as = st_alloc(nlen + vlen + 2);
+            char *as;
+            as = st_alloc(nlen + vlen + 2);
             memcpy(as, nbuf, nlen);
             as[nlen] = '=';
             memcpy(as + nlen + 1, valbuf, vlen + 1);
@@ -802,7 +832,7 @@ run_cmd(const cmd_tree *n, int inchld)
   if (CNEG(n))
     status = !status;
   if (efl && status != 0 && !ifl && !errsafe && !(n->flags & EFLAG_SAFE) && !CNEG(n))
-    exit(status);
+    exittrap(status);
 done:
   stack_restore(cm);
   return status;
@@ -941,7 +971,7 @@ run_while(const cmd_tree *n)
 }
 
 static int
-run_func(const cmd_tree *n, char **args)
+run_func(shfunc *f, char **args)
 {
   int status;
   tmp_var *loc;
@@ -966,13 +996,17 @@ run_func(const cmd_tree *n, char **args)
     status = 1;
     goto done;
   }
+  f->inuse = 1;
   gstate.funcdepth++;
-  status = run_commands(n, 0);
+  status = run_commands(f->body, 0);
   gstate.funcdepth--;
+  f->inuse = 0;
   if (RETNOW) {
     RETNOW = 0;
     status = RETVAL;
   }
+  if (!gstate.funcdepth)
+    cleandefered();
   goto done;
 
 done:
@@ -1037,6 +1071,7 @@ run_redir(const cmd_tree *n, int nchld)
   }
 
   sfdc = 0;
+  fflush_unlocked(shout);
   if ((save_fd(CREDR(n), sfd, &sfdc)))
     return 1;
   if (apply_redir(r))
@@ -1047,12 +1082,16 @@ run_redir(const cmd_tree *n, int nchld)
   if (CNEG(n))
     errsafe--;
   fflush_unlocked(NULL);
+  if (ferror_unlocked(shout)) {
+    clearerr(shout);
+    status = 1;
+  }
   if (restore_fd(sfd, sfdc))
     return 1;
 
   status = (CNEG(n)) ? !status : status;
   if (eflag && LSTATUS != 0 && !iflag && !errsafe && !(n->flags & EFLAG_SAFE))
-    exit(LSTATUS);
+    exittrap(LSTATUS);
   return status;
 }
 
@@ -1071,6 +1110,8 @@ run_subsh(const cmd_tree *n, int chld)
       _exit(1);
     status = run_commands(n->left, _INCHLD);
     fflush_unlocked(NULL);
+    if (ferror_unlocked(shout))
+      status = 1;
     _exit(status);
   }
 
@@ -1081,8 +1122,11 @@ run_subsh(const cmd_tree *n, int chld)
   fdlist sfd[FD_MAX];
   size_t sfdc = 0;
 
-  if (predir && (save_fd(predir, sfd, &sfdc) || apply_redir(predir)))
-    return 1;
+  if (predir) {
+    fflush_unlocked(shout);
+    if (save_fd(predir, sfd, &sfdc) || apply_redir(predir))
+      return 1;
+  }
   ps = (fakestate) { .cwd = -1 };
   sv = fkstate, svctx = fakectx;
   fkstate = &ps;
@@ -1090,11 +1134,15 @@ run_subsh(const cmd_tree *n, int chld)
   svefl = eflag, svifl = iflag;
   eflag = 0, iflag = 0;
   status = run_commands(n->left, 0);
-  if (sfdc)
-    restore_fd(sfd, sfdc);
   eflag = svefl, iflag = svifl;
   if (!(svefl && status && !svifl))
     fflush_unlocked(NULL);
+  if (ferror_unlocked(shout)) {
+    clearerr(shout);
+    status = 1;
+  }
+  if (sfdc)
+    restore_fd(sfd, sfdc);
   fkrestore(&ps);
   LOOPBREAK = LOOPCONT = RETNOW = 0;
   fakectx = svctx, fkstate = sv;
@@ -1117,6 +1165,8 @@ realsubsh:
       if (efl && status != 0 && !ifl && !errsafe)
         _exit(status);
       fflush_unlocked(NULL);
+      if (ferror_unlocked(shout))
+        status = 1;
       _exit(status);
     default:
       if (mfl && getpid() == sh_pgid) {
@@ -1129,14 +1179,14 @@ realsubsh:
         if (CNEG(n))
           status = !status;
       if (efl && status != 0 && !ifl && !errsafe)
-          exit(status);
+          exittrap(status);
         return status;
       }
       status = _wait_(pid);
       if (CNEG(n))
         status = !status;
       if (efl && status != 0 && !ifl && errsafe && !(n->flags & EFLAG_SAFE))
-        exit(status);
+        exittrap(status);
       return status;
   }
 }
@@ -1301,7 +1351,7 @@ realpipe:
   if (CNEG(n))
     status = !status;
   if (eflag && status != 0 && !iflag && !errsafe && !(n->flags & EFLAG_SAFE))
-    exit(status);
+    exittrap(status);
   predir = svredir;
   return status;
 }

@@ -484,12 +484,14 @@ tokword(wf *f, int *wd)
     word = join_wf(f, 0);
     a = findalias(word);
     if (a && !a->inuse) {
+      size_t alen;
       if (alias_depth >= MAX_ALIAS_DEPTH) {
         fprintf(stderr, "alias: too many levels of recursion\n");
         return SHTOK(TEOF);
       }
       a->inuse = 1;
-      pushstring(a->value, strlen(a->value), 1, a);
+      alen = strlen(a->value);
+      pushstring(st_strndup(a->value, alen), alen, 1, a);
       *wd &= ~CHKALIAS;
       return SHTOK(TCONT);
     }

@@ -690,7 +690,7 @@ exp_word(wf *wordf, size_t * restrict rlen)
                 name = st_strndup(f->word, op - 1);
                 shwarn(name, subres ? join_wf(subres, 0) : st_strndup("", 0));
                 if (!iflag)
-                  exit(1);
+                  exittrap(1);
                 return NULL;
               }
               break;

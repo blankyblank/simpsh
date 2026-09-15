@@ -17,18 +17,24 @@
 #include "parse.h"
 #include "utils.h"
 
+#define DEFER_MAX 64
+
 alias *alias_tab[ENV_BUCKETS];
 shfunc *func_tab[ENV_BUCKETS];
-wf * wfdup(wf *s);
-static clause * clausedup(clause *c);
+static cmd_tree *oldfuncs[DEFER_MAX];
+static size_t oldfcnt;
+static clause * clausedup(clause *c, int d);
 static void free_wf(wf *);
 
+
 wf *
-wfdup(wf *s)
+wfdup(wf *s, int d)
 {
   wf *n;
 
   if (!s)
+    return NULL;
+  if (d > 1024)
     return NULL;
   n = salloc(sizeof(wf));
   if (s->qs == QCMDSUB || s->qs == QCMDSUB_DQ)
@@ -37,13 +43,13 @@ wfdup(wf *s)
     n->word = strndup_(s->word, s->len);
   n->len = s->len;
   n->qs = s->qs;
-  n->next = wfdup(s->next);
   n->flags = s->flags;
+  n->next = wfdup(s->next, d + 1);
   return n;
 }
 
 static clause *
-clausedup(clause *c)
+clausedup(clause *c, int d)
 {
   size_t cnt = 0;
   clause *n;
@@ -55,10 +61,10 @@ clausedup(clause *c)
     cnt++;
   n->ptrn = salloc((cnt + 1) * sizeof(wf *));
   for (size_t i = 0; c->ptrn[i]; i++)
-    n->ptrn[i] = wfdup(c->ptrn[i]);
+    n->ptrn[i] = wfdup(c->ptrn[i], 0);
   n->ptrn[cnt] = NULL;
   n->body = tree_dup(c->body);
-  n->next = clausedup(c->next);
+  n->next = clausedup(c->next, d + 1);
   return n;
 }
 
@@ -99,7 +105,7 @@ tree_dup(cmd_tree *s)
       n->left = tree_dup(s->left);
       break;
     case FUNC:
-      CFUNC(n) = wfdup(CFUNC(s));
+      CFUNC(n) = wfdup(CFUNC(s), 0);
       n->left = tree_dup(s->left);
       break;
     case REDIR:
@@ -114,19 +120,19 @@ tree_dup(cmd_tree *s)
       n->left = tree_dup(s->left);
       break;
     case CASE:
-      CCASE(n).word = wfdup(CCASE(s).word);
-      CCASE(n).clauses = clausedup(CCASE(s).clauses);
+      CCASE(n).word = wfdup(CCASE(s).word, 0);
+      CCASE(n).clauses = clausedup(CCASE(s).clauses, 0);
       break;
     case FOR:
       {
         size_t wrdc = 0;
         n->right = tree_dup(s->right);
-        CFOR(n).name = wfdup(CFOR(s).name);
+        CFOR(n).name = wfdup(CFOR(s).name, 0);
         if (CFOR(s).words) {
           array_len(CFOR(s).words, wrdc);
           CFOR(n).words = salloc((wrdc + 1) * sizeof(wf *));
           for (size_t i = 0; CFOR(s).words[i]; i++)
-            CFOR(n).words[i] = wfdup(CFOR(s).words[i]);
+            CFOR(n).words[i] = wfdup(CFOR(s).words[i], 0);
           CFOR(n).words[wrdc] = NULL;
         } else {
           CFOR(n).words = NULL;
@@ -149,7 +155,7 @@ tree_dup(cmd_tree *s)
       if (cnt) {
         CARGS(n) = salloc((cnt + 1) * sizeof(wf *));
         for (size_t i = 0; i < cnt; i++)
-          CARGS(n)[i] = wfdup(CARGS(s)[i]);
+          CARGS(n)[i] = wfdup(CARGS(s)[i], 0);
         CARGS(n)[cnt] = NULL;
       } else {
         CARGS(n) = NULL;
@@ -158,7 +164,7 @@ tree_dup(cmd_tree *s)
       if (CVARS(s)) {
         CVARS(n) = salloc((CVARC(s) + 1) * sizeof(wf *));
         for (size_t i = 0; i < CVARC(s); i++)
-          CVARS(n)[i] = wfdup(CVARS(s)[i]);
+          CVARS(n)[i] = wfdup(CVARS(s)[i], 0);
         CVARS(n)[CVARC(s)] = NULL;
       } else {
         CVARS(n) = NULL;
@@ -286,6 +292,25 @@ free_tree(cmd_tree *n)
   }
 }
 
+static void
+setoldfunc(cmd_tree *body)
+{
+  if (!body)
+    return;
+  if (oldfcnt < DEFER_MAX)
+    oldfuncs[oldfcnt++] = body;
+}
+
+void
+cleandefered(void)
+{
+  if (gstate.funcdepth)
+    return;
+  for (size_t i = 0; i < oldfcnt; i++)
+    free_tree(oldfuncs[i]);
+  oldfcnt = 0;
+}
+
 shfunc *
 findfunc(const char *name)
 {
@@ -311,7 +336,10 @@ setfunc(const char *restrict name, cmd_tree *restrict body)
 
   f = findfunc(name);
   if (f) {
-    free_tree(f->body);
+    if (f->inuse || gstate.funcdepth > 0)
+      setoldfunc(f->body);
+    else
+      free_tree(f->body);
     sfree(f->name);
     f->name = strdup_(name);
     f->body = tree_dup(body);
@@ -384,7 +412,10 @@ rmfunc(const char *name)
       if (strcmp(f->name, name) == 0) {
         *prev = f->next;
         sfree(f->name);
-        free_tree(f->body);
+        if (f->inuse)
+          setoldfunc(f->body);
+        else
+          free_tree(f->body);
         sfree(f);
         return;
       }
@@ -477,10 +508,6 @@ unaliascmd(char **argv)
           e = alias_tab[i];
           while (e) {
             n = e->next;
-            if (e->inuse) {
-              e = n;
-              continue;
-            }
             sfree(e->name);
             sfree(e->value);
             sfree(e);
@@ -509,12 +536,7 @@ unaliascmd(char **argv)
   for (size_t i = 0; argv[i]; i++) {
     e = findalias(argv[i]);
     if (e) {
-      if (e->inuse) {
-        shwarn_arg(argv0, argv[i], "alias is in use");
-        status = 1;
-      } else {
-        rmalias(argv[i]);
-      }
+      rmalias(argv[i]);
     } else {
       shwarn_arg(argv0, argv[i], "alias not found");
       status = 1;
