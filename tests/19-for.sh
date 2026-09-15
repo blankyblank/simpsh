@@ -12,6 +12,15 @@ else
   exit 1
 fi
 
+msg_run 'for loop test 1: for f in ./testfiles/*; do echo $f; done'
+out1=$(../simpsh -c 'for f in testfiles/*; do echo $f; done' | grep 'source.sh')
+if [ "$out1" = "testfiles/source.sh" ]; then
+  test_pass "out1" "matches" "testfiles/source.sh"
+else
+  test_fail "out1" "expected" "testfiles/source.sh"
+  exit 1
+fi
+
 msg_run 'for loop test 2: s=""; for f in a b c; do s="$s$f"; done; echo $s'
 out2=$(../simpsh -c 's=""; for f in a b c; do s="$s$f"; done; echo $s')
 if [ "$out2" = "abc" ]; then
