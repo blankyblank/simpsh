@@ -12,6 +12,8 @@
  */
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
+#include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <ftw.h>
@@ -20,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/prctl.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -64,6 +67,77 @@ static int read_all(int fd, void *buf, size_t n) {
   return 0;
 }
 
+static int
+scan_children(int pid, char *buf, size_t buflen)
+{
+  int list[2048], n = 1, i, count = 0;
+  list[0] = pid;
+  for (;;) {
+    int added = 0;
+    DIR *d = opendir("/proc");
+    if (!d)
+      break;
+    struct dirent *de;
+    while ((de = readdir(d))) {
+      if (!isdigit(de->d_name[0]))
+        continue;
+      int p = atoi(de->d_name);
+      if (p <= 0)
+        continue;
+      if (n >= 2048)
+        break;
+      char path[64];
+      snprintf(path, sizeof path, "/proc/%d/status", p);
+      FILE *sf = fopen(path, "r");
+      if (!sf)
+        continue;
+      int ppid = -1;
+      char line[128];
+      while (fgets(line, sizeof line, sf))
+        if (!strncmp(line, "PPid:", 5)) {
+          ppid = atoi(line + 5);
+          break;
+        }
+      fclose(sf);
+      for (i = 0; i < n && list[i] != ppid; i++)
+        ;
+      if (i == n)
+        continue;              /* not a descendant of pid */
+      for (i = 0; i < n && list[i] != p; i++)
+        ;
+      if (i != n)
+        continue;              /* already listed */
+      list[n++] = p;
+      added++;
+    }
+    closedir(d);
+    if (!added)
+      break;
+  }
+  buf[0] = '\0';
+  for (i = 1; i < n; i++) {
+    int p = list[i];
+    char cmd[256] = {0};
+    char path[64];
+    snprintf(path, sizeof path, "/proc/%d/cmdline", p);
+    FILE *cf = fopen(path, "r");
+    if (cf) {
+      size_t m = fread(cmd, 1, sizeof cmd - 1, cf);
+      fclose(cf);
+      size_t j;
+      for (j = 0; j < m; j++)
+        if (cmd[j] == '\0')
+          cmd[j] = ' ';
+    }
+    int wrote = snprintf(buf + strlen(buf), buflen - strlen(buf),
+                         "[%d:%s] ", p, cmd);
+    if (wrote < 0 || (size_t)wrote >= buflen - strlen(buf))
+      break;
+    count++;
+  }
+  return count;
+}
+
 int main(int argc, char **argv) {
   const char *input;
   unsigned int hs = 0;  /* plain forkserver, no extended options */
@@ -90,6 +164,8 @@ int main(int argc, char **argv) {
       case -1:
         return 2;
       case 0:
+        setpgid(0, 0);
+        setrlimit(RLIMIT_NPROC, &(struct rlimit) { 200, 200 });
         prctl(PR_SET_PDEATHSIG, SIGKILL);
         if (chdir(dir) < 0)
           _exit(2);
@@ -111,8 +187,18 @@ int main(int argc, char **argv) {
       default:
         if (write_all(FORKSRV_FD + 1, &pid, 4) < 0)
           return 2;
-        while (waitpid(pid, &st, 0) < 0 && errno == EINTR)
-          ;
+        while ((waitpid(pid, &st, 0)) < 0 && errno == EINTR);
+        char kids[8192];
+        int found = scan_children(pid, kids, sizeof(kids));
+        if (found > 0) {
+          FILE *log = fopen("/out/fz-run.log", "a");
+          if (log) {
+            fprintf(log, "[%d] %s children=%d %s\n", pid, input, found, kids);
+            fclose(log);
+          }
+        }
+        if (pid > 0)
+          kill(-pid, SIGKILL);
     }
     nftw(dir, rm_one, 16, FTW_DEPTH | FTW_PHYS);
     rmdir(dir);
