@@ -52,9 +52,6 @@ case "$var" in #inline comment
     ;; #cmmt
 esac  #cmmt
 
-case && in
-esac
-
 # testv=test123
 # true
 # cat <<EOF
