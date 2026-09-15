@@ -324,9 +324,10 @@ trapsig(int n)
 int
 getsig(const char *sig)
 {
-  int nnum = 0, n = -1;
+  int nnum, n;
 
-
+  n = -1;
+  nnum = 0;
   if ((sig[0] == '-' && sig[1] != '\0') || isdigit_(sig[0])) {
     for (size_t i = 1; sig[i]; i++)
       if (!isdigit_(sig[i])) {
@@ -334,18 +335,18 @@ getsig(const char *sig)
         break;
       }
     if (!nnum) {
-      n = atoi(sig);
+      n = atoi_(sig);
       if (n >= 0 && n < NSIG) {
         return n;
       } else {
         return -1;
       }
     }
-  } else if (strncasecmp(sig, "SIG", 3) == 0) {
+  } else if (!strncasecmp(sig, "SIG", 3)) {
     sig += 3;
   }
   for (size_t i = 0; i < NSIG; i++) {
-    if (strcasecmp(sig, signame[i]) == 0)
+    if (!strcasecmp(sig, signame[i]))
       return i;
   }
   return -1;
@@ -410,73 +411,67 @@ exittrap(int status)
 int
 killcmd(char **argv)
 {
-  int flag = 0, sig = 15, status = 0;
-  char *sname = NULL;
-  char *argv0;
+  int sig, set, status;
+  char *sname, *argv0;
 
-  (void)sname;
-  (void)argv0;
-  (void)flag;
-  argv0 = *argv;
-  argv++;
+  sig = 15;
+  status = set = 0;
+  argv0 = *argv++;
 
   if (!*argv)
     goto err;
-  for (; *argv; argv++) {
-    char *arg = *argv;
-    if (*arg == '-') {
-      arg++;
-      switch (*arg) {
-        case '-':
-          argv++;
-          goto cont;
-        case 'l':
-          if (arg[1] && arg[1] != '\0')
-            goto err;
-          flag = FLAG_l;
-          continue;
-        case 's':
-          if (arg[1] && arg[1] != '\0')
-            goto err;
-          flag = FLAG_s;
-          continue;
-        default:
-          if ((sig = getsig(arg)) < 0) {
-            shwarn_arg(argv0, arg, "invalid signal spec");
-            return 1;
-          }
-          break;
-      }
-    } else {
-      break;
-    }
-  }
-cont:
-
-  if (flag & FLAG_l) {
-    if (!*argv) {
-      for (int i = 0; i < NSIG; i++) {
-        if (signame[i] != signum[i])
-          printf("%s\n", signame[i]);
-      }
-      return 0;
-    }
+  if ((*argv)[0] == '-') {
     int n;
-    n = atoi_(*argv) - 128;
-    if (n < 0 || n >= NSIG) {
-      shwarn_arg(argv0, *argv, "invalid signal spec");
-      return 1;
+    switch ((*argv)[1]) {
+      case 'l':
+        if ((*argv)[2])
+          goto longsig;
+        argv++;
+        if (!*argv) {
+          for (int i = 0; i < NSIG; i++) {
+            if (signame[i] != signum[i])
+              printf("%s\n", signame[i]);
+          }
+          return 0;
+        }
+        n = atoi_(*argv) - 128;
+        if (n < 0 || n >= NSIG)
+          return shwarn_arg(argv0, *argv, "invalid signal spec");
+        printf("%s\n", signame[n]);
+        return 0;
+      case 's':
+        if ((*argv)[2])
+          goto longsig;
+        argv++;
+        if (!(*argv) || !(*argv)[0])
+          return no_opt(argv0, 's'), 1;
+        sname = *argv++;
+        if ((sig = getsig(sname)) < 0)
+          return shwarn_arg(argv0, sname, "invalid signal spec");
+        set = 1;
+        break;
+      case '-':
+        if ((*argv)[2])
+          goto longsig;
+        argv++;
+        break;
+      default:
+longsig:
+        if (set)
+          break;
+        if ((sig = getsig((*argv) + 1)) < 0) {
+          if (isdigit_((*argv)[1]))
+            break;
+          return shwarn_arg(argv0, *argv, "invalid signal spec");
+        }
+        set = 1;
+        argv++;
+        break;
     }
-    printf("%s\n", signame[n]);
-    return 0;
   }
 
-  if (flag & FLAG_s)
-    if ((sig = getsig(*argv)) < 0) {
-      shwarn_arg(argv0, *argv, "invalid signal spec");
-      return 1;
-    }
-
+  if (*argv && !strcmp(*argv, "--"))
+    argv++;
   for (; *argv; argv++) {
     char *s = *argv;
     pid_t pid = 0;
@@ -497,11 +492,9 @@ cont:
         status = 1;
       }
   }
-
   return status;
 err:
-  usage(argv0, helpmsgs[KILLH].usage);
-  return 1;
+  return usage(argv0, helpmsgs[KILLH].usage), 1;
 }
 
 int
