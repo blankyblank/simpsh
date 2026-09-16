@@ -58,3 +58,5 @@ heaptrack.*
 /tests/fzrun
 /tests/seeds-exec
 /safe
+/tests/testfiles/initrd-simpsh
+/tests/testfiles/initrd-dash
