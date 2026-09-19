@@ -1,11 +1,12 @@
 #ifdef __linux__
   #define _POSIX_C_SOURCE 200809L
 #endif /* __linux__ */
-#include <stdlib.h>
-#include <stdio.h>
+#include <ctype.h>
 #include <dirent.h>
 #include <limits.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -65,15 +66,55 @@ match_bracket(const char *p, char c, const char **end)
     }
 
     while (*p && *p != ']') {
-        if (p[1] == '-' && p[2] && p[2] != ']') {
-            if (c >= *p && c <= p[2])
-                matched = 1;
-            p += 3;
-        } else {
-            if (c == *p)
-                matched = 1;
-            p++;
+      if (*p == '[' && p[1] == ':') {
+        const char *ce;
+        size_t cn;
+        int (*cls)(int);
+        ce = strstr(p + 2, ":]");
+        cn = ce ? (size_t)(ce - (p + 2)) : 0;
+        cls = NULL;
+        if (ce) {
+          if (cn == 5 && !memcmp(p + 2, "alnum", 5))
+            cls = isalnum;
+          else if (cn == 5 && !memcmp(p + 2, "alpha", 5))
+            cls = isalpha;
+          else if (cn == 5 && !memcmp(p + 2, "blank", 5))
+            cls = isblank;
+          else if (cn == 5 && !memcmp(p + 2, "cntrl", 5))
+            cls = iscntrl;
+          else if (cn == 5 && !memcmp(p + 2, "digit", 5))
+            cls = isdigit;
+          else if (cn == 5 && !memcmp(p + 2, "graph", 5))
+            cls = isgraph;
+          else if (cn == 5 && !memcmp(p + 2, "lower", 5))
+            cls = islower;
+          else if (cn == 5 && !memcmp(p + 2, "print", 5))
+            cls = isprint;
+          else if (cn == 5 && !memcmp(p + 2, "punct", 5))
+            cls = ispunct;
+          else if (cn == 5 && !memcmp(p + 2, "space", 5))
+            cls = isspace;
+          else if (cn == 5 && !memcmp(p + 2, "upper", 5))
+            cls = isupper;
+          else if (cn == 5 && !memcmp(p + 2, "xdigit", 5))
+            cls = isxdigit;
         }
+        if (cls) {
+          if (cls((unsigned char)c))
+            matched = 1;
+          p = ce + 2;
+          continue;
+        }
+      }
+      if (p[1] == '-' && p[2] && p[2] != ']') {
+        if (c >= *p && c <= p[2])
+          matched = 1;
+        p += 3;
+      } else {
+        if (c == *p)
+          matched = 1;
+        p++;
+      }
     }
 
     if (*p == ']') {
