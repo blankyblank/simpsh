@@ -26,6 +26,8 @@ enum arith_tok {
     A_STAR,     // *
     A_SLASH,    // /
     A_PCT,      // %
+    A_QMARK,    // ?
+    A_COLON,    // :
     A_LPAREN,   // (
     A_RPAREN,   // )
     A_LSHIFT,   // <<
@@ -70,7 +72,9 @@ static const int lbp_tab[] = {
   [A_PCT]    = 13,
   [A_INCR]   = 15,
   [A_DECR]   = 15,
+  [A_QMARK]  = 3,
   [A_ASSN]   = 2,
+  [A_COLON]  = -1,
   [A_BNOT]   = -1,
   [A_LNOT]   = -1,
   [A_LPAREN] = -1,
@@ -402,6 +406,12 @@ scan_tok(void)
         atok = A_BAND;
       }
       break;
+    case '?':
+      atok = A_QMARK;
+      break;
+    case ':':
+      atok = A_COLON;
+      break;
     case '|':
       if (alen > 0 && ap[0] == '|') {
         atok = A_LOR;
@@ -662,6 +672,22 @@ led(i64 left)
 {
   i64 rb;
   switch (atok) {
+    case A_QMARK:
+      {
+        i64 tv, fv;
+        int cond;
+
+        cond = (left != 0);
+        next_tok();
+        tv = expr_bp(3);
+        if (atok != A_COLON) {
+          shwarn_arg("arithmetic", ap, "expected :");
+          return 0;
+        }
+        next_tok();
+        fv = expr_bp(3);
+        return cond ? tv : fv;
+      }
     case A_PLUS:
       next_tok();
       return (i64)((u64)left + (u64)expr_bp(13));
