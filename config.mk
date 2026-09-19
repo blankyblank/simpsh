@@ -1,13 +1,12 @@
 ## paths
-PREFIX = /usr/local
+PREFIX = /usr
 BINDIR = $(DESTDIR)$(PREFIX)/bin
 
 ## compiler: cc | gcc | clang | afl-clang-fast | afl-clang-lto
-# CC = clang
-CC = afl-clang-lto
+CC = cc
 
 ## build profile: release | debug | sanitize | sanitize-extra (clang only) | valgrind | profile
-# BUILD = sanitize
+BUILD = release
 
 ## linking: dynamic | static
 BUILD_LINK = dynamic
