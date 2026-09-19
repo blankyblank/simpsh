@@ -139,6 +139,47 @@ fkinit(fakestate *fs)
 }
 
 void
+funcfkrestore(fakestate *fs)
+{
+  if (fs->pparamsv) {
+    freeshargv();
+    SHARGV = fs->argv;
+    SHARGC = fs->argc;
+    SHARGV0 = fs->argv0;
+    ALLOCED = fs->argvalloc;
+    fs->argv = NULL, fs->argv0 = NULL;
+    fs->argc = fs->argvalloc = fs->pparamsv = 0;
+  }
+  if (fs->cwd >= 0) {
+    close(fs->cwd);
+    fs->cwd = -1;
+  }
+  if (fs->varc) {
+    for (size_t i = 0; i < fs->varc; i++) {
+     sfree(fs->vars[i].name);
+     sfree(fs->vars[i].val);
+    }
+    sfree(fs->vars);
+  }
+  if (fs->trap) {
+    for (int i = 0; i < NSIG; i++)
+      sfree(fs->trap[i]);
+    sfree(fs->trap);
+  }
+  if (fs->rlim)
+    sfree(fs->rlim);
+  if (fs->alias) {
+   for (size_t i = 0; i < fs->aliasc; i++) {
+     sfree(fs->alias[i].name);
+     sfree(fs->alias[i].val);
+   }
+   sfree(fs->alias);
+  }
+  fs->varc = fs->trapm = fs->trapsv = fs->rlimsv =
+    fs->aliasc = fs->optsv = fs->umasksv = 0;
+}
+
+void
 svfkcwd(fakestate *fs)
 {
   if (fs->cwd >= 0)

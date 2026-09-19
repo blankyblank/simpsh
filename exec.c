@@ -973,14 +973,26 @@ run_while(const cmd_tree *n)
 static int
 run_func(shfunc *f, char **args)
 {
-  int status;
+  int status, svctx;
   tmp_var *loc;
   stmark fmark;
   size_t savedsp;
+  fakestate *sv, funcps;
 
   loc = LOCALVARS;
   fmark = stack_mark();
   savedsp = LOCALCNT;
+
+  if (fakectx) {
+    sv = fkstate;
+    svctx = fakectx;
+    funcps = (fakestate) { .cwd = -1 };
+    fkstate = &funcps;
+    fkinit(&funcps);
+    svfkargv(&funcps);
+  } else {
+    svctx = 0;
+  }
 
   pushframe();
   SHARGC = 0;
@@ -1018,8 +1030,19 @@ done:
     else
       rmvar(loc[LOCALCNT].name);
   }
+  int retnow, retval;
+
+  if (svctx) {
+    retnow = RETNOW, retval = RETVAL;
+    funcfkrestore(&funcps);
+    RETNOW = retnow, RETVAL = retval;
+    fkstate = sv;
+    fakectx = svctx;
+  }
+
   stack_restore(fmark);
-  freeshargv();
+  if (!svctx)
+    freeshargv();
   popframe();
   return status;
 }

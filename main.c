@@ -130,6 +130,11 @@ main(int argc, char **argv)
   if (mflag) {
     init_pgrp();
     init_job();
+  } else {
+    sh_pgid = getpid();
+    setpgid(0, sh_pgid);
+    if (setpgid(0, getpid()) < 0)
+      perror("setpgid");
   }
 
   shin = stdin;

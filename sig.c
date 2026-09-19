@@ -229,10 +229,10 @@ setsignal(int n)
     struct sigaction old;
     sigmode[n] = (sigaction(n, NULL, &old) == 0 && old.sa_handler == SIG_IGN)
                  ? S_HIGN : S_DFL;
-    if (sigmode[n] == S_HIGN)
+    if (sigmode[n] == S_HIGN && !trap[n])
       return;
   }
-  if (sigmode[n] == S_HIGN)
+  if (sigmode[n] == S_HIGN && !trap[n])
     return;
   if (!trap[n]) {
     switch (n) {
@@ -384,12 +384,19 @@ cleartraps(void)
   dfl.sa_flags = 0;
 
   while (tm) {
-    int i = __builtin_ctzll(tm);
+    int i;
+    i = __builtin_ctzll(tm);
     tm &= tm - 1;
+    if (trap[i] && trap[i][0] == '\0') {
+      trapm |= 1ULL << 1;
+      continue;
+    }
     sfree(trap[i]);
     trap[i] = NULL;
-    if (i && sigmode[i] != S_HIGN)
+    if (i && sigmode[i] != S_HIGN) {
       sigaction(i, &dfl, NULL);
+      sigmode[i] = S_DFL;
+    }
   }
 }
 
@@ -488,6 +495,12 @@ longsig:
     }
     if (pid)
       if (kill(pid, sig) < 0) {
+        if (pid < 0 && errno == ESRCH) {
+          if (!kill(0, sig))
+            continue;
+          if (errno == ESRCH)
+            continue;
+        }
         shwarn_arg(argv0, *argv, strerror(errno));
         status = 1;
       }

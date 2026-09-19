@@ -2,6 +2,7 @@
 #define PIPE_H
 
 #include "builtins.h"
+#include "env.h"
 #include "exec.h"
 #include "main.h"
 #include "parse.h"
@@ -52,6 +53,46 @@ void svfkargv(fakestate *);
 void savefkulimit(fakestate *, int, u64, u64);
 void svfkumask(fakestate *);
 void svfktraps(fakestate *, int);
+void funcfkrestore(fakestate *);
+static int canfakepipe(cmd_tree *);
+static int canfakesubsh(const cmd_tree *);
+
+
+static inline int
+canfkfunc(const cmd_tree *n)
+{
+  if (!n)
+    return 1;
+  switch (n->type) {
+    case CMD:
+      return canfakepipe((cmd_tree *)n);  // reuse builtin-only gate
+    case REDIR:
+    case BRACE:
+    case SUBSHELL:
+      return canfkfunc(n->left);
+    case OP:
+      if (COPP(n) == TPIPE) {
+        for (size_t i = 0; i < CPIPEC(n); i++)
+          if (!canfkfunc(CPIPE(n)[i]))
+            return 0;
+        return 1;
+      }
+      return canfkfunc(n->left) && canfkfunc(n->right);
+    case IF:
+      return canfkfunc(n->left) && canfkfunc(n->right) &&
+             (!CELSE(n) || canfkfunc(CELSE(n)));
+    case WHILE:
+    case FOR:
+      return canfkfunc(n->left) && canfkfunc(n->right);
+    case CASE:
+      for (clause *c = CCASE(n).clauses; c; c = c->next)
+        if (!canfkfunc(c->body))
+          return 0;
+      return 1;
+    default:
+      return 0;
+  }
+}
 
 static inline int
 canfakepipe(cmd_tree *n)
@@ -63,6 +104,7 @@ canfakepipe(cmd_tree *n)
   if (!n || n->type != CMD)
     return 0;
   const builtin *bi;
+  shfunc *f;
   wf **a;
 
   a = CARGS(n);
@@ -71,6 +113,8 @@ canfakepipe(cmd_tree *n)
   bi = findbuiltin(CARGS(n)[0]->word);
   if (bi && bi->fn != &execcmd &&
       bi->fn != &evalcmd && bi->fn != &commandcmd && bi->fn != &dotcmd)
+    return 1;
+  if ((f = findfunc(CARGS(n)[0]->word)) && canfkfunc(f->body))
     return 1;
   return 0;
 }
