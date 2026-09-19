@@ -556,8 +556,7 @@ echocmd(char *argv[])
         return sherr(1, argv0, "could not write to stdout");
   }
   if (!(nf & FLAG_N))
-    if (fputc('\n', shout) == EOF)
-      return sherr(1, argv0, "could not write to stdout");
+    if (fputc('\n', shout) == EOF) return sherr(1, argv0, "could not write to stdout");
   return 0;
 }
 
@@ -693,11 +692,12 @@ readcmd(char **argv)
     }
   }
 rend:
-  if (status && len == 0) {
+  if (status && !len) {
+    for (size_t i = 0; argv[i]; i++)
+      setvar(argv[i], 0, 0);
     stack_restore(rmark);
     return 1;
   }
-
 
   line = grab_str(len);
   ifs = getvar("IFS");
