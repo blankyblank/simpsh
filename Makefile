@@ -18,7 +18,7 @@ OS != uname -s
 PROFILE != case "$(BUILD):$(CCNAME):$(OS)" in \
 	release:gcc:*)    echo "-march=native -D_FORTIFY_SOURCE=2 -fstack-protector-strong -falign-functions=16 -fno-plt -O2 -flto=auto -s" ;; \
 	release:clang:*)  echo "-march=native -D_FORTIFY_SOURCE=2 -fstack-protector-strong -fno-plt -flto -O2 -fvectorize -flto=full" ;; \
-	debug:gcc:*)      echo "-O0 -g3 -fno-omit-frame-pointer -flto=auto -ggdb" ;; \
+	debug:gcc:*)      echo "-Og -g3 -fno-omit-frame-pointer -flto=auto -ggdb" ;; \
 	debug:clang:*)    echo "-Og -g3 -fno-omit-frame-pointer -flto -glldb -fstandalone-debug" ;; \
 	sanitize:gcc:OpenBSD)   echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=undefined" ;; \
 	sanitize:gcc:*)   echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined" ;; \
@@ -27,7 +27,7 @@ PROFILE != case "$(BUILD):$(CCNAME):$(OS)" in \
 	-fno-omit-frame-pointer -fno-sanitize-recover=all -O1 -g3 " ;; \
 	sanitize-extra*)  echo "-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,undefined -fsanitize=integer -fno-sanitize-recover=all -fsanitize=cfi -fvisibility=hidden -flto" ;; \
 	valgrind:*)       echo "-Og -g3 -fno-omit-frame-pointer -DENABLE_VALGRIND" ;; \
-	*afl*)            echo "-O2 -fsanitize=address,undefined -fsanitize=cfi -g3 -fno-omit-frame-pointer -fno-sanitize-recover=all -flto=full" ;; \
+	*afl*)            echo "-O2 -fsanitize=address,undefined -g3 -no-pie -fno-omit-frame-pointer -fno-sanitize-recover=all -flto=full" ;; \
 	profile:gcc:*)    echo "-O2 -g3 -pg -fxray-instrument -fvar-tracking-assignments -fno-analyzer-state-merge" ;; \
 	profile:clang:*)  echo "-O2 -g3 -fprofile-instr-generate -fcoverage-mapping -fxray-instrument" ;; \
 	*)                echo "-march=native -O2 -flto=auto";;\
@@ -44,7 +44,7 @@ LDFLAG != case "$(BUILD):$(CCNAME):$(OS)" in \
 	sanitize:clang:*) echo "-fsanitize=address,undefined -static-libasan" ;; \
 	sanitize-extra:*) echo "-fsanitize=address,undefined,cfi -static-libasan" ;; \
 	valgrind:*)       echo "" ;; \
-	*afl*)            echo "-O2 -g3 -fsanitize=address,undefined -fsanitize=cfi -fno-omit-frame-pointer -fno-sanitize-recover=all -flto=full" ;; \
+	*afl*)            echo "-O2 -g3 -fsanitize=address,undefined -no-pie -fno-omit-frame-pointer -fno-sanitize-recover=all -flto=full" ;; \
 	profile:gcc:*)    echo "-pg" ;; \
 	profile:clang:*)  echo "-fprofile-instr-generate" ;; \
 	*)                echo "" ;; \
@@ -186,13 +186,16 @@ pgo:
 	rm -rf ./builtins/pgo
 	$(MAKE) clean
 	$(MAKE) PGOFLAGS="-fprofile-dir=pgo -fprofile-generate"
-	./simpsh profile/bench.sh
+	./simpsh ./profile/bench.sh
 	./simpsh ./profile/parse.bench
 	./simpsh ./profile/forbench.sh
 	./simpsh ./profile/quote-bench.sh
 	./simpsh ./profile/arith-bench.sh
 	./simpsh ./profile/printf-bench.sh
 	./simpsh ./profile/benchwecho.sh
+	./simpsh ./tests/lineno.sh
+	./simpsh ./tests/heredoc.sh
+	./simpsh -c 'for f in ./tests/seeds-exec/*; do ./simpsh "$$f"; done'
 	cd tests && ./runtests.sh > /dev/null 2>&1 || true
 	$(MAKE) clean
 	$(MAKE) PGOFLAGS="-fprofile-dir=pgo -fprofile-use -fprofile-correction"
@@ -223,7 +226,8 @@ bench-q:
 FZENV = --clearenv --setenv PATH /usr/bin:/bin --setenv HOME /tmp --setenv SHELL /simpsh \
 	--setenv UBSAN_OPTIONS halt_on_error=1:abort_on_error=1:symbolize=0:print_stacktrace=1 \
 	--setenv ASAN_OPTIONS abort_on_error=1:detect_leaks=0:symbolize=0:allocator_may_return_null=1 \
-	--setenv AFL_SKIP_BIN_CHECK 1 --setenv AFL_AUTORESUME 1 --chdir /tmp
+	--setenv AFL_SKIP_BIN_CHECK 1 --setenv AFL_AUTORESUME 1 --setenv AFL_FASTRESUME 1 --setenv AFL_FAST_CAL 1 \
+	--setenv AFL_NO_VAR_CHECK 1 --setenv AFL_NO_ASLR 1 --chdir /tmp
 FZWRAP = bwrap \
 	--ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /sbin /sbin \
 	--ro-bind /lib /lib --ro-bind /lib64 /lib64 --ro-bind /etc /etc \
@@ -234,12 +238,18 @@ FZWRAP = bwrap \
 	--bind /mnt/fuzz/out-exec /out \
 	--tmpfs /tmp --tmpfs /run --proc /proc --dev /dev --unshare-all --die-with-parent \
 	$(FZENV)
+# fuzz-exec:
+# 	mkdir -p tests/seeds-exec /mnt/fuzz/out-exec
+# 	$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -M exec0 -- /t/fzrun @@ > /mnt/fuzz/logs-exec0.log 2>&1 & \
+# 		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -S exec1 -- /t/fzrun @@ > /mnt/fuzz/logs-exec1.log 2>&1 & \
+# 		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -S exec2 -- /t/fzrun @@ > /mnt/fuzz/logs-exec2.log 2>&1 & \
+# 		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -S exec3 -- /t/fzrun @@ > /mnt/fuzz/logs-exec3.log 2>&1 & \
+# 		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -S exec4 -- /t/fzrun @@ > /mnt/fuzz/logs-exec4.log 2>&1 & \
+# 		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -S exec5 -- /t/fzrun @@
+
 fuzz-exec:
 	mkdir -p tests/seeds-exec /mnt/fuzz/out-exec
 	$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -M exec0 -- /t/fzrun @@ > /mnt/fuzz/logs-exec0.log 2>&1 & \
-		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -p explore -S exec1 -- /t/fzrun @@ > /mnt/fuzz/logs-exec1.log 2>&1 & \
-		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -p explore -S exec2 -- /t/fzrun @@ > /mnt/fuzz/logs-exec2.log 2>&1 & \
-		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -p explore -S exec3 -- /t/fzrun @@ > /mnt/fuzz/logs-exec3.log 2>&1 & \
-		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -p explore -S exec4 -- /t/fzrun @@ > /mnt/fuzz/logs-exec4.log 2>&1 & \
-		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -p explore -S exec5 -- /t/fzrun @@
+		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -S exec1 -- /t/fzrun @@ > /mnt/fuzz/logs-exec1.log 2>&1 & \
+		$(FZWRAP) afl-fuzz -i /t/seeds-exec -o /out -m none -t 2000 -d -x /t/afl.dict -S exec2 -- /t/fzrun @@
 
