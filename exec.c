@@ -979,6 +979,7 @@ run_func(shfunc *f, char **args)
   size_t savedsp;
   fakestate *sv, funcps;
 
+  sv = NULL;
   loc = LOCALVARS;
   fmark = stack_mark();
   savedsp = LOCALCNT;
