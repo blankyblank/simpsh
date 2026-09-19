@@ -130,11 +130,6 @@ main(int argc, char **argv)
   if (mflag) {
     init_pgrp();
     init_job();
-  } else {
-    sh_pgid = getpid();
-    setpgid(0, sh_pgid);
-    if (setpgid(0, getpid()) < 0)
-      perror("setpgid");
   }
 
   shin = stdin;
@@ -153,7 +148,7 @@ main(int argc, char **argv)
     sh_ccmd(argv[0]);
     exittrap(LSTATUS);
   } else if (!sflag && *argv) {
-    if ((fd = open(*argv, O_RDONLY)) < 0) {
+    if ((fd = open(*argv, O_RDONLY | O_CLOEXEC)) < 0) {
       exittrap(sherrx(1, "open"));
     }
     SHARGV0 = *argv;

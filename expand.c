@@ -4,6 +4,7 @@
 #endif /* __linux__ */
 #define _DEFAULT_SOURCE
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -127,6 +128,8 @@ run_cmdsub(const cmd_tree *restrict n)
     ret = -1;
     goto cleanup;
   }
+  fcntl(pipefd[0], F_SETFD, FD_CLOEXEC);
+  fcntl(pipefd[1], F_SETFD, FD_CLOEXEC);
 
   fflush_unlocked(shout);
   pid = fork();

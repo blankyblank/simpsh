@@ -191,6 +191,8 @@ dupredir:
           if (blen < HEREDOC_LIMIT) {
             if (pipe(p) < 0)
               return sherr(1, "heredoc", "pipe");
+            fcntl(p[0], F_SETFD, FD_CLOEXEC);
+            fcntl(p[1], F_SETFD, FD_CLOEXEC);
             if (write(p[1], body, blen) < 0)
               return sherr(1, "heredoc", "write");
             CLOSEFD(p[1]);
@@ -237,7 +239,7 @@ save_fd(redir *r, fdlist *sfd, size_t * restrict sfdc)
   t = r;
   while (t) {
     sfd[*sfdc].orig = t->fd;
-    if ((saved = dup(t->fd)) < 0) {
+    if ((saved = fcntl(t->fd, F_DUPFD_CLOEXEC, 10)) < 0) {
       if (errno == EBADF)
         sfd[(*sfdc)++].saved = -1;
       else

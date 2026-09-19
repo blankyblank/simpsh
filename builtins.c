@@ -492,7 +492,7 @@ dotcmd(char **argv)
   }
   if (!file)
     return 1;
-  if ((fd = open(file, O_RDONLY)) < 0)
+  if ((fd = open(file, O_RDONLY | O_CLOEXEC)) < 0)
     return 1;
   setinputf(fd, file, 0);
 

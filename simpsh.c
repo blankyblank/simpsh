@@ -53,7 +53,7 @@ static void stdin_cb(void *data);
 static inline void
 source_file(const char *path)
 {
-  int fd = open(path, O_RDONLY);
+  int fd = open(path, O_RDONLY | O_CLOEXEC);
   if (fd < 0)
     return;
   setinputf(fd, path, 0);

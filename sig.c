@@ -74,7 +74,7 @@ init_job(void)
   signal(SIGTTIN, SIG_IGN);
   signal(SIGTTOU, SIG_IGN);
 
-  if ((tty_fd = open("/dev/tty", O_RDWR)) < 0)
+  if ((tty_fd = open("/dev/tty", O_RDWR | O_CLOEXEC)) < 0)
     tty_fd = STDIN_FILENO;
   else {
     int nfd = fcntl(tty_fd, F_DUPFD, 10);
