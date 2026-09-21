@@ -253,6 +253,35 @@ else
   test_pass "out" "matches" "[]"
 fi
 
+msg_run '$$ stable in subshell'
+out=$(../simpsh -c 'echo $$; (echo $$)')
+if [ "$(printf '%s' "$out" | uniq | wc -l)" = "1" ]; then test_pass "out" "same pid twice" ""; else
+  test_fail "out" "unexpected" "$out"
+  exit 1
+fi
+
+msg_run '$! is the real bg child pid'
+out=$(../simpsh -c 'sleep 0.2 & p=$!; ps -o pid= -p $p | tr -d " "; kill $p 2>/dev/null; wait 2>/dev/null; true')
+if [ "$out" = "$out" ] && [ -n "$out" ]; then test_pass "out" "non-empty pid" ""; else
+  test_fail "out" "expected pid" "$out"
+  exit 1
+fi
+
+msg_run 'nested defaults ${a:-${b:-c}}'
+out=$(../simpsh -c 'echo ${a:-${b:-c}}; b=B; echo ${a:-${b:-c}}')
+if [ "$out" = "c
+B" ]; then test_pass "out" "matches"; else
+  test_fail "out" "unexpected" "$out"
+  exit 1
+fi
+
+msg_run 'sh -c $0 assignment'
+out=$(../simpsh -c 'echo $0' myname)
+if [ "$out" = "myname" ]; then test_pass "out" "matches" "myname"; else
+  test_fail "out" "unexpected" "$out"
+  exit 1
+fi
+
 msg_run 'variable stress test'
 printf '%s\n' \
 "abc1=asdasdf" \

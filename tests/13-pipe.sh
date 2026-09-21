@@ -1,5 +1,5 @@
 #!/bin/sh
-# shellcheck disable=2181
+# shellcheck disable=2181,2016
 
 [ -f ./funcs ] && . ./funcs
 
@@ -99,3 +99,9 @@ else
   test_pass "out" "matches" "test"
 fi
 
+msg_run 'builtin-only pipeline stage runs subshelled (POSIX: read var lost)'
+out=$(../simpsh -c 'echo x | { read v; }; echo "[$v]"')
+if [ "$out" = "[]" ]; then test_pass "out" "matches" "[]"; else
+  test_fail "out" "expected" "[]"
+  exit 1
+fi

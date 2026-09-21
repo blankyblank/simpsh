@@ -57,3 +57,10 @@ else
   test_fail "out4" "expected" "134"
   exit 1
 fi
+
+msg_run 'nested break 2 exits both loops'
+out=$(../simpsh -c 'o=""; for a in 1 2; do for b in x y; do o="$o$a$b"; break 2; done; done; echo $o')
+if [ "$out" = "1x" ]; then test_pass "out" "matches" "1x"; else
+  test_fail "out" "expected" "1x"
+  exit 1
+fi

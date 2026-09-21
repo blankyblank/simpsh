@@ -290,3 +290,23 @@ if [ "$out" != "1 1" ]; then
 else
   test_pass "out" "matches" "1 1"
 fi
+
+msg_run 'ternary true: echo $((1 ? 10 : 20))'
+out=$(../simpsh -c 'echo $((1 ? 10 : 20))')
+[ "$out" = "10" ] || { msg_fail "?: true"; exit 1; }
+
+msg_run 'ternary false: echo $((0 ? 10 : 20))'
+out=$(../simpsh -c 'echo $((0 ? 10 : 20))')
+[ "$out" = "20" ] || { msg_fail "?: false"; exit 1; }
+
+msg_run 'ternary nested right-assoc: echo $((1 ? 0 ? 1 : 2 : 3))'
+out=$(../simpsh -c 'echo $((1 ? 0 ? 1 : 2 : 3))')
+[ "$out" = "2" ] || { msg_fail "?: nested"; exit 1; }
+
+msg_run 'ternary with vars (shellbench shape): ex=2; echo $(($ex == 0 ? 1 : $ex))'
+out=$(../simpsh -c 'ex=2; echo $(($ex == 0 ? 1 : $ex))')
+[ "$out" = "2" ] || { msg_fail "?: shellbench shape"; exit 1; }
+
+msg_run 'ternary condition from comparison: echo $((3 > 2 ? 7 : 8))'
+out=$(../simpsh -c 'echo $((3 > 2 ? 7 : 8))')
+[ "$out" = "7" ] || { msg_fail "?: comparison cond"; exit 1; }

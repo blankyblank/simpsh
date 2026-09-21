@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=2016
 
 [ -f ./funcs ] && . ./funcs
 
@@ -56,4 +57,25 @@ if [ "$out" != "hi" ] || [ "$err" != "+ echo hi" ]; then
   test_fail "out/err" "expected" "hi / + echo hi"; exit 1
 else
   test_pass "out/err" "matches" "hi / + echo hi"
+fi
+
+msg_run 'set -e subshell failure exits (rc=1)'
+../simpsh -c 'set -e; (false); echo end' >/dev/null 2>&1
+if [ "$?" = "1" ]; then test_pass "rc" "matches" "1"; else
+  test_fail "rc" "expected" "1"
+  exit 1
+fi
+
+msg_run 'set -e cmdsub-assign failure exits (rc=1)'
+../simpsh -c 'set -e; x=$(false); echo end' >/dev/null 2>&1
+if [ "$?" = "1" ]; then test_pass "rc" "matches" "1"; else
+  test_fail "rc" "expected" "1"
+  exit 1
+fi
+
+msg_run 'set -e bare cmdsub failure exits (rc=1)'
+../simpsh -c 'set -e; $(false); echo end' >/dev/null 2>&1
+if [ "$?" = "1" ]; then test_pass "rc" "matches" "1"; else
+  test_fail "rc" "expected" "1"
+  exit 1
 fi

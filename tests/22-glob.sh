@@ -5,8 +5,7 @@
 
 [ -f ./funcs ] && . ./funcs
 
-# out=$(../simpsh -c 'i=0; i=$((i + 1)); echo $i')
-# [ "$out" = 1 ] || exit 1
+here=$PWD
 
 d=$(mktemp -d)
 cd $d
@@ -50,3 +49,23 @@ else
   exit 1
 fi
 rm -rf $d
+
+d=$(mktemp -d)
+cd $d
+touch a.test 1.test
+msg_run 'glob [[:alpha:]] class: echo [[:alpha:]].test'
+out=$(simpsh -c 'echo [[:alpha:]].test')
+if [ "$out" = "a.test" ]; then test_pass "out" "matches" "a.test"; else test_fail "out" "expected" "a.test"; rm -rf $d; cd "$here"; exit 1; fi
+
+msg_run 'glob [!a] negation: echo [!a].test'
+out=$(simpsh -c 'echo [!a].test')
+if [ "$out" = "1.test" ]; then test_pass "out" "matches" "1.test"; else test_fail "out" "expected" "1.test"; rm -rf $d; cd "$here"; exit 1; fi
+cd "$here"; rm -rf $d
+
+msg_run 'param trim idiom (shellbench): ${v#"${v%%[![:space:]]*}"}'
+out=$(../simpsh -c 'v="  hello"; echo "[${v#"${v%%[![:space:]]*}"}]"')
+if [ "$out" = "[hello]" ]; then test_pass "out" "matches" "[hello]"; else test_fail "out" "expected" "[hello]"; exit 1; fi
+
+msg_run 'no brace expansion: echo {a,b} stays literal'
+out=$(../simpsh -c 'echo {a,b}')
+if [ "$out" = "{a,b}" ]; then test_pass "out" "matches" "{a,b}"; else test_fail "out" "expected" "{a,b}"; exit 1; fi
