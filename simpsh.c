@@ -271,7 +271,11 @@ simpsh_run(void)
     if (!nflag)
       run_commands(c, 0);
     fflush_unlocked(shout);
+#ifdef __OpenBSD__
+    if (ferror(shout)) {
+#else
     if (ferror_unlocked(shout)) {
+#endif /* __OpenBSD__ */
       clearerr(shout);
       LSTATUS = 1;
     }

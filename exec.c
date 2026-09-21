@@ -578,7 +578,11 @@ runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
   if (pr) {
     if (!(b && b->fn == &execcmd && !final[1])) {
       fflush_unlocked(NULL);
+#ifdef __OpenBSD__
+      if (ferror(shout)) {
+#else
       if (ferror_unlocked(shout)) {
+#endif /* __OpenBSD__ */
         clearerr(shout);
         sherr(1, final[0], "could not write to stdout");
         st = 1;
@@ -643,7 +647,11 @@ runshcmd(shfunc * restrict f, const builtin * restrict b,
   if (pr) {
     if (!(b && b->fn == &execcmd && !final[1])) {
       fflush_unlocked(NULL);
+#ifdef __OpenBSD__
+      if (ferror(shout)) {
+#else
       if (ferror_unlocked(shout)) {
+#endif /* __OpenBSD__ */
         clearerr(shout);
         sherr(1, final[0], "could not write to stdout");
         status = 1;
@@ -1111,7 +1119,11 @@ run_redir(const cmd_tree *n, int nchld)
   if (CNEG(n))
     errsafe--;
   fflush_unlocked(NULL);
+#ifdef __OpenBSD__
+  if (ferror(shout)) {
+#else
   if (ferror_unlocked(shout)) {
+#endif /* __OpenBSD__ */
     clearerr(shout);
     status = 1;
   }
@@ -1139,7 +1151,11 @@ run_subsh(const cmd_tree *n, int chld)
       _exit(1);
     status = run_commands(n->left, _INCHLD);
     fflush_unlocked(NULL);
+#ifdef __OpenBSD__
+    if (ferror(shout))
+#else
     if (ferror_unlocked(shout))
+#endif /* __OpenBSD__ */
       status = 1;
     _exit(status);
   }
@@ -1166,7 +1182,11 @@ run_subsh(const cmd_tree *n, int chld)
   eflag = svefl, iflag = svifl;
   if (!(svefl && status && !svifl))
     fflush_unlocked(NULL);
+#ifdef __OpenBSD__
+  if (ferror(shout)) {
+#else
   if (ferror_unlocked(shout)) {
+#endif /* __OpenBSD__ */
     clearerr(shout);
     status = 1;
   }
@@ -1199,7 +1219,11 @@ realsubsh:
       if (efl && status != 0 && !ifl && !errsafe)
         _exit(status);
       fflush_unlocked(NULL);
+#ifdef __OpenBSD__
+      if (ferror(shout))
+#else
       if (ferror_unlocked(shout))
+#endif /* __OpenBSD__ */
         status = 1;
       runexittrap();
       _exit(status);
