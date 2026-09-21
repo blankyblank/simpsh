@@ -33,6 +33,7 @@ extern void init_builtins(void);
 /* needed elsewhere */
 extern int commandcmd(char **);
 extern int dotcmd(char **);
+extern int exitcmd(char **);
 extern int returncmd(char **);
 extern int execcmd(char **);
 extern int evalcmd(char **);

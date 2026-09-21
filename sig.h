@@ -72,6 +72,7 @@ extern int runeventloop(eventloop *, int);
 
 int init_traps(void);
 void exittrap(int) __attribute__((__noreturn__));
+void runexittrap(void);
 void dotrap(void);
 void trapsig(int);
 void cleartraps(void);

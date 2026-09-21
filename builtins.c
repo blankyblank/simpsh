@@ -42,7 +42,6 @@ static int breakcmd(char **);
 extern int cdcmd(char **);
 static int continuecmd(char **);
 static int echocmd(char **);
-static int exitcmd(char **);
 extern int exportcmd(char **);
 static int falsecmd(char **);
 extern int fccmd(char **);
@@ -580,7 +579,7 @@ evalcmd(char **argv)
   return status;
 }
 
-static int
+int
 exitcmd(char **argv)
 {
   size_t argc = 0;
@@ -762,7 +761,7 @@ int
 returncmd(char **argv)
 {
   size_t argc = 0;
-  int status = 0;
+  int status = -1, ret;
   array_len(argv, argc);
 
   if (argc > 2)
@@ -775,8 +774,9 @@ returncmd(char **argv)
     }
     status = atoi_(argv[1]);
   }
-  RETVAL = status, RETNOW = 1;
-  return status;
+  ret = (status == -1) ? LSTATUS : status;
+  RETVAL = ret, RETNOW = 1;
+  return ret;
 }
 
 static int
@@ -1013,6 +1013,8 @@ umaskcmd(char **argv)
   }
   ARGEND
 
+  if (!symb && *argv && (argv[0][0] < '0' || argv[0][0] > '7'))
+    symb = 1;
   mode_t mask = umask(0);
   int usrp, grpp, othp;
   const char ugo[] = { 'u', 'g', 'o', '\0' };

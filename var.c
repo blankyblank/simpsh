@@ -72,7 +72,7 @@ ifsupdt(const char *ifs)
 static void
 optindupdt(const char *val)
 {
-  optind = val ? atoi_(val) : 1;
+  OPTIND = val ? atoi_(val) : 1;
   OPTOFF = -1;
 }
 
@@ -268,7 +268,7 @@ setvar(const char *restrict name, const char *restrict val, shvflags flags)
       }
       if (v->flags & VEXPRT || flags & VEXPRT)
         env_dirty = 1;
-      v->flags = flags;
+      v->flags = flags & ~VNOCB;
       goto callback;
     }
     if (++v >= end)
@@ -288,7 +288,7 @@ setvar(const char *restrict name, const char *restrict val, shvflags flags)
   n->var = nvar;
   n->nlen = nlen;
   n->flen = flen;
-  v->flags = flags;
+  v->flags = flags & ~VNOCB;
   n->func = NULL;
   v = n;
   VARCNT++;
@@ -566,12 +566,19 @@ exportcmd(char **argv)
   size_t argc = 0;
   array_len(argv, argc);
 
-  if (argc < 2) {
+  ARGBEGIN
+  {
+    default:
+      return bad_opt(argv0, ARGC());
+  }
+  ARGEND
+
+  if (!argc) {
     printvars("export", VEXPRT);
     return 0;
   }
 
-  for (size_t i = 1; i < argc; i++) {
+  for (size_t i = 0; i < argc; i++) {
     char *eq;
     char *name, *val;
     shvar *v;

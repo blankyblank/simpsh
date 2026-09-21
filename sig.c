@@ -415,6 +415,22 @@ exittrap(int status)
   exit(status);
 }
 
+void
+runexittrap(void)
+{
+  char *cmd;
+  int sv;
+  if (!trap[0] || !trap[0][0])
+    return;
+  cmd = trap[0];
+  trap[0] = NULL;
+  trapm &= ~1ULL;
+  sv = LSTATUS;
+  sh_ccmd(cmd);
+  sfree(cmd);
+  LSTATUS = sv;
+}
+
 int
 killcmd(char **argv)
 {
@@ -495,12 +511,6 @@ longsig:
     }
     if (pid)
       if (kill(pid, sig) < 0) {
-        if (pid < 0 && errno == ESRCH) {
-          if (!kill(0, sig))
-            continue;
-          if (errno == ESRCH)
-            continue;
-        }
         shwarn_arg(argv0, *argv, strerror(errno));
         status = 1;
       }

@@ -566,7 +566,7 @@ runsbltn(const builtin *restrict b, char **restrict final, wf **restrict vars)
   }
   predir = pr;
   if ((int)st > 0) {
-    if (!errsafe && !iflag && b->fn != returncmd && b->fn != evalcmd) {
+    if (!errsafe && !iflag && b->fn != returncmd && b->fn != evalcmd && b->fn != exitcmd) {
       if (fakectx) {
         if (pr)
           restore_fd(sfd, sfdc);
@@ -811,6 +811,8 @@ run_cmd(const cmd_tree *n, int inchld)
       status = apply_redir(predir);
     if (CNEG(n))
       status = !status;
+    if (efl && status && !ifl && !errsafe && !(n->flags & EFLAG_SAFE) && !CNEG(n))
+      exittrap(status);
     goto done;
   }
 #ifdef DEBUG
@@ -1063,6 +1065,7 @@ run_bg(const cmd_tree *n)
     case 0:
       status = run_commands(n->left, _INCHLD);
       fflush_unlocked(NULL);
+      runexittrap();
       _exit(status);
     default:
       if (mflag)
@@ -1169,9 +1172,14 @@ run_subsh(const cmd_tree *n, int chld)
   }
   if (sfdc)
     restore_fd(sfd, sfdc);
+  if (trap[0] && trap[0][0] && (!(ps.trapsv & 1UL) || !ps.trap ||
+      !ps.trap[0] || strcmp(trap[0], ps.trap[0]) != 0))
+    runexittrap();
   fkrestore(&ps);
   LOOPBREAK = LOOPCONT = RETNOW = 0;
   fakectx = svctx, fkstate = sv;
+  if (eflag && status && !iflag && !errsafe && !(n->flags & EFLAG_SAFE) && !CNEG(n))
+    exittrap(status);
   return status;
 
 realsubsh:
@@ -1193,6 +1201,7 @@ realsubsh:
       fflush_unlocked(NULL);
       if (ferror_unlocked(shout))
         status = 1;
+      runexittrap();
       _exit(status);
     default:
       if (mfl && getpid() == sh_pgid) {
@@ -1211,7 +1220,7 @@ realsubsh:
       status = _wait_(pid);
       if (CNEG(n))
         status = !status;
-      if (efl && status != 0 && !ifl && errsafe && !(n->flags & EFLAG_SAFE))
+      if (efl && status != 0 && !ifl && !errsafe && !(n->flags & EFLAG_SAFE))
         exittrap(status);
       return status;
   }
