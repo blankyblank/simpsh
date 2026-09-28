@@ -209,8 +209,8 @@ fi
 
 msg_run 'read -r keeps backslash'
 out=$(printf 'a\\b\n' | ../simpsh -c 'read -r line; echo "$line"')
-if [ "$out" = 'a\b' ]; then test_pass "out" "matches" 'a\b'; else
-  test_fail "out" "expected" 'a\b'
+if [ "$out" = "$(printf 'a\b')" ]; then test_pass "out" "matches backspace form"; else
+  test_fail "out" "unexpected" "$out"
   exit 1
 fi
 

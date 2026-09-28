@@ -293,20 +293,118 @@ fi
 
 msg_run 'ternary true: echo $((1 ? 10 : 20))'
 out=$(../simpsh -c 'echo $((1 ? 10 : 20))')
-[ "$out" = "10" ] || { msg_fail "?: true"; exit 1; }
+[ "$out" = "10" ] || {
+  msg_fail "?: true"
+  exit 1
+}
 
 msg_run 'ternary false: echo $((0 ? 10 : 20))'
 out=$(../simpsh -c 'echo $((0 ? 10 : 20))')
-[ "$out" = "20" ] || { msg_fail "?: false"; exit 1; }
+[ "$out" = "20" ] || {
+  msg_fail "?: false"
+  exit 1
+}
 
 msg_run 'ternary nested right-assoc: echo $((1 ? 0 ? 1 : 2 : 3))'
 out=$(../simpsh -c 'echo $((1 ? 0 ? 1 : 2 : 3))')
-[ "$out" = "2" ] || { msg_fail "?: nested"; exit 1; }
+[ "$out" = "2" ] || {
+  msg_fail "?: nested"
+  exit 1
+}
 
 msg_run 'ternary with vars (shellbench shape): ex=2; echo $(($ex == 0 ? 1 : $ex))'
 out=$(../simpsh -c 'ex=2; echo $(($ex == 0 ? 1 : $ex))')
-[ "$out" = "2" ] || { msg_fail "?: shellbench shape"; exit 1; }
+[ "$out" = "2" ] || {
+  msg_fail "?: shellbench shape"
+  exit 1
+}
 
 msg_run 'ternary condition from comparison: echo $((3 > 2 ? 7 : 8))'
 out=$(../simpsh -c 'echo $((3 > 2 ? 7 : 8))')
-[ "$out" = "7" ] || { msg_fail "?: comparison cond"; exit 1; }
+[ "$out" = "7" ] || {
+  msg_fail "?: comparison cond"
+  exit 1
+}
+
+msg_run 'div by zero aborts rc=2, no output'
+out=$(../simpsh -c 'echo $((1/0))' 2>/dev/null)
+rc=$?
+if [ -z "$out" ] && [ "$rc" = "2" ]; then test_pass "rc" "matches" "2"; else
+  test_fail "out/rc" "unexpected" "$out/$rc"
+  exit 1
+fi
+
+msg_run 'assign div by zero aborts rc=2'
+../simpsh -c 'x=$((1/0))' 2>/dev/null
+if [ "$?" = "2" ]; then test_pass "rc" "matches" "2"; else
+  test_fail "rc" "unexpected" "$?"
+  exit 1
+fi
+
+msg_run 'mod by zero aborts rc=2'
+../simpsh -c 'echo $((1%0))' 2>/dev/null
+if [ "$?" = "2" ]; then test_pass "rc" "matches" "2"; else
+  test_fail "rc" "unexpected" "$?"
+  exit 1
+fi
+
+msg_run 'div by zero in if condition aborts, no branch'
+out=$(../simpsh -c 'if [ $((1/0)) -eq 0 ]; then echo y; else echo n; fi' 2>/dev/null)
+rc=$?
+if [ -z "$out" ] && [ "$rc" = "2" ]; then test_pass "rc" "matches" "2"; else
+  test_fail "out/rc" "unexpected" "$out/$rc"
+  exit 1
+fi
+
+msg_run 'div by zero in for words aborts'
+out=$(../simpsh -c 'for i in $((1/0)); do echo $i; done' 2>/dev/null)
+rc=$?
+if [ -z "$out" ] && [ "$rc" = "2" ]; then test_pass "rc" "matches" "2"; else
+  test_fail "out/rc" "unexpected" "$out/$rc"
+  exit 1
+fi
+
+msg_run 'div by zero in case word aborts'
+out=$(../simpsh -c 'case $((1/0)) in 0) echo y;; *) echo n;; esac' 2>/dev/null)
+rc=$?
+if [ -z "$out" ] && [ "$rc" = "2" ]; then test_pass "rc" "matches" "2"; else
+  test_fail "out/rc" "unexpected" "$out/$rc"
+  exit 1
+fi
+
+msg_run 'div by zero in && RHS aborts'
+out=$(../simpsh -c 'true && echo $((1/0))' 2>/dev/null)
+rc=$?
+if [ -z "$out" ] && [ "$rc" = "2" ]; then test_pass "rc" "matches" "2"; else
+  test_fail "out/rc" "unexpected" "$out/$rc"
+  exit 1
+fi
+
+msg_run 'valid division unaffected'
+out=$(../simpsh -c 'echo $((7/2)) $((7%3))')
+if [ "$out" = "3 1" ]; then test_pass "out" "matches" "3 1"; else
+  test_fail "out" "unexpected" "$out"
+  exit 1
+fi
+
+msg_run 'div by zero in redirect target aborts rc=2, no file'
+rm -f ./testfiles/dz_*
+../simpsh -c 'echo hi > ./testfiles/dz_$((1/0))' 2>/dev/null
+rc=$?
+if [ "$rc" = "2" ] && [ -z "$(ls ./testfiles/dz_* 2>/dev/null)" ]; then test_pass "rc" "matches, no file" "2"; else
+  test_fail "rc/out" "unexpected" "$rc"
+  rm -f ./testfiles/dz_*
+  exit 1
+fi
+rm -f ./testfiles/dz_*
+
+msg_run 'div by zero in heredoc body aborts rc=2 (dash silently continues; we fail loud)'
+out=$(../simpsh -c 'read v <<EOF
+$((1/0))
+EOF
+echo after' 2>/dev/null)
+rc=$?
+if [ -z "$out" ] && [ "$rc" = "2" ]; then test_pass "rc" "matches" "2"; else
+  test_fail "out/rc" "unexpected" "$out/$rc"
+  exit 1
+fi
