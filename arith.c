@@ -702,6 +702,7 @@ led(i64 left)
       rb = expr_bp(14);
       if (!rb) {
         shwarn_arg("arithmetic", ap, "division by 0");
+        gstate.divby0 = 1;
         return 0;
       }
       // INT64_MIN / -1 wrap
@@ -713,6 +714,7 @@ led(i64 left)
       rb = expr_bp(14);
       if (!rb) {
         shwarn_arg("arithmetic", ap, "division by 0");
+        gstate.divby0 = 1;
         return 0;
       }
       if (rb == -1)
@@ -786,6 +788,7 @@ led(i64 left)
           } else {
             nv = 0;
             shwarn_arg("arithmetic", ap, "division by 0");
+            gstate.divby0 = 1;
           }
           break;
         case '%':
@@ -797,6 +800,7 @@ led(i64 left)
           } else {
             nv = 0;
             shwarn_arg("arithmetic", ap, "division by 0");
+            gstate.divby0 = 1;
           }
           break;
         case '<':

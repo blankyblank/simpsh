@@ -124,6 +124,12 @@ apply_redir(redir *r)
     int fd, flags, cached = 0;
     if (!(name = xpnd(r->name)))
       return 1;
+    if (gstate.divby0) {
+      gstate.divby0 = 0;
+      if (!iflag)
+        exittrap(2);
+      return 1;
+    }
     switch (r->type) {
       case RDIN:
       case RDAPP:
@@ -730,6 +736,12 @@ run_cmd(const cmd_tree *n, int inchld)
     final = expand_argv(CARGS(n), &len);
     handler = sv;
   }
+  if (gstate.divby0) {
+    gstate.divby0 = 0;
+    if (!ifl)
+      exittrap(2);
+    return 2;
+  }
   if (gstate.nounseterr) {
     gstate.nounseterr = 0;
     if (!ifl)
@@ -819,7 +831,14 @@ run_cmd(const cmd_tree *n, int inchld)
       status = apply_redir(predir);
     if (CNEG(n))
       status = !status;
-    if (efl && status && !ifl && !errsafe && !(n->flags & EFLAG_SAFE) && !CNEG(n))
+    if (gstate.divby0) {
+      gstate.divby0 = 0;
+      if (!ifl)
+        exittrap(2);
+      return 2;
+    }
+    if (efl && status && !ifl && !errsafe &&
+        !(n->flags & EFLAG_SAFE) && !CNEG(n))
       exittrap(status);
     goto done;
   }
@@ -876,6 +895,12 @@ run_case(const cmd_tree *n)
     return 1;
   word = join_wf(wrd, 0);
 
+  if (gstate.divby0) {
+    gstate.divby0 = 0;
+    if (!iflag)
+      exittrap(2);
+    return 2;
+  }
   for (clause *cl = CCASE(n).clauses; cl; cl = cl->next) {
     for (size_t i = 0; cl->ptrn[i]; i++, gl = 0) {
       char *patstr;
@@ -918,6 +943,12 @@ run_for(const cmd_tree *n)
     for (size_t i = 0; i < wrdc; i++)
       wrdv[i] = st_strdup(SHARGV[i]);
     wrdv[wrdc] = NULL;
+  }
+  if (gstate.divby0) {
+    gstate.divby0 = 0;
+    if (!iflag)
+      exittrap(2);
+    return 2;
   }
 
   for (size_t i = 0; wrdv[i]; i++) {

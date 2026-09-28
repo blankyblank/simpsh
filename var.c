@@ -365,6 +365,7 @@ grabvar(char *name)
     tmp.set = 0;
     tmp.name = st_strdup(name);
     tmp.val = NULL;
+    tmp.oldflags = 0;
   }
   return tmp;
 }

@@ -537,10 +537,12 @@ dotcmd(char **argv)
 static int
 echocmd(char *argv[])
 {
-  int nf = 0;
-  size_t argc = 0;
-  char *argv0 = argv[0];
+  int nf;
+  size_t argc;
+  char *argv0;
 
+  argv0 = argv[0];
+  nf = argc = 0;
   array_len(argv, argc);
 
   if (argv[1] && argv[1][0] == '-' && argv[1][1] == 'n' && !argv[1][2])
@@ -548,14 +550,95 @@ echocmd(char *argv[])
   argv++, argc--;
 
   for (size_t i = 0; argv[i]; i++) {
-    if (fputs(argv[i], shout) == EOF)
-      return sherr(1, argv0, "could not write to stdout");
+    char *p = argv[i];
+    for (;;) {
+      char *bs;
+      if (!(bs = strchr(p, '\\'))) {
+        if (fputs(p, shout) == EOF)
+          return sherr(1, argv0, "could not write to stdout");
+        break;
+      }
+      if (bs > p && fwrite(p, 1, (size_t)(bs - p), shout) != (size_t)(bs - p))
+        return sherr(1, argv0, "could not write to stdout");
+      p = bs + 1;
+      if (!*p) {
+        if (fputc('\\', shout) == EOF)
+          return sherr(1, argv0, "could not write to stdout");
+        break;
+      }
+      int c;
+      c = -1;
+      switch (*p) {
+        case 'a':
+          c = '\a';
+          p++;
+          break;
+        case 'b':
+          c = '\b';
+          p++;
+          break;
+        case 'c':
+          goto done;
+        case 'f':
+          c = '\f';
+          p++;
+          break;
+        case 'n':
+          c = '\n';
+          p++;
+          break;
+        case 'r':
+          c = '\r';
+          p++;
+          break;
+        case 't':
+          c = '\t';
+          p++;
+          break;
+        case 'v':
+          c = '\v';
+          p++;
+          break;
+        case '\\':
+          c = '\\';
+          p++;
+          break;
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+          {
+            int v, n;
+            v = n = 0;
+            while (n < 3 && *p >= '0' && *p <= '7') {
+              v = v * 8 + (*p - '0');
+              p++, n++;
+            }
+            c = v;
+            break;
+          }
+        default:
+          if (fputc('\\', shout) == EOF)
+            return sherr(1, argv0, "could not write to stdout");
+          c = (unsigned char)*p;
+          p++;
+          break;
+      }
+      if (fputc(c, shout) == EOF)
+        return sherr(1, argv0, "could not write to stdout");
+    }
     if (i < argc - 1)
       if (fputc(' ', shout) == EOF)
         return sherr(1, argv0, "could not write to stdout");
   }
   if (!(nf & FLAG_N))
-    if (fputc('\n', shout) == EOF) return sherr(1, argv0, "could not write to stdout");
+    if (fputc('\n', shout) == EOF)
+      return sherr(1, argv0, "could not write to stdout");
+done:
   return 0;
 }
 

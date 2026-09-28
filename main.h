@@ -91,6 +91,7 @@ typedef struct {
   int funcdepth;  /* shell function nesting level */
   shopt shopts;   /* shell options */
   int stackdepth; /* frame nesting level */
+  int divby0; /* divide by zero arith error */
   struct stackframe stackframes[64]; /* current frames */
 } GSTATE;
 
